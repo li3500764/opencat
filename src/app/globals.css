@@ -4,40 +4,56 @@
  * OpenCat 全局样式
  * ============================================================
  * 设计语言：干净、克制、工具感
- * 主色调：暖灰 + 琥珀色点缀（不用紫色，不搞 AI 风渐变）
- * 参考风格：Linear, Raycast, Vercel Dashboard
+ * Light 风格参考：Evose AI（纯白底、浅灰侧边栏、微妙投影）
+ * Dark 风格：暖灰 + 琥珀（Linear / Raycast 感）
+ * 主题切换：通过 <html class="dark"> 控制，不用 prefers-color-scheme
  * ============================================================ */
 
+/* ---- Light 主题（默认，参考 Evose）---- */
 :root {
-  --background: #fafaf9;
-  --foreground: #1c1917;
-  --muted: #78716c;
-  --border: #e7e5e4;
-  --accent: #d97706;         /* 琥珀色 amber-600，用于按钮/链接 */
-  --accent-hover: #b45309;   /* amber-700 */
+  --background: #ffffff;
+  --background-secondary: #f7f7f8;   /* 侧边栏/次要区域 */
+  --foreground: #1a1a1a;
+  --muted: #8b8b8b;
+  --border: #ebebeb;
+  --accent: #d97706;
+  --accent-hover: #b45309;
   --card: #ffffff;
-  --card-border: #f5f5f4;
+  --card-border: #f0f0f0;
   --danger: #dc2626;
   --success: #16a34a;
+  --input-bg: #ffffff;
+  --input-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --sidebar-hover: rgba(0, 0, 0, 0.04);
+  --sidebar-active: rgba(0, 0, 0, 0.06);
+  --message-user-bg: #f0f0f0;
+  --message-user-text: #1a1a1a;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0c0a09;
-    --foreground: #e7e5e4;
-    --muted: #a8a29e;
-    --border: #292524;
-    --accent: #f59e0b;       /* amber-500 */
-    --accent-hover: #fbbf24;
-    --card: #1c1917;
-    --card-border: #292524;
-    --danger: #ef4444;
-    --success: #22c55e;
-  }
+/* ---- Dark 主题 ---- */
+.dark {
+  --background: #0c0a09;
+  --background-secondary: #141211;
+  --foreground: #e7e5e4;
+  --muted: #a8a29e;
+  --border: #292524;
+  --accent: #f59e0b;
+  --accent-hover: #fbbf24;
+  --card: #1c1917;
+  --card-border: #292524;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --input-bg: #1c1917;
+  --input-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --sidebar-hover: rgba(255, 255, 255, 0.04);
+  --sidebar-active: rgba(255, 255, 255, 0.06);
+  --message-user-bg: #292524;
+  --message-user-text: #e7e5e4;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-background-secondary: var(--background-secondary);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-border: var(--border);
@@ -47,6 +63,9 @@
   --color-card-border: var(--card-border);
   --color-danger: var(--danger);
   --color-success: var(--success);
+  --color-input-bg: var(--input-bg);
+  --color-message-user-bg: var(--message-user-bg);
+  --color-message-user-text: var(--message-user-text);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -56,7 +75,7 @@ body {
   color: var(--foreground);
 }
 
-/* 滚动条样式（非必要但提升质感） */
+/* 滚动条 */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -70,4 +89,18 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted);
+}
+
+/* 全局过渡（主题切换时颜色平滑过渡） */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+/* 排除动画元素，避免干扰 */
+[class*="animate-"],
+[class*="transition-"] {
+  transition-property: all;
 }

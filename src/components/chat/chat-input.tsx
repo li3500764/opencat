@@ -1,7 +1,7 @@
 // ============================================================
 // 聊天输入框组件（AI SDK 6.x）
 // ============================================================
-// 自己管理 input 状态（AI SDK 6 的 useChat 不提供 input）
+// 样式参考 Evose：圆角输入框 + 微妙投影 + 干净边框
 // Enter 发送，Shift+Enter 换行
 
 "use client";
@@ -19,12 +19,10 @@ export function ChatInput({ isLoading, onSend, onStop }: ChatInputProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 自动聚焦
   useEffect(() => {
     textareaRef.current?.focus();
   }, []);
 
-  // 自动调整高度
   useEffect(() => {
     const el = textareaRef.current;
     if (el) {
@@ -37,7 +35,6 @@ export function ChatInput({ isLoading, onSend, onStop }: ChatInputProps) {
     if (!input.trim() || isLoading) return;
     onSend(input.trim());
     setInput("");
-    // 重置高度
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
     }
@@ -51,9 +48,13 @@ export function ChatInput({ isLoading, onSend, onStop }: ChatInputProps) {
   };
 
   return (
-    <div className="border-t border-border bg-card px-4 py-3">
+    <div className="px-4 py-4">
       <div className="mx-auto max-w-3xl">
-        <div className="flex items-end gap-2 rounded-2xl border border-border bg-background px-4 py-2 transition-colors focus-within:border-accent/50">
+        {/* 输入框容器 —— Evose 风格：白底/深色底 + 微妙投影 + 圆角 */}
+        <div
+          className="flex items-end gap-2 rounded-2xl border border-border bg-input-bg px-4 py-3 transition-all focus-within:border-accent/40"
+          style={{ boxShadow: "var(--input-shadow)" }}
+        >
           <textarea
             ref={textareaRef}
             value={input}
@@ -79,7 +80,7 @@ export function ChatInput({ isLoading, onSend, onStop }: ChatInputProps) {
               type="button"
               onClick={handleSubmit}
               disabled={!input.trim()}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-colors hover:bg-accent-hover disabled:opacity-30 disabled:cursor-not-allowed"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-colors hover:opacity-80 disabled:opacity-20 disabled:cursor-not-allowed"
               title="Send message"
             >
               <ArrowUp className="h-4 w-4" />
@@ -87,7 +88,7 @@ export function ChatInput({ isLoading, onSend, onStop }: ChatInputProps) {
           )}
         </div>
 
-        <p className="mt-2 text-center text-[11px] text-muted/50">
+        <p className="mt-2 text-center text-[11px] text-muted/40">
           OpenCat may make mistakes. Verify important information.
         </p>
       </div>

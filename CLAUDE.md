@@ -21,8 +21,8 @@
 |-----|------|------|
 | Day 1 | 脚手架 + 认证 + DB | ✅ 完成 |
 | Day 2 | 单模型对话 + SSE 流式 | ✅ 完成 |
-| Day 3 | 多模型 Gateway + API Key 管理 | 🔲 下一步 |
-| Day 4 | Tool Calling + ReAct Agent 引擎 | 🔲 |
+| Day 3 | 多模型 Gateway + API Key 管理 | ✅ 完成 |
+| Day 4 | Tool Calling + ReAct Agent 引擎 | 🔲 下一步 |
 | Day 5 | 多 Agent 编排 + 项目隔离 | 🔲 |
 | Day 6 | Memory 系统 + RAG 知识库 | 🔲 |
 | Day 7 | Dashboard + Tauri 打包 + 部署 | 🔲 |
@@ -71,6 +71,27 @@
 7. Usage 字段：`inputTokens` / `outputTokens`（不是 `promptTokens` / `completionTokens`）
 8. 自定义 fetch + transport.body 函数可以实现请求拦截和动态参数注入
 
+## Day 3 完成内容
+- [x] Provider 抽象层（src/lib/llm/）— types + registry + createModel()，可插拔架构
+- [x] 模型注册表 — OpenAI（5 模型）+ Anthropic（2 模型）+ DeepSeek（2 模型），含价格
+- [x] createModel() — 根据 modelId + apiKey 动态创建 AI SDK LanguageModel 实例
+- [x] DeepSeek / Custom Provider 走 OpenAI 兼容接口
+- [x] API Key 管理 API — POST/GET /api/keys（增查）+ DELETE/POST /api/keys/[id]（删/测试）
+- [x] API Key 加密存储 — 用 Day 1 的 AES-256-GCM，解密后调 LLM
+- [x] Key 测试功能 — POST /api/keys/[id] 发一个极短请求验证 Key 是否有效
+- [x] Settings 页面 — /settings，API Key 管理 UI（添加/删除/测试/按 Provider 分类）
+- [x] 模型选择器组件 — 下拉菜单，按 Provider 分组，显示价格，对话顶栏可切换
+- [x] Chat API 改造 — 支持 modelId 参数，优先用户 Key → 回退 .env Key
+- [x] 费用计算 — calculateCost() 按模型单价折算，存入 UsageLog.cost
+- [x] 侧边栏加 Settings 入口（🔑 图标）
+- [x] 新增依赖：无（复用已有 @ai-sdk/openai, @ai-sdk/anthropic）
+
+## Day 4 计划（下一步）
+1. Tool 定义 + JSON Schema 校验 — 工具注册、inputSchema 验证
+2. ReAct Agent 引擎 — 思考→行动→观察循环，maxSteps 防无限循环
+3. 内置工具 — web_search、calculator、code_interpreter 等
+4. Tool Calling UI — 展示工具调用过程（调了什么工具、参数、结果）
+
 ## Prisma 7 踩坑记录
 1. schema.prisma 里 datasource 不能写 url = env()，要移到 prisma.config.ts 的 datasource.url
 2. 默认 "client" 引擎需要 @prisma/adapter-pg + pg 连接池，不能直接 new PrismaClient()
@@ -86,25 +107,30 @@ src/server/db/index.ts         → Prisma Client 单例 + pg Pool
 src/lib/auth.ts                → NextAuth v5 配置
 src/lib/crypto.ts              → AES-256-GCM 加解密
 src/lib/utils.ts               → cn() TailwindCSS 工具
+src/lib/llm/types.ts           → Provider/Model 类型定义
+src/lib/llm/registry.ts        → Provider 注册表 + createModel() + calculateCost()
+src/lib/llm/index.ts           → LLM 模块统一导出
 src/stores/chat.ts             → Zustand 对话列表状态管理
-src/components/chat/chat-panel.tsx    → 聊天主面板（useChat + transport）
-src/components/chat/chat-input.tsx    → 输入框（自管理 input 状态）
-src/components/chat/message-list.tsx  → 消息列表（自动滚底）
-src/components/chat/message-item.tsx  → 单条消息（Markdown 渲染）
-src/components/chat/markdown.tsx      → Markdown → HTML 渲染器
-src/components/layout/sidebar.tsx     → 侧边栏（对话列表 + 新建 + 删除）
-src/app/api/auth/[...nextauth] → NextAuth API 路由
-src/app/api/auth/register      → 注册 API
-src/app/api/chat/route.ts      → Chat 流式 API（AI SDK 6.x）
-src/app/api/conversations/route.ts    → 对话列表 + 删除 API
-src/app/api/conversations/[id]/messages/route.ts → 历史消息 API
-src/app/(auth)/login            → 登录页
-src/app/(auth)/register         → 注册页
-src/app/(dashboard)/layout.tsx  → Dashboard 布局（Server → Client Sidebar）
+src/stores/theme.ts            → Zustand 主题状态（light/dark）
+src/components/chat/chat-panel.tsx    → 聊天主面板（useChat + 模型选择）
+src/components/chat/chat-input.tsx    → 输入框
+src/components/chat/message-list.tsx  → 消息列表
+src/components/chat/message-item.tsx  → 单条消息
+src/components/chat/markdown.tsx      → Markdown 渲染器
+src/components/chat/model-selector.tsx → 模型下拉选择器
+src/components/layout/sidebar.tsx     → 侧边栏
+src/components/layout/theme-provider.tsx → 主题初始化
+src/components/layout/theme-toggle.tsx   → 主题切换按钮
+src/app/api/chat/route.ts             → Chat 流式 API（多模型）
+src/app/api/conversations/route.ts    → 对话列表 + 删除
+src/app/api/conversations/[id]/messages/route.ts → 历史消息
+src/app/api/keys/route.ts             → API Key 增查
+src/app/api/keys/[id]/route.ts        → API Key 删除 + 测试
+src/app/(dashboard)/settings/page.tsx  → Settings / API Key 管理页
 src/app/(dashboard)/chat/page.tsx      → 新对话页面
 src/app/(dashboard)/chat/[id]/page.tsx → 已有对话页面
-src/app/globals.css             → 设计系统（暖灰+琥珀）
-.env                            → 环境变量（DATABASE_URL 端口 5433）
+src/app/globals.css                    → 设计系统（light/dark 双主题）
+.env                                   → 环境变量
 ```
 
 ## 开发环境

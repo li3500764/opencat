@@ -1,8 +1,10 @@
 // ============================================================
 // 单条消息组件（AI SDK 6.x）
 // ============================================================
-// UIMessage.parts 是内容数组：[{ type: 'text', text: '...' }, ...]
-// 我们提取 text parts 拼接后渲染 Markdown
+// 样式参考 Evose：
+// - 用户消息：浅灰圆角气泡（light）/ 深色气泡（dark），不用琥珀色
+// - AI 消息：无背景，直接渲染 Markdown
+// - 头像：小圆形，带首字母或猫 icon
 
 "use client";
 
@@ -10,7 +12,6 @@ import { Cat, User } from "lucide-react";
 import { Markdown } from "./markdown";
 import type { UIMessage } from "ai";
 
-// 从 parts 里提取纯文本
 function getTextContent(message: UIMessage): string {
   return message.parts
     .filter((p): p is { type: "text"; text: string } => p.type === "text")
@@ -31,7 +32,7 @@ export function MessageItem({ message }: { message: UIMessage }) {
         className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
           isUser
             ? "bg-accent/10 text-accent"
-            : "bg-foreground/5 text-muted"
+            : "bg-foreground/[0.06] text-muted"
         }`}
       >
         {isUser ? <User className="h-3.5 w-3.5" /> : <Cat className="h-3.5 w-3.5" />}
@@ -45,19 +46,15 @@ export function MessageItem({ message }: { message: UIMessage }) {
         </p>
 
         {/* 消息体 */}
-        <div
-          className={`rounded-2xl px-4 py-2.5 ${
-            isUser
-              ? "bg-accent text-white rounded-tr-md"
-              : "bg-foreground/[0.03] border border-border rounded-tl-md"
-          }`}
-        >
-          {isUser ? (
+        {isUser ? (
+          <div className="inline-block rounded-2xl rounded-tr-md bg-message-user-bg px-4 py-2.5 text-message-user-text">
             <p className="text-sm leading-relaxed whitespace-pre-wrap">{text}</p>
-          ) : (
+          </div>
+        ) : (
+          <div className="rounded-2xl rounded-tl-md">
             <Markdown content={text} />
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
