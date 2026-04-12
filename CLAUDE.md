@@ -22,8 +22,8 @@
 | Day 1 | 脚手架 + 认证 + DB | ✅ 完成 |
 | Day 2 | 单模型对话 + SSE 流式 | ✅ 完成 |
 | Day 3 | 多模型 Gateway + API Key 管理 | ✅ 完成 |
-| Day 4 | Tool Calling + ReAct Agent 引擎 | 🔲 下一步 |
-| Day 5 | 多 Agent 编排 + 项目隔离 | 🔲 |
+| Day 4 | Tool Calling + ReAct Agent 引擎 | ✅ 完成 |
+| Day 5 | 多 Agent 编排 + 项目隔离 | 🔲 下一步 |
 | Day 6 | Memory 系统 + RAG 知识库 | 🔲 |
 | Day 7 | Dashboard + Tauri 打包 + 部署 | 🔲 |
 
@@ -92,6 +92,32 @@
 3. 内置工具 — web_search、calculator、code_interpreter 等
 4. Tool Calling UI — 展示工具调用过程（调了什么工具、参数、结果）
 
+## Day 4 完成内容
+- [x] Tool 类型系统（src/lib/tools/types.ts）— ToolDefinition / ToolExecutionResult / ToolExecutionContext / RegisteredTool
+- [x] 内置工具 3 个：calculator（安全数学计算）、datetime（当前时间/格式化/日期差值）、http_request（外部 API 调用，超时+截断保护）
+- [x] Tool Registry 注册中心（src/lib/tools/registry.ts）— 注册/注销/启用禁用/按名查找，核心方法 toAISDKTools() 转换成 AI SDK 格式
+- [x] ReAct Agent Engine（src/lib/agent/react-engine.ts）— createAgentStream() 封装 streamText + tools + stopWhen
+- [x] AI SDK 6.x 适配：maxSteps 已被替换为 stopWhen: stepCountIs(N)，tool() 是 identity function
+- [x] Chat API 改造（Day 4 版）— 接入 Agent Engine，新增 enableTools / toolNames 参数，fire-and-forget 后台保存
+- [x] Tool Calling UI — message-item.tsx 支持渲染 ToolUIPart，展示工具调用的输入参数和执行结果
+- [x] ToolCallCard 组件 — 可折叠卡片，显示工具名/状态图标(loading/success/error)/输入参数/输出结果
+- [x] Tools API — GET /api/tools 返回所有已注册工具的名称、描述、类型、启用状态
+- [x] TypeScript 编译零错误，Next.js build 通过
+
+## AI SDK 6.x Tool Calling 踩坑记录
+1. `maxSteps` 参数已移除，改用 `stopWhen: stepCountIs(N)`（import { stepCountIs } from "ai"）
+2. `tool()` 函数是 identity function（原样返回），但 TS 类型重载极严格，泛型架构下直接构造对象更可靠
+3. `StreamTextResult` 的属性（.text, .totalUsage, .steps）都是 `PromiseLike`，需要 await 获取最终值
+4. UIMessage.parts 中工具调用的 type 格式：静态工具 "tool-{name}"，动态工具 "dynamic-tool"
+5. 工具调用 state 生命周期：input-streaming → input-available → output-available / output-error
+6. Zod v4 的 `z.record()` 需要两个参数：z.record(z.string(), z.string())，不能只传一个
+
+## Day 5 计划（下一步）
+1. 多 Agent 编排 — Orchestrator Agent 协调多个子 Agent
+2. 项目隔离 — 每个 Project 独立的 Agent/Tool/Memory 配置
+3. Agent 管理 CRUD — 创建/编辑/删除自定义 Agent（系统提示词、工具选择、maxSteps）
+4. Agent 切换器 — 对话时可选择使用哪个 Agent
+
 ## Prisma 7 踩坑记录
 1. schema.prisma 里 datasource 不能写 url = env()，要移到 prisma.config.ts 的 datasource.url
 2. 默认 "client" 引擎需要 @prisma/adapter-pg + pg 连接池，不能直接 new PrismaClient()
@@ -110,6 +136,15 @@ src/lib/utils.ts               → cn() TailwindCSS 工具
 src/lib/llm/types.ts           → Provider/Model 类型定义
 src/lib/llm/registry.ts        → Provider 注册表 + createModel() + calculateCost()
 src/lib/llm/index.ts           → LLM 模块统一导出
+src/lib/tools/types.ts         → Tool 类型定义（ToolDefinition/ToolExecutionResult/RegisteredTool）
+src/lib/tools/registry.ts      → Tool Registry 注册中心（注册/查找/转 AI SDK 格式）
+src/lib/tools/index.ts         → Tools 模块统一导出
+src/lib/tools/builtin/calculator.ts   → 内置工具：安全数学计算
+src/lib/tools/builtin/datetime.ts     → 内置工具：日期时间（now/format/diff）
+src/lib/tools/builtin/http-request.ts → 内置工具：HTTP API 调用
+src/lib/tools/builtin/index.ts        → 内置工具统一导出
+src/lib/agent/react-engine.ts  → ReAct Agent Engine（createAgentStream + stopWhen）
+src/lib/agent/index.ts         → Agent 模块统一导出
 src/stores/chat.ts             → Zustand 对话列表状态管理
 src/stores/theme.ts            → Zustand 主题状态（light/dark）
 src/components/chat/chat-panel.tsx    → 聊天主面板（useChat + 模型选择）
@@ -126,6 +161,7 @@ src/app/api/conversations/route.ts    → 对话列表 + 删除
 src/app/api/conversations/[id]/messages/route.ts → 历史消息
 src/app/api/keys/route.ts             → API Key 增查
 src/app/api/keys/[id]/route.ts        → API Key 删除 + 测试
+src/app/api/tools/route.ts            → GET 可用工具列表
 src/app/(dashboard)/settings/page.tsx  → Settings / API Key 管理页
 src/app/(dashboard)/chat/page.tsx      → 新对话页面
 src/app/(dashboard)/chat/[id]/page.tsx → 已有对话页面
