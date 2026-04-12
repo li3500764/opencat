@@ -1,0 +1,32 @@
+# OpenCat 开发环境依赖服务
+# 跑 `docker compose up -d` 就起来了
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17    # 自带 pgvector 扩展的 PostgreSQL 17
+    container_name: opencat-db
+    environment:
+      POSTGRES_USER: opencat
+      POSTGRES_PASSWORD: opencat
+      POSTGRES_DB: opencat
+    ports:
+      - "5433:5432"    # 用 5433 避开本地 PG 14 占用的 5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opencat"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: opencat-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:

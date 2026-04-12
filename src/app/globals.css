@@ -1,26 +1,73 @@
 @import "tailwindcss";
 
+/* ============================================================
+ * OpenCat 全局样式
+ * ============================================================
+ * 设计语言：干净、克制、工具感
+ * 主色调：暖灰 + 琥珀色点缀（不用紫色，不搞 AI 风渐变）
+ * 参考风格：Linear, Raycast, Vercel Dashboard
+ * ============================================================ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fafaf9;
+  --foreground: #1c1917;
+  --muted: #78716c;
+  --border: #e7e5e4;
+  --accent: #d97706;         /* 琥珀色 amber-600，用于按钮/链接 */
+  --accent-hover: #b45309;   /* amber-700 */
+  --card: #ffffff;
+  --card-border: #f5f5f4;
+  --danger: #dc2626;
+  --success: #16a34a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0c0a09;
+    --foreground: #e7e5e4;
+    --muted: #a8a29e;
+    --border: #292524;
+    --accent: #f59e0b;       /* amber-500 */
+    --accent-hover: #fbbf24;
+    --card: #1c1917;
+    --card-border: #292524;
+    --danger: #ef4444;
+    --success: #22c55e;
+  }
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-card: var(--card);
+  --color-card-border: var(--card-border);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* 滚动条样式（非必要但提升质感） */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }

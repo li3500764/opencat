@@ -1,0 +1,310 @@
+// ============================================================
+// OpenCat - 数据库 Schema
+// ============================================================
+// 这个文件定义了所有数据表的结构。Prisma 会根据这个文件：
+// 1. 自动生成 TypeScript 类型（prisma generate）
+// 2. 自动生成数据库迁移 SQL（prisma migrate）
+// 3. 生成类型安全的查询 API（prisma client）
+//
+// 你改了这个文件后跑 `pnpm prisma migrate dev` 就会同步到数据库
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7: 数据库连接 URL 移到了 prisma.config.ts
+// 这里只声明数据库类型，不放敏感的连接字符串
+datasource db {
+  provider = "postgresql"
+}
+
+// ==================== 用户系统 ====================
+
+// 用户表 - NextAuth 需要的标准字段 + 我们自定义的字段
+model User {
+  id            String    @id @default(cuid())  // cuid 比 uuid 短，URL 友好
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?   // 邮箱注册的用户才有密码，OAuth 用户为 null
+
+  // 自定义字段
+  plan          Plan      @default(FREE)        // 用户套餐
+  tokenQuota    Int       @default(100000)      // Token 配额（免费用户 10 万）
+  tokenUsed     Int       @default(0)           // 已用 Token
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // 关联
+  accounts      Account[]
+  sessions      Session[]
+  apiKeys       ApiKey[]
+  projects      Project[]
+  memories      Memory[]
+  usageLogs     UsageLog[]
+}
+
+enum Plan {
+  FREE
+  PRO
+}
+
+// ==================== NextAuth 必需表 ====================
+// 这三个表是 NextAuth + Prisma Adapter 的标准结构，不要改字段名
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String        // "github", "google" 等
+  providerAccountId String        // 第三方平台的用户 ID
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// ==================== API Key 管理 ====================
+// 用户存储自己的 LLM API Key（加密存储）
+
+model ApiKey {
+  id           String   @id @default(cuid())
+  userId       String
+  provider     String   // "openai", "anthropic", "deepseek", "custom"
+  encryptedKey String   // AES-256-GCM 加密后的密文
+  iv           String   // 加密初始化向量（每个 key 不同，防止相同明文产生相同密文）
+  label        String   @default("Default")  // 用户给这个 key 的备注名
+  baseUrl      String?  // 自定义 Provider 的 API 地址（如 heiyu）
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, provider])
+}
+
+// ==================== 项目系统 ====================
+// 项目是最顶层的组织单位，类似 OpenCow 的 workspace
+
+model Project {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  description   String?
+  systemPrompt  String?  @db.Text   // 项目级 system prompt
+  defaultModel  String   @default("gpt-4o")
+  settings      Json     @default("{}")  // 扩展配置（temperature、maxTokens 等）
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agents        Agent[]
+  conversations Conversation[]
+  tools         Tool[]
+  knowledgeBases KnowledgeBase[]
+
+  @@index([userId])
+}
+
+// ==================== Agent 配置 ====================
+// 每个项目下可以创建多个 Agent，不同的 prompt/工具集/模型
+
+model Agent {
+  id           String   @id @default(cuid())
+  projectId    String
+  name         String
+  description  String?
+  systemPrompt String   @db.Text   // Agent 专属 system prompt
+  model        String   @default("gpt-4o")
+  temperature  Float    @default(0.7)
+  maxSteps     Int      @default(10)   // ReAct 循环最大步数，防止无限循环
+  tools        Json     @default("[]") // 该 Agent 可用的工具 ID 列表
+  isOrchestrator Boolean @default(false) // 是否是编排器 Agent（可以调度其他 Agent）
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+
+  @@index([projectId])
+}
+
+// ==================== 对话系统 ====================
+
+model Conversation {
+  id        String   @id @default(cuid())
+  projectId String
+  agentId   String?
+  title     String   @default("New Chat")
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agent    Agent?   @relation(fields: [agentId], references: [id])
+  messages Message[]
+
+  @@index([projectId])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           MessageRole  // user / assistant / system / tool
+  content        String   @db.Text
+  toolCalls      Json?    // LLM 返回的 tool_calls（要调用哪些工具）
+  toolResults    Json?    // 工具执行后的返回结果
+  model          String?  // 用哪个模型生成的
+  tokenCount     Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+  tool
+}
+
+// ==================== 工具注册 ====================
+// 内置工具 + 用户自定义 HTTP 工具
+
+model Tool {
+  id          String   @id @default(cuid())
+  projectId   String?  // null = 全局内置工具
+  name        String   // 工具名，如 "web_search"
+  description String   @db.Text
+  inputSchema Json     // JSON Schema 7 格式的参数定义
+  type        ToolType
+  config      Json     @default("{}") // HTTP 工具的 url/method/headers 等配置
+  isEnabled   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+enum ToolType {
+  builtin  // 内置工具（代码里实现的）
+  http     // 用户自定义 HTTP API 调用
+  mcp      // MCP 协议工具
+}
+
+// ==================== Memory 记忆系统 ====================
+// 向量化存储的长期记忆
+
+model Memory {
+  id         String   @id @default(cuid())
+  userId     String
+  projectId  String?  // null = 用户级全局记忆
+  content    String   @db.Text        // 记忆的文本内容
+  // embedding 字段需要 pgvector 扩展，后面用 raw SQL 创建
+  // Prisma 目前不原生支持 vector 类型，我们用 Unsupported 占位
+  embedding  Unsupported("vector(1536)")?
+  category   MemoryCategory
+  importance Float    @default(0.5)   // 0-1 重要性权重
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([projectId])
+}
+
+enum MemoryCategory {
+  preference    // 用户偏好（"喜欢简洁风格"）
+  background    // 背景信息（"是前端开发，在杭州"）
+  behavior      // 行为模式（"经常催进度"）
+  project_context // 项目上下文
+  fact          // 事实信息
+}
+
+// ==================== 知识库 ====================
+// RAG 用的文档库
+
+model KnowledgeBase {
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  createdAt DateTime @default(now())
+
+  project  Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  documents Document[]
+
+  @@index([projectId])
+}
+
+model Document {
+  id              String   @id @default(cuid())
+  knowledgeBaseId String
+  fileName        String
+  fileType        String   // "pdf", "md", "txt"
+  fileSize        Int
+  chunkCount      Int      @default(0)
+  status          String   @default("processing") // processing / ready / error
+  createdAt       DateTime @default(now())
+
+  knowledgeBase KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  chunks        DocumentChunk[]
+}
+
+model DocumentChunk {
+  id         String @id @default(cuid())
+  documentId String
+  content    String @db.Text
+  embedding  Unsupported("vector(1536)")?
+  chunkIndex Int    // 在文档中的顺序
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+}
+
+// ==================== 用量追踪 ====================
+
+model UsageLog {
+  id             String   @id @default(cuid())
+  userId         String
+  model          String
+  provider       String
+  promptTokens   Int
+  completionTokens Int
+  totalTokens    Int
+  cost           Float    @default(0) // 按模型单价折算的美元费用
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
