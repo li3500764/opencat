@@ -46,7 +46,7 @@ const createAgentSchema = z.object({
   systemPrompt: z.string().min(1, "systemPrompt is required"),
 
   // 可选：使用的模型，默认 gpt-4o
-  model: z.string().default("gpt-4o"),
+  model: z.string().default("gpt-5.4-mini"),
 
   // 可选：温度参数 0-2，默认 0.7
   temperature: z.number().min(0).max(2).default(0.7),

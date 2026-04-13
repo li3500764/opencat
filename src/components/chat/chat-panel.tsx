@@ -29,7 +29,7 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages }: Ch
   // ---- 对话和模型状态 ----
   const [conversationId, setConversationId] = useState<string | null>(initialConvId ?? null);
   const conversationIdRef = useRef(conversationId);
-  const [modelId, setModelId] = useState("gpt-4o");
+  const [modelId, setModelId] = useState("gpt-5.4-mini");
   const modelIdRef = useRef(modelId);
 
   // ---- ★ Day 5 新增：Agent 状态 ----

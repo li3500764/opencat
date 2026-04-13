@@ -11,7 +11,7 @@
 - **ORM**: Prisma 7（client engine + @prisma/adapter-pg + pg Pool）
 - **数据库**: PostgreSQL 17 (pgvector) + Redis 7（Docker Compose，PG 映射到 **5433** 端口，因为本地有 PG14 占了 5432）
 - **认证**: NextAuth.js v5 (Auth.js)，JWT session，GitHub OAuth + 邮箱密码
-- **AI SDK**: Vercel AI SDK 6.x (@ai-sdk/openai, @ai-sdk/anthropic)
+- **AI SDK**: Vercel AI SDK 6.x (@ai-sdk/openai, @ai-sdk/anthropic, @ai-sdk/google)
 - **状态管理**: Zustand
 - **桌面端**: Tauri 2.0（计划 Day 7 接入，代码复用 95%+）
 - **部署**: Docker Compose
@@ -144,6 +144,12 @@
 - [x] Knowledge Base 管理页面（/settings/knowledge）— 创建/删除知识库、上传 .txt/.md 文档、查看文档列表和分块状态
 - [x] 侧边栏新增 Knowledge Base 入口（Database 图标 → /settings/knowledge）
 - [x] ToolCallCard 新增 memory_save / memory_search / call_agent 的中文显示名和配色
+- [x] **API Format 架构** — ApiFormat 类型（openai / openai-responses / anthropic / google-genai），Provider 注册表按格式区分 API 协议
+- [x] **Google Gemini Provider** — 新增 @ai-sdk/google，支持 Gemini 2.5 Flash/Pro、2.0 Flash 三个模型
+- [x] **createModel() 重构** — 根据 format 而非 providerId 选择创建方式，openai-responses 配自定义 baseUrl 时自动降级为 chat completions
+- [x] **ApiKey format 字段** — Schema 新增 format 字段，Settings 页面支持选择 API 格式（自动根据 Provider 推荐）
+- [x] **API Key 编辑功能** — PUT /api/keys/[id]，Settings 页面新增编辑按钮（修改 provider/format/label/baseUrl/apiKey）
+- [x] **Chat API format 传递** — 从 userKey.format 读取格式，传递给 createModel() 确保走正确的 API 协议
 - [x] TypeScript 编译零错误，Next.js build 通过
 
 ## pgvector + RAG 踩坑记录
@@ -153,6 +159,13 @@
 4. 批量向量化用 AI SDK 的 `embedMany()` 一次性处理所有 chunk，效率远高于逐个 `embed()`
 5. 文档分块的滑动窗口策略需要处理句子边界，避免在句子中间断开
 6. DocumentChunk 的 embedding 同样是 `Unsupported("vector(1536)")`，存储时用 `$executeRaw`
+
+## AI SDK 6.x API Format 踩坑记录
+1. AI SDK 6.x 的 `createOpenAI()(modelId)` 默认走 Responses API（`/responses` 端点），只有 OpenAI 官方支持
+2. DeepSeek、代理平台等第三方必须用 `.chat(modelId)` 走 Chat Completions（`/chat/completions`）
+3. 因此引入 `ApiFormat` 类型区分四种 API 协议：`openai`（Chat Completions）、`openai-responses`、`anthropic`、`google-genai`
+4. `openai-responses` 格式 + 自定义 baseUrl 时自动降级为 `.chat()` — 因为代理平台不支持 Responses API
+5. ApiKey 表新增 `format` 字段，用户可在 Settings 页手动选择（Provider 切换时自动推荐默认格式）
 
 ## Prisma 7 踩坑记录
 1. schema.prisma 里 datasource 不能写 url = env()，要移到 prisma.config.ts 的 datasource.url

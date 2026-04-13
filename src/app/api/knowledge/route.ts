@@ -67,7 +67,7 @@ export async function POST(req: Request) {
     });
     if (!project) {
       project = await db.project.create({
-        data: { userId: session.user.id, name: "Default", description: "Default project", defaultModel: "gpt-4o" },
+        data: { userId: session.user.id, name: "Default", description: "Default project", defaultModel: "gpt-5.4-mini" },
       });
     }
     pid = project.id;

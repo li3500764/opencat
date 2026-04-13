@@ -96,7 +96,8 @@ model VerificationToken {
 model ApiKey {
   id           String   @id @default(cuid())
   userId       String
-  provider     String   // "openai", "anthropic", "deepseek", "custom"
+  provider     String   // "openai", "anthropic", "deepseek", "google", "custom"
+  format       String   @default("openai")  // API 协议格式："openai" | "openai-responses" | "anthropic" | "google-genai"
   encryptedKey String   // AES-256-GCM 加密后的密文
   iv           String   // 加密初始化向量（每个 key 不同，防止相同明文产生相同密文）
   label        String   @default("Default")  // 用户给这个 key 的备注名
@@ -118,7 +119,7 @@ model Project {
   name          String
   description   String?
   systemPrompt  String?  @db.Text   // 项目级 system prompt
-  defaultModel  String   @default("gpt-4o")
+  defaultModel  String   @default("gpt-5.4-mini")
   settings      Json     @default("{}")  // 扩展配置（temperature、maxTokens 等）
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -141,7 +142,7 @@ model Agent {
   name         String
   description  String?
   systemPrompt String   @db.Text   // Agent 专属 system prompt
-  model        String   @default("gpt-4o")
+  model        String   @default("gpt-5.4-mini")
   temperature  Float    @default(0.7)
   maxSteps     Int      @default(10)   // ReAct 循环最大步数，防止无限循环
   tools        Json     @default("[]") // 该 Agent 可用的工具 ID 列表

@@ -11,10 +11,11 @@ import { z } from "zod/v4";
 
 // 添加 Key 的校验 schema
 const addKeySchema = z.object({
-  provider: z.string().min(1),      // "openai" | "anthropic" | "deepseek" | "custom"
+  provider: z.string().min(1),      // "openai" | "anthropic" | "deepseek" | "google" | "custom"
   apiKey: z.string().min(1),         // 原始 API Key
   label: z.string().optional(),      // 备注名
   baseUrl: z.string().url().optional(), // 自定义 Provider 的 base URL
+  format: z.enum(["openai", "openai-responses", "anthropic", "google-genai"]).optional(),  // ★ API 协议格式
 });
 
 // GET — 列出 API Keys（脱敏）
@@ -30,6 +31,7 @@ export async function GET() {
     select: {
       id: true,
       provider: true,
+      format: true,        // ★ 返回 API 格式
       label: true,
       baseUrl: true,
       isActive: true,
@@ -52,6 +54,7 @@ export async function GET() {
     return {
       id: k.id,
       provider: k.provider,
+      format: k.format,      // ★ 返回 API 格式
       label: k.label,
       baseUrl: k.baseUrl,
       isActive: k.isActive,
@@ -79,7 +82,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { provider, apiKey, label, baseUrl } = parsed.data;
+  const { provider, apiKey, label, baseUrl, format } = parsed.data;
 
   // 加密 API Key
   const { encrypted, iv } = encrypt(apiKey);
@@ -88,6 +91,7 @@ export async function POST(req: Request) {
     data: {
       userId: session.user.id,
       provider,
+      format: format || "openai",     // ★ 存储 API 格式，默认 openai（Chat Completions）
       encryptedKey: encrypted,
       iv,
       label: label || `${provider} key`,

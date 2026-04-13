@@ -13,7 +13,7 @@ import { convertToModelMessages, type UIMessage } from "ai";
 import { auth } from "@/lib/auth";
 import { db } from "@/server/db";
 import { decrypt } from "@/lib/crypto";
-import { createModel, getProviderForModel, calculateCost } from "@/lib/llm";
+import { createModel, getProviderForModel, calculateCost, getProviderInfo, type ApiFormat } from "@/lib/llm";
 import { createAgentStream } from "@/lib/agent";
 import {
   searchRelevantMemories,
@@ -80,24 +80,53 @@ export async function POST(req: Request) {
     }
   }
 
-  const modelId = requestedModel || agentConfig?.model || "gpt-4o";
+  const modelId = requestedModel || agentConfig?.model || "gpt-5.4-mini";
 
   // ---- 4. 获取 API Key ----
+  //
+  // 查找优先级：
+  //   1. 精确匹配 provider（如 modelId=deepseek-chat → provider=deepseek → 查 provider="deepseek" 的 Key）
+  //   2. 如果没找到，尝试查 provider="custom" 的 Key（用户可能把所有 Key 都配成 custom）
+  //   3. 都没有，回退到环境变量
+  //
+  // 为什么要有 fallback 到 custom？
+  // → Settings 页面 Provider 下拉框有 "Custom (OpenAI Compatible)" 选项
+  // → 用户可能把 DeepSeek 的 Key 配在 custom 下面（因为 DeepSeek 本身就是 OpenAI 兼容格式）
+  // → 如果只按 exact provider 查，就会 miss
+  //
+  // ★ 如果 modelId 不在预设注册表里（用户输入的自定义模型名），
+  //   getProviderForModel 返回 null → 这里会 fallback 到 "openai"
+  //   然后第二轮查 "custom" Key → 用户只要配了 custom Key 就能用任意模型名
+  //
   const providerId = getProviderForModel(modelId) || "openai";
   let apiKey: string | null = null;
   let baseUrl: string | undefined;
+  let keyFormat: string | undefined;   // ★ 用户 Key 上存的 API 格式
 
-  const userKey = await db.apiKey.findFirst({
+  // 第一轮：精确匹配 provider
+  let userKey = await db.apiKey.findFirst({
     where: { userId, provider: providerId, isActive: true },
   });
+
+  // 第二轮：如果精确没匹配上，尝试 "custom"
+  // （很多用户会把代理平台/第三方 API 都配成 custom）
+  if (!userKey && providerId !== "custom") {
+    userKey = await db.apiKey.findFirst({
+      where: { userId, provider: "custom", isActive: true },
+    });
+  }
 
   if (userKey) {
     apiKey = decrypt(userKey.encryptedKey, userKey.iv);
     baseUrl = userKey.baseUrl || undefined;
+    keyFormat = userKey.format || undefined;   // ★ 读取用户存储的 API 格式
   } else {
+    // 第三轮：回退到环境变量
     const envKeyMap: Record<string, string | undefined> = {
       openai: process.env.OPENAI_API_KEY,
       anthropic: process.env.ANTHROPIC_API_KEY,
+      deepseek: process.env.DEEPSEEK_API_KEY,
+      google: process.env.GOOGLE_API_KEY,
     };
     apiKey = envKeyMap[providerId] || null;
   }
@@ -193,7 +222,13 @@ export async function POST(req: Request) {
   const baseSystemPrompt = agentConfig?.systemPrompt || undefined;
 
   // ---- 8. 创建模型实例 ----
-  const model = createModel(modelId, apiKey, { baseUrl, providerId });
+  // ★ keyFormat 优先（用户在 Settings 里选的格式）
+  // → 如果用户没指定 format，createModel() 内部会根据 providerId 自动判断
+  const model = createModel(modelId, apiKey, {
+    baseUrl,
+    providerId,
+    format: keyFormat as ApiFormat | undefined,
+  });
   const modelMessages = await convertToModelMessages(messages);
 
   // ---- 9. 使用 Agent Engine 创建流式响应 ----

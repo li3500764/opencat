@@ -17,37 +17,90 @@
 // → Memory 系统：把用户信息变成向量存进数据库，搜索时按语义匹配
 // → RAG 知识库：把文档内容变成向量，用户提问时找最相关的文档段落
 //
-// 为什么是 1536 维？
-// → OpenAI 的 text-embedding-3-small 模型输出 1536 维向量
-// → Prisma schema 里也定义了 vector(1536)
-// → 这是行业标准尺寸，平衡了精度和存储成本
+// ============================================================
+//
+// ★ 可配置化设计（Day 6 改进）：
+// ---
+// Embedding 服务不应该写死 OpenAI，理由：
+//   1. 用户可能用代理平台（heiyu、one-api 等），baseUrl 不同
+//   2. 国产模型也提供 Embedding（智谱、DeepSeek、百川等）
+//   3. 不同模型输出维度不同（1536 / 1024 / 768 等）
+//
+// 配置优先级：
+//   环境变量 > 用户 DB 配置的 API Key > 系统默认值
+//
+// 环境变量：
+//   EMBEDDING_MODEL      — 模型名（默认 text-embedding-3-small）
+//   EMBEDDING_DIMENSION  — 向量维度（默认 1536，必须和 Prisma schema 的 vector(N) 一致）
+//   EMBEDDING_BASE_URL   — 自定义 API 端点（留空则用 OpenAI 官方）
+//   EMBEDDING_API_KEY    — 专用 API Key（留空则按 provider 匹配用户 Key）
+//   EMBEDDING_PROVIDER   — 匹配用户 Key 时用哪个 provider（默认 "openai"）
+//
+// ⚠️ 维度注意事项：
+//   如果换了模型维度，Prisma schema 里的 vector(1536) 也要同步改，
+//   并且已有的向量数据需要全部重新生成。
+//   所以换维度是个"大动作"，不能随便改。
 //
 // ============================================================
 
 import { embed, embedMany } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { db } from "@/server/db";
+import { decrypt } from "@/lib/crypto";
 
-// ---------- 向量维度常量 ----------
-export const EMBEDDING_DIMENSION = 1536;
+// ============================================================
+// Embedding 配置（从环境变量读取，有默认值兜底）
+// ============================================================
 
-// ---------- 嵌入模型名 ----------
-// text-embedding-3-small 是 OpenAI 最新的轻量嵌入模型：
-// - 1536 维，精度足够
-// - 价格便宜：$0.02 / 百万 tokens
-// - 速度快
-const EMBEDDING_MODEL = "text-embedding-3-small";
+// 模型名 — 默认 OpenAI text-embedding-3-small
+// 常见可选值：
+//   OpenAI:   text-embedding-3-small (1536), text-embedding-3-large (3072), text-embedding-ada-002 (1536)
+//   DeepSeek: deepseek-embedding (1024, 预估)
+//   智谱:     embedding-3 (2048)
+//   百川:     baichuan-text-embedding (1024)
+//   Jina:     jina-embeddings-v3 (1024)
+// 只要 API 是 OpenAI 兼容格式（POST /v1/embeddings），都能用
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "text-embedding-3-small";
+
+// 向量维度 — 必须和 Prisma schema 的 vector(N) 一致
+// 如果改了这个值，记得同步改 schema.prisma 里的 Unsupported("vector(1536)")
+export const EMBEDDING_DIMENSION = parseInt(
+  process.env.EMBEDDING_DIMENSION || "1536",
+  10
+);
+
+// 自定义 API 端点 — 留空则用 OpenAI 官方地址
+// 填了就走这个地址（代理平台、私有部署等）
+// 例如：https://www.heiyucode.com/v1
+const EMBEDDING_BASE_URL = process.env.EMBEDDING_BASE_URL || undefined;
+
+// 专用 Embedding API Key — 如果 Embedding 用的 Key 和 Chat 不一样，可以单独配
+// 留空则走下面的 getEmbeddingApiKey 逻辑（按 provider 匹配用户 Key → 回退 OPENAI_API_KEY）
+const EMBEDDING_API_KEY = process.env.EMBEDDING_API_KEY || undefined;
+
+// Embedding 对应的 provider 名 — 匹配用户 Key 时用
+// 默认 "openai"，如果用户的 Embedding Key 存在其他 provider 下就改这个
+// 例如用户把 heiyu 的 Key 存为 provider: "custom:heiyu"，
+// 那就把 EMBEDDING_PROVIDER 设为 "custom:heiyu"
+const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || "openai";
 
 // ============================================================
 // 获取 Embedding 模型实例
 // ============================================================
 //
-// 为什么需要这个函数？
-// → Embedding 需要 API Key，但 Key 可能来自用户配置或环境变量
-// → 这个函数根据传入的 apiKey 创建模型实例
+// 用 @ai-sdk/openai 的 createOpenAI 创建。
+// 因为绝大多数 Embedding API 都兼容 OpenAI 格式
+// （POST /v1/embeddings，请求体 { model, input }）
+// 所以不管是 OpenAI 官方、代理平台、还是国产模型，
+// 只要兼容这个格式，传入 baseURL 就能用。
 //
 function getEmbeddingModel(apiKey: string) {
-  const openai = createOpenAI({ apiKey });
+  const openai = createOpenAI({
+    apiKey,
+    // 如果配了自定义 baseURL，走代理/私有端点
+    // 没配就用 @ai-sdk/openai 的默认值（OpenAI 官方）
+    ...(EMBEDDING_BASE_URL ? { baseURL: EMBEDDING_BASE_URL } : {}),
+  });
   return openai.textEmbeddingModel(EMBEDDING_MODEL);
 }
 
@@ -55,33 +108,87 @@ function getEmbeddingModel(apiKey: string) {
 // 获取可用的 Embedding API Key
 // ============================================================
 //
-// 优先级：用户的 OpenAI Key → 环境变量的 OPENAI_API_KEY
-// 因为 Embedding 只支持 OpenAI（暂时），所以只查 OpenAI 的 Key
+// 优先级（从高到低）：
+//   1. 环境变量 EMBEDDING_API_KEY  → 最高优先，专用 Key
+//   2. 用户在 Settings 配置的 Key  → 按 EMBEDDING_PROVIDER 匹配
+//   3. 环境变量 OPENAI_API_KEY     → 兜底
 //
-import { decrypt } from "@/lib/crypto";
-
+// 为什么有这个优先级？
+// → 有些场景 Embedding 和 Chat 用不同的 Key/Provider
+// → 比如 Chat 用 Anthropic，但 Embedding 只能用 OpenAI 兼容接口
+// → EMBEDDING_API_KEY 让运维可以直接配一个专用 Key，不依赖用户配置
+//
 export async function getEmbeddingApiKey(userId: string): Promise<string | null> {
-  // 1. 查用户的 OpenAI Key
+  // 1. 最高优先：环境变量专用 Key
+  if (EMBEDDING_API_KEY) {
+    return EMBEDDING_API_KEY;
+  }
+
+  // 2. 查用户在 Settings → API Keys 里配的 Key
+  //    按 EMBEDDING_PROVIDER 匹配（默认是 "openai"）
   const userKey = await db.apiKey.findFirst({
-    where: { userId, provider: "openai", isActive: true },
+    where: { userId, provider: EMBEDDING_PROVIDER, isActive: true },
   });
 
   if (userKey) {
+    // 解密用户存的 Key（AES-256-GCM 加密存储）
     return decrypt(userKey.encryptedKey, userKey.iv);
   }
 
-  // 2. 回退到环境变量
+  // 3. 兜底：环境变量 OPENAI_API_KEY
   return process.env.OPENAI_API_KEY || null;
+}
+
+// ============================================================
+// 获取用户配置的 Embedding baseUrl（可选）
+// ============================================================
+//
+// 如果用户的 API Key 配了自定义 baseUrl（比如代理平台），
+// 也用于 Embedding 请求。
+// 优先级：环境变量 EMBEDDING_BASE_URL > 用户 Key 的 baseUrl
+//
+export async function getEmbeddingBaseUrl(userId: string): Promise<string | undefined> {
+  // 环境变量已经配了就直接用
+  if (EMBEDDING_BASE_URL) return EMBEDDING_BASE_URL;
+
+  // 否则看用户的 Key 有没有 baseUrl
+  const userKey = await db.apiKey.findFirst({
+    where: { userId, provider: EMBEDDING_PROVIDER, isActive: true },
+  });
+
+  return userKey?.baseUrl || undefined;
+}
+
+// ============================================================
+// 获取完整的 Embedding 模型实例（含 Key + baseUrl 解析）
+// ============================================================
+//
+// 这是对外的便捷方法：自动解析 Key 和 baseUrl，返回可用的模型实例。
+// 如果用户的 Key 自带 baseUrl，也会用上。
+//
+async function resolveEmbeddingModel(userId: string) {
+  const apiKey = await getEmbeddingApiKey(userId);
+  if (!apiKey) return null;
+
+  // 如果环境变量没配 baseUrl，尝试用用户 Key 上的 baseUrl
+  const userBaseUrl = await getEmbeddingBaseUrl(userId);
+
+  const openai = createOpenAI({
+    apiKey,
+    ...(userBaseUrl ? { baseURL: userBaseUrl } : {}),
+  });
+
+  return openai.textEmbeddingModel(EMBEDDING_MODEL);
 }
 
 // ============================================================
 // 生成单条文本的向量
 // ============================================================
 //
-// 输入：一段文字
-// 输出：1536 维浮点数数组
+// 输入：一段文字 + apiKey（或用 resolveEmbeddingModel 自动解析）
+// 输出：N 维浮点数数组（维度由 EMBEDDING_DIMENSION 决定）
 //
-// 使用 AI SDK 的 embed() 函数，底层调用 OpenAI Embeddings API
+// 使用 AI SDK 的 embed() 函数，底层调用 OpenAI 兼容的 /v1/embeddings
 //
 export async function generateEmbedding(
   text: string,
@@ -89,8 +196,6 @@ export async function generateEmbedding(
 ): Promise<number[]> {
   const model = getEmbeddingModel(apiKey);
 
-  // AI SDK 的 embed() 函数
-  // 发送文本到 OpenAI，返回 { embedding: number[], usage: { tokens } }
   const result = await embed({
     model,
     value: text,
@@ -104,7 +209,7 @@ export async function generateEmbedding(
 // ============================================================
 //
 // 用于 RAG 文档分块后的批量向量化
-// embedMany 会自动处理并发和速率限制
+// embedMany 会一次性把所有文本发给 API，效率远高于逐个 embed
 //
 export async function generateEmbeddings(
   texts: string[],
@@ -120,6 +225,30 @@ export async function generateEmbeddings(
   });
 
   return result.embeddings;
+}
+
+// ============================================================
+// 便捷方法：自动解析用户配置，生成单条向量
+// ============================================================
+//
+// 与 generateEmbedding 的区别：不需要手动传 apiKey，
+// 自动走 getEmbeddingApiKey 解析链。
+// 适合在 Chat API 等场景直接调用。
+//
+export async function generateEmbeddingForUser(
+  text: string,
+  userId: string
+): Promise<number[] | null> {
+  const model = await resolveEmbeddingModel(userId);
+  if (!model) return null;
+
+  try {
+    const result = await embed({ model, value: text });
+    return result.embedding;
+  } catch (err) {
+    console.error("[Embedding] Failed to generate embedding:", err);
+    return null;
+  }
 }
 
 // ============================================================

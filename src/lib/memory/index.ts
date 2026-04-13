@@ -5,7 +5,9 @@
 export {
   generateEmbedding,
   generateEmbeddings,
+  generateEmbeddingForUser,
   getEmbeddingApiKey,
+  getEmbeddingBaseUrl,
   searchMemories,
   searchDocumentChunks,
   EMBEDDING_DIMENSION,

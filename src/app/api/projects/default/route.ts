@@ -34,7 +34,7 @@ export async function GET() {
         userId,
         name: "Default",
         description: "Default project",
-        defaultModel: "gpt-4o",
+        defaultModel: "gpt-5.4-mini",
       },
     });
   }

@@ -64,7 +64,7 @@ const DEFAULT_FORM = {
   name: "",
   description: "",
   systemPrompt: "你是一个有帮助的 AI 助手。请用中文回复用户。",
-  model: "gpt-4o",
+  model: "gpt-5.4-mini",
   temperature: 0.7,
   maxSteps: 10,
   tools: [] as string[],

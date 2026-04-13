@@ -5,13 +5,26 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Loader2, CheckCircle, XCircle, Key, ArrowLeft } from "lucide-react";
+import { Plus, Trash2, Loader2, CheckCircle, XCircle, Key, ArrowLeft, Pencil } from "lucide-react";
 import Link from "next/link";
 import { PROVIDERS } from "@/lib/llm/registry";
+import { API_FORMAT_LABELS } from "@/lib/llm/types";
+import type { ApiFormat } from "@/lib/llm/types";
+
+// ---- Provider → 默认 Format 映射 ----
+// 选择 Provider 时自动推荐对应的 API 格式
+const PROVIDER_DEFAULT_FORMAT: Record<string, ApiFormat> = {
+  openai: "openai-responses",
+  anthropic: "anthropic",
+  deepseek: "openai",
+  google: "google-genai",
+  custom: "openai",           // 自定义 Provider 默认走 Chat Completions
+};
 
 interface ApiKeyItem {
   id: string;
   provider: string;
+  format: string;
   label: string;
   baseUrl: string | null;
   isActive: boolean;
@@ -23,13 +36,16 @@ export default function SettingsPage() {
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 添加表单
-  const [showAdd, setShowAdd] = useState(false);
+  // 添加/编辑表单
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null); // null = 新增模式
   const [provider, setProvider] = useState("openai");
+  const [format, setFormat] = useState<ApiFormat>("openai-responses");  // ★ API 协议格式
   const [apiKey, setApiKey] = useState("");
   const [label, setLabel] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   // 测试状态
   const [testing, setTesting] = useState<string | null>(null);
@@ -43,24 +59,99 @@ export default function SettingsPage() {
 
   useEffect(() => { fetchKeys(); }, [fetchKeys]);
 
-  const handleAdd = async () => {
-    if (!apiKey.trim()) return;
+  // ---- 打开新增表单 ----
+  const handleShowAdd = () => {
+    setEditingId(null);
+    setProvider("openai");
+    setFormat("openai-responses");
+    setApiKey("");
+    setLabel("");
+    setBaseUrl("");
+    setSaveError("");
+    setShowForm(true);
+  };
+
+  // ---- 打开编辑表单 ----
+  const handleEdit = (k: ApiKeyItem) => {
+    setEditingId(k.id);
+    setProvider(k.provider);
+    setFormat((k.format || PROVIDER_DEFAULT_FORMAT[k.provider] || "openai") as ApiFormat);
+    setLabel(k.label);
+    setBaseUrl(k.baseUrl || "");
+    setApiKey(""); // 密钥不回填，留空表示不修改
+    setSaveError("");
+    setShowForm(true);
+  };
+
+  // ---- 保存（新增或编辑） ----
+  const handleSave = async () => {
     setSaving(true);
-    const res = await fetch("/api/keys", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        provider,
-        apiKey: apiKey.trim(),
-        label: label.trim() || undefined,
-        baseUrl: baseUrl.trim() || undefined,
-      }),
-    });
-    if (res.ok) {
-      setApiKey(""); setLabel(""); setBaseUrl(""); setShowAdd(false);
-      fetchKeys();
+    setSaveError("");
+
+    try {
+      if (editingId) {
+        // 编辑模式：PUT /api/keys/[id]
+        const body: Record<string, string | undefined> = {
+          provider,
+          format,            // ★ API 格式
+          label: label.trim() || undefined,
+          baseUrl: baseUrl.trim() || undefined,
+        };
+        // 只有用户填了新 Key 才传（不填 = 不改）
+        if (apiKey.trim()) {
+          body.apiKey = apiKey.trim();
+        }
+
+        const res = await fetch(`/api/keys/${editingId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok) {
+          setSaveError(data?.error || data?.message || "Failed to update API key");
+          return;
+        }
+
+        setShowForm(false);
+        setEditingId(null);
+        fetchKeys();
+      } else {
+        // 新增模式：POST /api/keys
+        if (!apiKey.trim()) {
+          return;
+        }
+
+        const res = await fetch("/api/keys", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider,
+            format,            // ★ API 格式
+            apiKey: apiKey.trim(),
+            label: label.trim() || undefined,
+            baseUrl: baseUrl.trim() || undefined,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok) {
+          setSaveError(data?.error || data?.message || "Failed to save API key");
+          return;
+        }
+
+        setShowForm(false);
+        setApiKey("");
+        setLabel("");
+        setBaseUrl("");
+        fetchKeys();
+      }
+    } catch {
+      setSaveError("Network error while saving API key");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const handleDelete = async (id: string) => {
@@ -94,13 +185,13 @@ export default function SettingsPage() {
         {/* Key 列表 */}
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted" /></div>
-        ) : keys.length === 0 && !showAdd ? (
+        ) : keys.length === 0 && !showForm ? (
           <div className="rounded-xl border border-border bg-background-secondary p-8 text-center">
             <Key className="mx-auto h-8 w-8 text-muted/40" />
             <p className="mt-3 text-sm text-muted">No API keys configured</p>
             <p className="mt-1 text-xs text-muted/60">Add a key to start chatting with AI models</p>
             <button
-              onClick={() => setShowAdd(true)}
+              onClick={handleShowAdd}
               className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-80"
             >
               <Plus className="h-3.5 w-3.5" /> Add API Key
@@ -116,7 +207,10 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{k.label}</p>
-                  <p className="text-xs text-muted">{k.provider} · {k.maskedKey}</p>
+                  <p className="text-xs text-muted">
+                    {k.provider} · <span className="text-muted/70">{API_FORMAT_LABELS[k.format as ApiFormat] || k.format}</span> · {k.maskedKey}
+                    {k.baseUrl && <span className="ml-1 text-muted/50">· {k.baseUrl}</span>}
+                  </p>
                   {testResult[k.id] && (
                     <p className={`mt-1 text-xs ${testResult[k.id].ok ? "text-success" : "text-danger"}`}>
                       {testResult[k.id].ok ? <CheckCircle className="inline h-3 w-3 mr-1" /> : <XCircle className="inline h-3 w-3 mr-1" />}
@@ -124,6 +218,15 @@ export default function SettingsPage() {
                     </p>
                   )}
                 </div>
+                {/* 编辑按钮 */}
+                <button
+                  onClick={() => handleEdit(k)}
+                  className="rounded-lg p-1.5 text-muted hover:text-foreground"
+                  title="Edit"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                {/* 测试按钮 */}
                 <button
                   onClick={() => handleTest(k.id)}
                   disabled={testing === k.id}
@@ -140,9 +243,9 @@ export default function SettingsPage() {
               </div>
             ))}
 
-            {!showAdd && (
+            {!showForm && (
               <button
-                onClick={() => setShowAdd(true)}
+                onClick={handleShowAdd}
                 className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border p-3 text-sm text-muted hover:border-foreground/20 hover:text-foreground"
               >
                 <Plus className="h-3.5 w-3.5" /> Add another key
@@ -151,16 +254,23 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* 添加表单 */}
-        {showAdd && (
+        {/* 添加/编辑表单 */}
+        {showForm && (
           <div className="mt-4 rounded-xl border border-border bg-background-secondary p-5 space-y-4">
-            <h3 className="text-sm font-medium">Add API Key</h3>
+            <h3 className="text-sm font-medium">
+              {editingId ? "Edit API Key" : "Add API Key"}
+            </h3>
 
             <div>
               <label className="mb-1 block text-xs text-muted">Provider</label>
               <select
                 value={provider}
-                onChange={(e) => setProvider(e.target.value)}
+                onChange={(e) => {
+                  const newProvider = e.target.value;
+                  setProvider(newProvider);
+                  // ★ 切换 Provider 时自动推荐对应的 API 格式
+                  setFormat(PROVIDER_DEFAULT_FORMAT[newProvider] || "openai");
+                }}
                 className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50"
               >
                 {PROVIDERS.map((p) => (
@@ -171,12 +281,31 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-muted">API Key</label>
+              <label className="mb-1 block text-xs text-muted">
+                API Format
+                <span className="text-muted/50 ml-1">(auto-detected, change if using proxy)</span>
+              </label>
+              <select
+                value={format}
+                onChange={(e) => setFormat(e.target.value as ApiFormat)}
+                className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50"
+              >
+                {(Object.entries(API_FORMAT_LABELS) as [ApiFormat, string][]).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs text-muted">
+                API Key
+                {editingId && <span className="text-muted/50 ml-1">(leave empty to keep current)</span>}
+              </label>
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-..."
+                placeholder={editingId ? "Leave empty to keep unchanged" : "sk-..."}
                 className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50"
               />
             </div>
@@ -186,14 +315,23 @@ export default function SettingsPage() {
               <input
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="My OpenAI Key"
+                placeholder="My DeepSeek Key"
                 className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50"
               />
             </div>
 
-            {(provider === "custom" || provider === "deepseek") && (
+            {saveError && (
+              <p className="text-sm text-danger">{saveError}</p>
+            )}
+
+            {(provider === "custom" || provider === "deepseek" || provider === "google") && (
               <div>
-                <label className="mb-1 block text-xs text-muted">Base URL</label>
+                <label className="mb-1 block text-xs text-muted">
+                  Base URL
+                  {provider === "deepseek" && (
+                    <span className="text-muted/50 ml-1">(default: https://api.deepseek.com)</span>
+                  )}
+                </label>
                 <input
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
@@ -205,15 +343,21 @@ export default function SettingsPage() {
 
             <div className="flex gap-2 pt-1">
               <button
-                onClick={handleAdd}
-                disabled={!apiKey.trim() || saving}
+                onClick={handleSave}
+                disabled={(!editingId && !apiKey.trim()) || saving}
                 className="flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-80 disabled:opacity-50"
               >
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                Save
+                {editingId ? "Save Changes" : "Save"}
               </button>
               <button
-                onClick={() => { setShowAdd(false); setApiKey(""); }}
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingId(null);
+                  setApiKey("");
+                  setFormat("openai-responses");
+                  setSaveError("");
+                }}
                 className="rounded-lg px-4 py-2 text-sm text-muted hover:text-foreground"
               >
                 Cancel
