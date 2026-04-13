@@ -75,9 +75,6 @@ export async function PUT(
     const { encrypted, iv } = encrypt(newApiKey.trim());
     updateData.encryptedKey = encrypted;
     updateData.iv = iv;
-    // 更新 maskedKey：显示前 4 位和后 4 位
-    updateData.maskedKey =
-      newApiKey.slice(0, 4) + "..." + newApiKey.slice(-4);
   }
 
   const updated = await db.apiKey.update({

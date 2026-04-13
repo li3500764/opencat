@@ -17,7 +17,7 @@
 //
 // ============================================================
 
-import { streamText, stepCountIs, type LanguageModel } from "ai";
+import { streamText, stepCountIs, tool, type LanguageModel } from "ai";
 import type { ToolSet } from "ai";
 import type { ModelMessage } from "ai";
 import { toolRegistry, createCallAgentTool } from "../tools";
@@ -96,14 +96,14 @@ export function createAgentStream(config: AgentConfig, options: AgentRunOptions)
 
     // 直接插入到工具集（与 registry.toAISDKTools 返回格式一致）
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (tools as Record<string, any>)["call_agent"] = {
+    (tools as Record<string, any>)["call_agent"] = tool({
       description: callAgentToolDef.description,
-      parameters: callAgentToolDef.parameters,
+      inputSchema: callAgentToolDef.parameters,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       execute: async (input: any) => {
         return callAgentToolDef.execute(input, context);
       },
-    };
+    });
   }
 
   // ---- 3. 判断是否有可用工具 ----

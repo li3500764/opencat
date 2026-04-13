@@ -20,7 +20,7 @@
 //
 // ============================================================
 
-import type { ToolSet } from "ai";
+import { tool, type ToolSet } from "ai";
 import type { ToolDefinition, ToolExecutionContext, RegisteredTool } from "./types";
 import { calculatorTool, datetimeTool, httpRequestTool, memorySaveTool, memorySearchTool } from "./builtin";
 
@@ -115,25 +115,20 @@ class ToolRegistry {
 
       const def = registered.definition;
 
-      // 将我们的 ToolDefinition 转成 AI SDK 的 Tool 格式
-      //
-      // AI SDK 的 tool() 本质上是个 identity function（原样返回），
-      // 但它的 TypeScript 重载类型很严格，在我们的泛型架构下会报类型错误。
-      //
-      // 解决方案：直接构造 AI SDK 需要的对象结构，跳过 tool() 函数。
-      // 这完全合法，因为 tool() 不做任何转换，只是类型标记。
-      // streamText() 的 tools 参数接受 ToolSet = Record<string, Tool>
+      // 将我们的 ToolDefinition 转成 AI SDK 6 的 Tool 格式。
+      // 注意：AI SDK 6 使用的是 `inputSchema`，不是旧写法里的 `parameters`。
+      // 如果字段名不对，provider 会收到一个 null schema，Tool Calling 会直接报错。
       //
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (toolSet as Record<string, any>)[name] = {
+      (toolSet as Record<string, any>)[name] = tool({
         description: def.description,
-        parameters: def.parameters,
+        inputSchema: def.parameters,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         execute: async (input: any) => {
           const result = await def.execute(input, context);
           return result;
         },
-      };
+      });
     }
 
     return toolSet;
