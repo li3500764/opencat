@@ -23,8 +23,8 @@
 | Day 2 | 单模型对话 + SSE 流式 | ✅ 完成 |
 | Day 3 | 多模型 Gateway + API Key 管理 | ✅ 完成 |
 | Day 4 | Tool Calling + ReAct Agent 引擎 | ✅ 完成 |
-| Day 5 | 多 Agent 编排 + 项目隔离 | 🔲 下一步 |
-| Day 6 | Memory 系统 + RAG 知识库 | 🔲 |
+| Day 5 | 多 Agent 编排 + 项目隔离 | ✅ 完成 |
+| Day 6 | Memory 系统 + RAG 知识库 | 🔲 下一步 |
 | Day 7 | Dashboard + Tauri 打包 + 部署 | 🔲 |
 
 ## Day 1 完成内容
@@ -112,11 +112,23 @@
 5. 工具调用 state 生命周期：input-streaming → input-available → output-available / output-error
 6. Zod v4 的 `z.record()` 需要两个参数：z.record(z.string(), z.string())，不能只传一个
 
-## Day 5 计划（下一步）
-1. 多 Agent 编排 — Orchestrator Agent 协调多个子 Agent
-2. 项目隔离 — 每个 Project 独立的 Agent/Tool/Memory 配置
-3. Agent 管理 CRUD — 创建/编辑/删除自定义 Agent（系统提示词、工具选择、maxSteps）
-4. Agent 切换器 — 对话时可选择使用哪个 Agent
+## Day 5 完成内容
+- [x] Agent CRUD API — GET/POST /api/agents（列表+创建）+ GET/PUT/DELETE /api/agents/[id]（详情/更新/删除）
+- [x] Agent 管理页面 /settings/agents — 卡片列表 + 创建/编辑表单（名称/描述/系统提示词/模型/温度/步数/工具选择/Orchestrator 开关）
+- [x] AgentSelector 组件 — 对话顶栏下拉选择 Agent，支持 Default（无 Agent）+ 自定义 Agent 列表
+- [x] ChatPanel 集成 — 新增 agentId 状态，通过 transport body 传给 Chat API
+- [x] Chat API 改造（Day 5 版）— 接受 agentId，加载 Agent 配置覆盖默认值（systemPrompt/tools/maxSteps/model），Conversation 关联 agentId
+- [x] Orchestrator Agent — call_agent 内置工具，Orchestrator 可通过 Tool Calling 调用子 Agent（generateText 非流式执行）
+- [x] createCallAgentTool 工厂函数 — 根据运行时子 Agent 列表动态创建 call_agent 工具定义
+- [x] Agent Engine 升级 — createAgentStream 新增 subAgents 参数，自动注册 call_agent 工具
+- [x] Default Project API — GET /api/projects/default，自动创建用户的 Default 项目
+- [x] 侧边栏新增 Agents 入口（Bot 图标 → /settings/agents）
+- [x] TypeScript 编译零错误，Next.js build 通过
+
+## Day 6 计划（下一步）
+1. Memory 系统 — Agent 自动记忆关键信息（用户偏好、上下文）
+2. RAG 知识库 — 文档上传 → 分块 → pgvector 向量存储 → 语义检索
+3. Memory + RAG 集成到对话流程 — 自动注入相关上下文
 
 ## Prisma 7 踩坑记录
 1. schema.prisma 里 datasource 不能写 url = env()，要移到 prisma.config.ts 的 datasource.url
@@ -143,7 +155,8 @@ src/lib/tools/builtin/calculator.ts   → 内置工具：安全数学计算
 src/lib/tools/builtin/datetime.ts     → 内置工具：日期时间（now/format/diff）
 src/lib/tools/builtin/http-request.ts → 内置工具：HTTP API 调用
 src/lib/tools/builtin/index.ts        → 内置工具统一导出
-src/lib/agent/react-engine.ts  → ReAct Agent Engine（createAgentStream + stopWhen）
+src/lib/tools/builtin/call-agent.ts   → 内置工具：Orchestrator 子 Agent 调用（Day 5）
+src/lib/agent/react-engine.ts  → ReAct Agent Engine（createAgentStream + stopWhen + Orchestrator）
 src/lib/agent/index.ts         → Agent 模块统一导出
 src/stores/chat.ts             → Zustand 对话列表状态管理
 src/stores/theme.ts            → Zustand 主题状态（light/dark）
@@ -153,6 +166,7 @@ src/components/chat/message-list.tsx  → 消息列表
 src/components/chat/message-item.tsx  → 单条消息
 src/components/chat/markdown.tsx      → Markdown 渲染器
 src/components/chat/model-selector.tsx → 模型下拉选择器
+src/components/chat/agent-selector.tsx → Agent 下拉选择器（Day 5）
 src/components/layout/sidebar.tsx     → 侧边栏
 src/components/layout/theme-provider.tsx → 主题初始化
 src/components/layout/theme-toggle.tsx   → 主题切换按钮
@@ -162,7 +176,11 @@ src/app/api/conversations/[id]/messages/route.ts → 历史消息
 src/app/api/keys/route.ts             → API Key 增查
 src/app/api/keys/[id]/route.ts        → API Key 删除 + 测试
 src/app/api/tools/route.ts            → GET 可用工具列表
+src/app/api/agents/route.ts           → Agent 列表 + 创建
+src/app/api/agents/[id]/route.ts      → Agent 详情 + 更新 + 删除
+src/app/api/projects/default/route.ts → 获取/创建默认项目
 src/app/(dashboard)/settings/page.tsx  → Settings / API Key 管理页
+src/app/(dashboard)/settings/agents/page.tsx → Agent 管理页（Day 5）
 src/app/(dashboard)/chat/page.tsx      → 新对话页面
 src/app/(dashboard)/chat/[id]/page.tsx → 已有对话页面
 src/app/globals.css                    → 设计系统（light/dark 双主题）

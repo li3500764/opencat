@@ -11,4 +11,5 @@ export type {
   HttpToolConfig,
   RegisteredTool,
 } from "./types";
-export { calculatorTool, datetimeTool, httpRequestTool } from "./builtin";
+export { calculatorTool, datetimeTool, httpRequestTool, createCallAgentTool } from "./builtin";
+export type { SubAgentInfo } from "./builtin";

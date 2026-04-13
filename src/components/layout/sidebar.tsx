@@ -15,7 +15,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useChatStore } from "@/stores/chat";
-import { Plus, MessageSquare, Trash2, Loader2, LogOut, Settings, Key } from "lucide-react";
+import { Plus, MessageSquare, Trash2, Loader2, LogOut, Settings, Key, Bot } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -128,9 +128,16 @@ export function Sidebar({ user }: SidebarProps) {
 
       {/* 底部操作栏 */}
       <div className="border-t border-border p-3">
-        {/* 工具行：主题切换 + Settings */}
+        {/* 工具行：主题切换 + Agents + API Keys */}
         <div className="mb-2 flex items-center gap-1">
           <ThemeToggle />
+          <button
+            onClick={() => router.push("/settings/agents")}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[var(--sidebar-hover)] hover:text-foreground"
+            title="Agents"
+          >
+            <Bot className="h-4 w-4" />
+          </button>
           <button
             onClick={() => router.push("/settings")}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[var(--sidebar-hover)] hover:text-foreground"

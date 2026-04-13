@@ -1,17 +1,20 @@
 // ============================================================
-// Chat API — SSE 流式对话（Day 4: ReAct Agent + Tool Calling）
+// Chat API — SSE 流式对话（Day 5: Agent 选择 + 项目隔离）
 // ============================================================
 //
-// Day 4 升级内容：
-// 1. 引入 Agent Engine，支持 Tool Calling（计算器、日期时间、HTTP 请求）
-// 2. 前端可通过 enableTools 参数控制是否启用工具
-// 3. streamText 增加 tools 和 stopWhen 参数，实现 ReAct 循环
-// 4. onFinish 回调中记录工具调用信息
+// Day 5 升级：
+// 1. 新增 agentId 参数 — 使用指定 Agent 的配置（系统提示词、工具、模型等）
+// 2. Agent 配置覆盖机制：agentId → 加载 Agent → 用 Agent 的 systemPrompt + tools + model
+// 3. 项目隔离：Conversation 关联 agentId
+// 4. 兼容 Day 4：不传 agentId 时退化为默认 Agent 行为
 //
-// 请求体新增字段：
-//   enableTools?: boolean  — 是否启用 Agent 工具（默认 true）
-//   toolNames?: string[]   — 指定启用哪些工具（不传 = 全部内置工具）
-//
+// 请求体：
+//   messages:       UIMessage[]      — 对话消息
+//   conversationId: string?          — 已有对话 ID（续聊时传）
+//   modelId:        string?          — 模型 ID（默认 gpt-4o）
+//   agentId:        string?          — ★ Agent ID（Day 5 新增）
+//   enableTools:    boolean?         — 是否启用工具（默认 true）
+//   toolNames:      string[]?        — 指定工具列表
 // ============================================================
 
 import { convertToModelMessages, type UIMessage } from "ai";
@@ -35,13 +38,14 @@ export async function POST(req: Request) {
     messages,
     conversationId: existingConvId,
     modelId: requestedModel,
-    // ★ Day 4 新增：工具相关参数
-    enableTools = true,       // 默认启用工具
-    toolNames,                // 可选：指定要用的工具列表
+    agentId,                        // ★ Day 5 新增
+    enableTools = true,
+    toolNames,
   } = body as {
     messages: UIMessage[];
     conversationId?: string;
     modelId?: string;
+    agentId?: string;               // ★ Day 5 新增
     enableTools?: boolean;
     toolNames?: string[];
     id?: string;
@@ -52,15 +56,58 @@ export async function POST(req: Request) {
     return new Response("Messages required", { status: 400 });
   }
 
-  const modelId = requestedModel || "gpt-4o";
+  // ---- 3. ★ Day 5: 加载 Agent 配置 ----
+  //
+  // 如果前端传了 agentId，从数据库加载这个 Agent 的完整配置：
+  //   - systemPrompt（系统提示词 → 定义 Agent 角色）
+  //   - model（使用的 LLM 模型）
+  //   - tools（可调用的工具列表）
+  //   - maxSteps（ReAct 最大步数）
+  //   - temperature（创造性参数）
+  //
+  // 加载后，这些配置会覆盖默认值。
+  // 前端的 modelId 仍可以手动覆盖 Agent 的默认模型。
+  //
+  let agentConfig: {
+    systemPrompt?: string;
+    model: string;
+    toolNames: string[];
+    maxSteps: number;
+    temperature: number;
+  } | null = null;
 
-  // ---- 3. 获取 API Key ----
-  // 优先用用户存储的 Key，回退到环境变量
+  if (agentId) {
+    // 查找 Agent，同时校验项目属于当前用户（项目隔离）
+    const agent = await db.agent.findFirst({
+      where: {
+        id: agentId,
+        project: { userId },
+      },
+    });
+
+    if (agent) {
+      agentConfig = {
+        systemPrompt: agent.systemPrompt,
+        model: agent.model,
+        toolNames: agent.tools as string[],
+        maxSteps: agent.maxSteps,
+        temperature: agent.temperature,
+      };
+    }
+    // Agent 不存在时不报错，退化为默认行为
+  }
+
+  // ---- 4. 确定最终使用的模型 ----
+  //
+  // 优先级：前端 modelId > Agent 配置 > 默认 gpt-4o
+  // 为什么前端优先？→ 用户可能想临时切换模型，不改变 Agent 配置
+  const modelId = requestedModel || agentConfig?.model || "gpt-4o";
+
+  // ---- 5. 获取 API Key ----
   const providerId = getProviderForModel(modelId) || "openai";
   let apiKey: string | null = null;
   let baseUrl: string | undefined;
 
-  // 查用户的 Key
   const userKey = await db.apiKey.findFirst({
     where: { userId, provider: providerId, isActive: true },
   });
@@ -69,7 +116,6 @@ export async function POST(req: Request) {
     apiKey = decrypt(userKey.encryptedKey, userKey.iv);
     baseUrl = userKey.baseUrl || undefined;
   } else {
-    // 回退到 .env
     const envKeyMap: Record<string, string | undefined> = {
       openai: process.env.OPENAI_API_KEY,
       anthropic: process.env.ANTHROPIC_API_KEY,
@@ -84,7 +130,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // ---- 4. 获取或创建对话 ----
+  // ---- 6. 获取或创建对话 ----
   let conversationId = existingConvId;
 
   if (!conversationId) {
@@ -107,12 +153,17 @@ export async function POST(req: Request) {
     const title = titleText.slice(0, 50) + (titleText.length > 50 ? "..." : "");
 
     const conversation = await db.conversation.create({
-      data: { projectId: defaultProject.id, title },
+      data: {
+        projectId: defaultProject.id,
+        title,
+        // ★ Day 5: 关联 Agent
+        agentId: agentId || undefined,
+      },
     });
     conversationId = conversation.id;
   }
 
-  // ---- 5. 存用户消息 ----
+  // ---- 7. 存用户消息 ----
   const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
   if (lastUserMessage) {
     const text = extractTextFromParts(lastUserMessage.parts);
@@ -121,27 +172,34 @@ export async function POST(req: Request) {
     });
   }
 
-  // ---- 6. 创建模型实例 ----
+  // ---- 8. 创建模型实例 ----
   const model = createModel(modelId, apiKey, { baseUrl, providerId });
   const modelMessages = await convertToModelMessages(messages);
 
-  // ---- 7. ★ Day 4 改造：使用 Agent Engine 创建流式响应 ----
+  // ---- 9. 使用 Agent Engine 创建流式响应 ----
   //
-  // 之前（Day 2-3）直接调用 streamText：
-  //   const result = streamText({ model, messages: modelMessages });
+  // ★ Day 5: Agent 配置覆盖
   //
-  // 现在通过 Agent Engine 包装，增加了 tools 和 stopWhen：
-  //   createAgentStream(config, options) 内部还是调 streamText，
-  //   但额外传入了 tools（工具集）和 stopWhen: stepCountIs(10)
+  // 如果有 agentConfig（即选择了自定义 Agent），使用 Agent 的配置：
+  //   - systemPrompt → Agent 的角色定义
+  //   - toolNames → Agent 配置的工具列表
+  //   - maxSteps → Agent 的最大步数
   //
-  // 当 enableTools = false 时，不传工具 → 退化为普通聊天（兼容 Day 3）
+  // 如果没有 agentConfig（默认模式），使用 Day 4 的默认行为：
+  //   - 默认系统提示词
+  //   - 所有内置工具
+  //   - maxSteps = 10
   //
+  const finalToolNames = enableTools
+    ? (agentConfig?.toolNames ?? toolNames)
+    : [];
+
   const result = createAgentStream(
     {
       model,
-      maxSteps: 10,
-      // 如果前端指定不启用工具，传空数组 → 不会注入任何工具
-      toolNames: enableTools ? toolNames : [],
+      systemPrompt: agentConfig?.systemPrompt,
+      maxSteps: agentConfig?.maxSteps ?? 10,
+      toolNames: finalToolNames,
       context: {
         userId,
         conversationId,
@@ -152,27 +210,14 @@ export async function POST(req: Request) {
     }
   );
 
-  // ---- 8. 后台保存 AI 回复 + 用量记录 ----
-  //
-  // StreamTextResult 的属性（.text, .totalUsage 等）都是 PromiseLike
-  // 当流式传输完成后，这些 Promise 会 resolve
-  //
-  // 注意：这里用 void 开头是因为我们不 await 这个 Promise
-  // 我们需要先返回 SSE 流给前端（第 9 步），让用户立即看到流式响应
-  // 保存数据库的操作在后台异步完成，不阻塞响应
-  //
-  // 这叫做 "fire and forget" 模式：
-  //   发射（启动异步任务）然后忘掉（不等它完成）
-  //   用于不影响用户体验的后台任务
+  // ---- 10. 后台保存 ----
   void (async () => {
     try {
-      // 等待流式生成完成，获取最终文本和用量
       const [text, totalUsage] = await Promise.all([
-        result.text,       // 最终生成的完整文本
-        result.totalUsage, // 所有步骤的总 token 用量（多步工具调用会累加）
+        result.text,
+        result.totalUsage,
       ]);
 
-      // 存 assistant 消息到数据库
       await db.message.create({
         data: {
           conversationId: conversationId!,
@@ -183,13 +228,11 @@ export async function POST(req: Request) {
         },
       });
 
-      // 更新对话的最后修改时间
       await db.conversation.update({
         where: { id: conversationId! },
         data: { updatedAt: new Date() },
       });
 
-      // 记录用量 + 费用
       if (totalUsage) {
         const cost = calculateCost(
           modelId,
@@ -209,18 +252,16 @@ export async function POST(req: Request) {
         });
       }
     } catch (err) {
-      // 后台保存失败不应该影响用户，只打日志
       console.error("[Chat API] Failed to save response:", err);
     }
   })();
 
-  // ---- 9. 返回 SSE 流 ----
+  // ---- 11. 返回 SSE 流 ----
   return result.toUIMessageStreamResponse({
     headers: { "X-Conversation-Id": conversationId },
   });
 }
 
-// ---------- 辅助函数 ----------
 function extractTextFromParts(parts: UIMessage["parts"]): string {
   return parts
     .filter((p): p is { type: "text"; text: string } => p.type === "text")
