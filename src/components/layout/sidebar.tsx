@@ -15,7 +15,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useChatStore } from "@/stores/chat";
-import { Plus, MessageSquare, Trash2, Loader2, LogOut, Settings, Key, Bot } from "lucide-react";
+import { Plus, MessageSquare, Trash2, Loader2, LogOut, Settings, Key, Bot, Database } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -137,6 +137,13 @@ export function Sidebar({ user }: SidebarProps) {
             title="Agents"
           >
             <Bot className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => router.push("/settings/knowledge")}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[var(--sidebar-hover)] hover:text-foreground"
+            title="Knowledge Base"
+          >
+            <Database className="h-4 w-4" />
           </button>
           <button
             onClick={() => router.push("/settings")}

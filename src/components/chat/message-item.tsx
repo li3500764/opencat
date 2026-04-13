@@ -86,9 +86,12 @@ function getToolPartInfo(part: MessagePart) {
 // 工具名的中文映射 + 图标配色
 // ============================================================
 const TOOL_DISPLAY: Record<string, { label: string; color: string }> = {
-  calculator:    { label: "计算器",      color: "text-amber-600 dark:text-amber-400" },
-  datetime:      { label: "日期时间",    color: "text-sky-600 dark:text-sky-400" },
-  http_request:  { label: "HTTP 请求",   color: "text-emerald-600 dark:text-emerald-400" },
+  calculator:      { label: "计算器",      color: "text-amber-600 dark:text-amber-400" },
+  datetime:        { label: "日期时间",    color: "text-sky-600 dark:text-sky-400" },
+  http_request:    { label: "HTTP 请求",   color: "text-emerald-600 dark:text-emerald-400" },
+  memory_save:     { label: "保存记忆",    color: "text-violet-600 dark:text-violet-400" },
+  memory_search:   { label: "搜索记忆",    color: "text-indigo-600 dark:text-indigo-400" },
+  call_agent:      { label: "调用 Agent",  color: "text-rose-600 dark:text-rose-400" },
 };
 
 function getToolDisplay(name: string) {

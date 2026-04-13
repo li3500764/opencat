@@ -1,20 +1,12 @@
 // ============================================================
-// Chat API — SSE 流式对话（Day 5: Agent 选择 + 项目隔离）
+// Chat API — SSE 流式对话（Day 6: Memory + RAG 注入）
 // ============================================================
 //
-// Day 5 升级：
-// 1. 新增 agentId 参数 — 使用指定 Agent 的配置（系统提示词、工具、模型等）
-// 2. Agent 配置覆盖机制：agentId → 加载 Agent → 用 Agent 的 systemPrompt + tools + model
-// 3. 项目隔离：Conversation 关联 agentId
-// 4. 兼容 Day 4：不传 agentId 时退化为默认 Agent 行为
-//
-// 请求体：
-//   messages:       UIMessage[]      — 对话消息
-//   conversationId: string?          — 已有对话 ID（续聊时传）
-//   modelId:        string?          — 模型 ID（默认 gpt-4o）
-//   agentId:        string?          — ★ Agent ID（Day 5 新增）
-//   enableTools:    boolean?         — 是否启用工具（默认 true）
-//   toolNames:      string[]?        — 指定工具列表
+// Day 6 升级：
+// 1. 每次对话前，自动检索相关 Memory 注入到系统提示词
+// 2. 如果项目有 KnowledgeBase，检索相关文档片段注入
+// 3. memory_save / memory_search 工具自动可用
+// 4. 新增 knowledgeBaseId 参数
 // ============================================================
 
 import { convertToModelMessages, type UIMessage } from "ai";
@@ -23,6 +15,12 @@ import { db } from "@/server/db";
 import { decrypt } from "@/lib/crypto";
 import { createModel, getProviderForModel, calculateCost } from "@/lib/llm";
 import { createAgentStream } from "@/lib/agent";
+import {
+  searchRelevantMemories,
+  formatMemoriesForPrompt,
+  retrieveRelevantChunks,
+  formatChunksForPrompt,
+} from "@/lib/memory";
 
 export async function POST(req: Request) {
   // ---- 1. 鉴权 ----
@@ -38,16 +36,18 @@ export async function POST(req: Request) {
     messages,
     conversationId: existingConvId,
     modelId: requestedModel,
-    agentId,                        // ★ Day 5 新增
+    agentId,
     enableTools = true,
     toolNames,
+    knowledgeBaseId,             // ★ Day 6 新增
   } = body as {
     messages: UIMessage[];
     conversationId?: string;
     modelId?: string;
-    agentId?: string;               // ★ Day 5 新增
+    agentId?: string;
     enableTools?: boolean;
     toolNames?: string[];
+    knowledgeBaseId?: string;    // ★ Day 6 新增
     id?: string;
     trigger?: string;
   };
@@ -56,18 +56,7 @@ export async function POST(req: Request) {
     return new Response("Messages required", { status: 400 });
   }
 
-  // ---- 3. ★ Day 5: 加载 Agent 配置 ----
-  //
-  // 如果前端传了 agentId，从数据库加载这个 Agent 的完整配置：
-  //   - systemPrompt（系统提示词 → 定义 Agent 角色）
-  //   - model（使用的 LLM 模型）
-  //   - tools（可调用的工具列表）
-  //   - maxSteps（ReAct 最大步数）
-  //   - temperature（创造性参数）
-  //
-  // 加载后，这些配置会覆盖默认值。
-  // 前端的 modelId 仍可以手动覆盖 Agent 的默认模型。
-  //
+  // ---- 3. 加载 Agent 配置 ----
   let agentConfig: {
     systemPrompt?: string;
     model: string;
@@ -77,14 +66,9 @@ export async function POST(req: Request) {
   } | null = null;
 
   if (agentId) {
-    // 查找 Agent，同时校验项目属于当前用户（项目隔离）
     const agent = await db.agent.findFirst({
-      where: {
-        id: agentId,
-        project: { userId },
-      },
+      where: { id: agentId, project: { userId } },
     });
-
     if (agent) {
       agentConfig = {
         systemPrompt: agent.systemPrompt,
@@ -94,16 +78,11 @@ export async function POST(req: Request) {
         temperature: agent.temperature,
       };
     }
-    // Agent 不存在时不报错，退化为默认行为
   }
 
-  // ---- 4. 确定最终使用的模型 ----
-  //
-  // 优先级：前端 modelId > Agent 配置 > 默认 gpt-4o
-  // 为什么前端优先？→ 用户可能想临时切换模型，不改变 Agent 配置
   const modelId = requestedModel || agentConfig?.model || "gpt-4o";
 
-  // ---- 5. 获取 API Key ----
+  // ---- 4. 获取 API Key ----
   const providerId = getProviderForModel(modelId) || "openai";
   let apiKey: string | null = null;
   let baseUrl: string | undefined;
@@ -130,7 +109,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // ---- 6. 获取或创建对话 ----
+  // ---- 5. 获取或创建对话 ----
   let conversationId = existingConvId;
 
   if (!conversationId) {
@@ -139,12 +118,7 @@ export async function POST(req: Request) {
     });
     if (!defaultProject) {
       defaultProject = await db.project.create({
-        data: {
-          userId,
-          name: "Default",
-          description: "Default project",
-          defaultModel: modelId,
-        },
+        data: { userId, name: "Default", description: "Default project", defaultModel: modelId },
       });
     }
 
@@ -156,40 +130,73 @@ export async function POST(req: Request) {
       data: {
         projectId: defaultProject.id,
         title,
-        // ★ Day 5: 关联 Agent
         agentId: agentId || undefined,
       },
     });
     conversationId = conversation.id;
   }
 
-  // ---- 7. 存用户消息 ----
+  // ---- 6. 存用户消息 ----
   const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
+  const userText = lastUserMessage ? extractTextFromParts(lastUserMessage.parts) : "";
+
   if (lastUserMessage) {
-    const text = extractTextFromParts(lastUserMessage.parts);
     await db.message.create({
-      data: { conversationId, role: "user", content: text },
+      data: { conversationId, role: "user", content: userText },
     });
   }
+
+  // ---- 7. ★ Day 6: 检索 Memory + RAG，注入到系统提示词 ----
+  //
+  // 这是 Day 6 最关键的集成点！
+  //
+  // 原来的系统提示词只有 Agent 的角色定义。
+  // 现在我们在角色定义后面追加两部分内容：
+  //   (a) 相关记忆 — 来自 Memory 表的向量搜索结果
+  //   (b) 相关文档 — 来自 KnowledgeBase 的 RAG 检索结果
+  //
+  // 这些内容对 LLM 来说就像"背景资料"，
+  // LLM 在回答时会参考这些信息。
+  //
+  let systemPromptSuffix = "";
+
+  // (a) 搜索相关记忆
+  if (userText) {
+    try {
+      const memories = await searchRelevantMemories(userText, userId, { limit: 5 });
+      systemPromptSuffix += formatMemoriesForPrompt(memories);
+    } catch (err) {
+      console.error("[Chat] Memory retrieval failed:", err);
+    }
+  }
+
+  // (b) RAG 检索：如果指定了知识库
+  if (knowledgeBaseId && userText) {
+    try {
+      const chunks = await retrieveRelevantChunks(
+        userText,
+        knowledgeBaseId,
+        userId,
+        { limit: 5 }
+      );
+      systemPromptSuffix += formatChunksForPrompt(chunks);
+    } catch (err) {
+      console.error("[Chat] RAG retrieval failed:", err);
+    }
+  }
+
+  // 拼接最终系统提示词
+  // ★ Day 6 简化：
+  // 不在这里拼接 suffix，而是把 suffix 传给 Agent Engine，
+  // 让 Engine 统一处理系统提示词的拼装。
+  // 这里只负责确定"基础系统提示词"是什么。
+  const baseSystemPrompt = agentConfig?.systemPrompt || undefined;
 
   // ---- 8. 创建模型实例 ----
   const model = createModel(modelId, apiKey, { baseUrl, providerId });
   const modelMessages = await convertToModelMessages(messages);
 
   // ---- 9. 使用 Agent Engine 创建流式响应 ----
-  //
-  // ★ Day 5: Agent 配置覆盖
-  //
-  // 如果有 agentConfig（即选择了自定义 Agent），使用 Agent 的配置：
-  //   - systemPrompt → Agent 的角色定义
-  //   - toolNames → Agent 配置的工具列表
-  //   - maxSteps → Agent 的最大步数
-  //
-  // 如果没有 agentConfig（默认模式），使用 Day 4 的默认行为：
-  //   - 默认系统提示词
-  //   - 所有内置工具
-  //   - maxSteps = 10
-  //
   const finalToolNames = enableTools
     ? (agentConfig?.toolNames ?? toolNames)
     : [];
@@ -197,13 +204,16 @@ export async function POST(req: Request) {
   const result = createAgentStream(
     {
       model,
-      systemPrompt: agentConfig?.systemPrompt,
+      // ★ Day 6 简化：传基础 prompt + suffix，Engine 内部拼接
+      systemPrompt: baseSystemPrompt,
       maxSteps: agentConfig?.maxSteps ?? 10,
       toolNames: finalToolNames,
       context: {
         userId,
         conversationId,
       },
+      // ★ Day 6: 传入 memory/RAG suffix 供 engine 追加到系统提示词
+      _systemPromptSuffix: systemPromptSuffix || undefined,
     },
     {
       messages: modelMessages,

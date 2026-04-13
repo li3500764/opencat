@@ -24,7 +24,7 @@
 | Day 3 | 多模型 Gateway + API Key 管理 | ✅ 完成 |
 | Day 4 | Tool Calling + ReAct Agent 引擎 | ✅ 完成 |
 | Day 5 | 多 Agent 编排 + 项目隔离 | ✅ 完成 |
-| Day 6 | Memory 系统 + RAG 知识库 | 🔲 下一步 |
+| Day 6 | Memory 系统 + RAG 知识库 | ✅ 完成 |
 | Day 7 | Dashboard + Tauri 打包 + 部署 | 🔲 |
 
 ## Day 1 完成内容
@@ -130,6 +130,30 @@
 2. RAG 知识库 — 文档上传 → 分块 → pgvector 向量存储 → 语义检索
 3. Memory + RAG 集成到对话流程 — 自动注入相关上下文
 
+## Day 6 完成内容
+- [x] Embedding Service（src/lib/memory/embedding.ts）— OpenAI text-embedding-3-small，1536 维向量
+- [x] Memory Store（src/lib/memory/store.ts）— 向量化存储 + 语义检索 + CRUD，pgvector 余弦相似度搜索
+- [x] RAG 系统（src/lib/memory/rag.ts）— 文档分块（滑动窗口 500 字符/50 重叠/句子边界感知）→ 批量向量化 → 存储 DocumentChunk → 相似度检索
+- [x] Memory 工具（src/lib/tools/builtin/memory.ts）— memory_save（Agent 自主保存用户信息）+ memory_search（语义搜索记忆）
+- [x] Tool Registry 注册 memory_save + memory_search 两个新工具
+- [x] Chat API 集成 Memory + RAG（/api/chat）— 每次对话前自动检索相关记忆和知识库文档，注入系统提示词后缀
+- [x] Agent Engine 升级（react-engine.ts）— 新增 _systemPromptSuffix 字段，自动拼接 Memory/RAG 上下文到系统提示词
+- [x] KnowledgeBase API（/api/knowledge）— 知识库 CRUD（创建/列表/删除，级联删除 Document + Chunk）
+- [x] Document Upload API（/api/knowledge/[id]/documents）— 支持 JSON 和 FormData 上传，自动触发 RAG 处理流程
+- [x] Memory API（/api/memory）— 用户记忆列表 + 删除
+- [x] Knowledge Base 管理页面（/settings/knowledge）— 创建/删除知识库、上传 .txt/.md 文档、查看文档列表和分块状态
+- [x] 侧边栏新增 Knowledge Base 入口（Database 图标 → /settings/knowledge）
+- [x] ToolCallCard 新增 memory_save / memory_search / call_agent 的中文显示名和配色
+- [x] TypeScript 编译零错误，Next.js build 通过
+
+## pgvector + RAG 踩坑记录
+1. Prisma 7 不原生支持 vector 类型字段的读写，需要用 `$executeRaw` / `$queryRaw` 进行原始 SQL 操作
+2. Memory 表的 embedding 字段用 `Unsupported("vector(1536)")` 声明，Prisma ORM 的 create/findMany 无法操作该字段
+3. 向量相似度搜索用 `<=>` 余弦距离运算符（pgvector 提供），值越小越相似
+4. 批量向量化用 AI SDK 的 `embedMany()` 一次性处理所有 chunk，效率远高于逐个 `embed()`
+5. 文档分块的滑动窗口策略需要处理句子边界，避免在句子中间断开
+6. DocumentChunk 的 embedding 同样是 `Unsupported("vector(1536)")`，存储时用 `$executeRaw`
+
 ## Prisma 7 踩坑记录
 1. schema.prisma 里 datasource 不能写 url = env()，要移到 prisma.config.ts 的 datasource.url
 2. 默认 "client" 引擎需要 @prisma/adapter-pg + pg 连接池，不能直接 new PrismaClient()
@@ -156,7 +180,12 @@ src/lib/tools/builtin/datetime.ts     → 内置工具：日期时间（now/form
 src/lib/tools/builtin/http-request.ts → 内置工具：HTTP API 调用
 src/lib/tools/builtin/index.ts        → 内置工具统一导出
 src/lib/tools/builtin/call-agent.ts   → 内置工具：Orchestrator 子 Agent 调用（Day 5）
-src/lib/agent/react-engine.ts  → ReAct Agent Engine（createAgentStream + stopWhen + Orchestrator）
+src/lib/tools/builtin/memory.ts       → 内置工具：memory_save + memory_search（Day 6）
+src/lib/memory/embedding.ts    → Embedding 服务（向量生成 + 向量搜索）（Day 6）
+src/lib/memory/store.ts        → Memory Store（记忆存取 + 语义检索）（Day 6）
+src/lib/memory/rag.ts          → RAG 系统（分块 + 文档处理 + 检索）（Day 6）
+src/lib/memory/index.ts        → Memory 模块统一导出（Day 6）
+src/lib/agent/react-engine.ts  → ReAct Agent Engine（createAgentStream + stopWhen + Orchestrator + Memory/RAG suffix）
 src/lib/agent/index.ts         → Agent 模块统一导出
 src/stores/chat.ts             → Zustand 对话列表状态管理
 src/stores/theme.ts            → Zustand 主题状态（light/dark）
@@ -178,9 +207,13 @@ src/app/api/keys/[id]/route.ts        → API Key 删除 + 测试
 src/app/api/tools/route.ts            → GET 可用工具列表
 src/app/api/agents/route.ts           → Agent 列表 + 创建
 src/app/api/agents/[id]/route.ts      → Agent 详情 + 更新 + 删除
+src/app/api/knowledge/route.ts        → KnowledgeBase CRUD（Day 6）
+src/app/api/knowledge/[id]/documents/route.ts → 文档上传 + 列表（Day 6）
+src/app/api/memory/route.ts           → Memory 列表 + 删除（Day 6）
 src/app/api/projects/default/route.ts → 获取/创建默认项目
 src/app/(dashboard)/settings/page.tsx  → Settings / API Key 管理页
 src/app/(dashboard)/settings/agents/page.tsx → Agent 管理页（Day 5）
+src/app/(dashboard)/settings/knowledge/page.tsx → Knowledge Base 管理页（Day 6）
 src/app/(dashboard)/chat/page.tsx      → 新对话页面
 src/app/(dashboard)/chat/[id]/page.tsx → 已有对话页面
 src/app/globals.css                    → 设计系统（light/dark 双主题）

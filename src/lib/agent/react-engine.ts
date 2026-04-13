@@ -34,6 +34,11 @@ export interface AgentConfig {
   // ★ Day 5 新增：子 Agent 列表（Orchestrator 模式专用）
   // 如果提供了子 Agent，会自动注册 call_agent 工具
   subAgents?: SubAgentInfo[];
+
+  // ★ Day 6 新增：系统提示词后缀（Memory + RAG 注入内容）
+  // Chat API 会把检索到的记忆和知识库片段拼成 suffix，
+  // 追加到系统提示词末尾，让 LLM 在回答时参考这些背景信息
+  _systemPromptSuffix?: string;
 }
 
 // ---------- Agent 执行选项 ----------
@@ -67,7 +72,15 @@ export function createAgentStream(config: AgentConfig, options: AgentRunOptions)
     toolNames,
     context,
     subAgents,
+    _systemPromptSuffix,  // ★ Day 6: Memory + RAG 注入的后缀
   } = config;
+
+  // ★ Day 6: 拼接系统提示词 + 后缀（记忆 / RAG 内容）
+  // 如果有 suffix，追加到系统提示词末尾
+  // 这样 LLM 在回答时会把记忆和知识库片段当作"背景资料"参考
+  const finalSystemPrompt = _systemPromptSuffix
+    ? systemPrompt + "\n" + _systemPromptSuffix
+    : systemPrompt;
 
   // ---- 1. 从注册中心获取工具集 ----
   const tools: ToolSet = toolRegistry.toAISDKTools(context, toolNames);
@@ -99,7 +112,7 @@ export function createAgentStream(config: AgentConfig, options: AgentRunOptions)
   // ---- 4. 调用 streamText 创建流式响应 ----
   const result = streamText({
     model,
-    system: systemPrompt,
+    system: finalSystemPrompt,
     messages: options.messages,
     ...(hasTools ? { tools } : {}),
     ...(hasTools ? { stopWhen: stepCountIs(maxSteps) } : {}),
