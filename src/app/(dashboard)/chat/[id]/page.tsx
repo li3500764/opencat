@@ -3,6 +3,7 @@
 // ============================================================
 // /chat/[id] → 加载历史消息继续对话
 // 从 DB 加载的消息需要转成 UIMessage 格式（带 parts 数组）
+// ★ 同时加载 agentId 和 lastModel，恢复选择器状态
 
 "use client";
 
@@ -34,6 +35,8 @@ export default function ConversationPage() {
   const id = params.id as string;
 
   const [messages, setMessages] = useState<UIMessage[] | null>(null);
+  const [agentId, setAgentId] = useState<string | null>(null);
+  const [lastModel, setLastModel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -44,8 +47,11 @@ export default function ConversationPage() {
           setError(res.status === 404 ? "Conversation not found" : "Failed to load");
           return;
         }
-        const data: DbMessage[] = await res.json();
-        setMessages(toUIMessages(data));
+        const data = await res.json();
+        // API 现在返回 { messages, agentId, lastModel }
+        setMessages(toUIMessages(data.messages));
+        setAgentId(data.agentId || null);
+        setLastModel(data.lastModel || null);
       } catch {
         setError("Failed to load conversation");
       }
@@ -72,5 +78,12 @@ export default function ConversationPage() {
     );
   }
 
-  return <ChatPanel conversationId={id} initialMessages={messages} />;
+  return (
+    <ChatPanel
+      conversationId={id}
+      initialMessages={messages}
+      initialAgentId={agentId}
+      initialModelId={lastModel}
+    />
+  );
 }

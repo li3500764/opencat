@@ -14,16 +14,14 @@
 import { useEffect, useState } from "react";
 import {
   MessageSquare,
-  MessagesSquare,
   Zap,
   DollarSign,
   Bot,
-  Database,
-  Brain,
   Loader2,
   RefreshCw,
 } from "lucide-react";
 import { StatCard, LineChart, DonutChart, ActivityTable } from "@/components/dashboard";
+import { useTranslation } from "@/lib/i18n";
 
 // ---- 类型定义 ----
 interface StatsData {
@@ -79,6 +77,7 @@ function formatCost(c: number): string {
 }
 
 export default function DashboardPage() {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<StatsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,11 +87,11 @@ export default function DashboardPage() {
       setIsLoading(true);
       setError(null);
       const res = await fetch("/api/stats");
-      if (!res.ok) throw new Error("Failed to fetch stats");
+      if (!res.ok) throw new Error(t("dashboard.failedToFetch"));
       const data = await res.json();
       setStats(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      setError(err instanceof Error ? err.message : t("common.unknownError"));
     } finally {
       setIsLoading(false);
     }
@@ -100,6 +99,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchStats();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---- Loading 状态 ----
@@ -115,13 +115,13 @@ export default function DashboardPage() {
   if (error || !stats) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
-        <p className="text-sm text-danger">{error || "Failed to load"}</p>
+        <p className="text-sm text-danger">{error || t("common.failedToLoad")}</p>
         <button
           onClick={fetchStats}
           className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover"
         >
           <RefreshCw className="h-3.5 w-3.5" />
-          Retry
+          {t("common.retry")}
         </button>
       </div>
     );
@@ -135,9 +135,9 @@ export default function DashboardPage() {
         {/* ---- 页面标题 ---- */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold">Dashboard</h1>
+            <h1 className="text-xl font-semibold">{t("dashboard.title")}</h1>
             <p className="mt-1 text-xs text-muted">
-              Platform usage overview and analytics
+              {t("dashboard.subtitle")}
             </p>
           </div>
           <button
@@ -145,34 +145,34 @@ export default function DashboardPage() {
             className="flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-xs text-muted transition-colors hover:bg-[var(--sidebar-hover)] hover:text-foreground"
           >
             <RefreshCw className="h-3 w-3" />
-            Refresh
+            {t("common.refresh")}
           </button>
         </div>
 
         {/* ---- 概览卡片（第一行：4 个核心指标） ---- */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="Conversations"
+            label={t("dashboard.conversations")}
             value={overview.totalConversations}
-            subtitle={`${overview.totalMessages} messages`}
+            subtitle={`${overview.totalMessages} ${t("dashboard.messages")}`}
             icon={MessageSquare}
           />
           <StatCard
-            label="Token Usage"
+            label={t("dashboard.tokenUsage")}
             value={formatTokens(tokenUsage.used)}
-            subtitle={`${tokenUsage.percentage}% of ${formatTokens(tokenUsage.quota)} quota`}
+            subtitle={`${tokenUsage.percentage}% ${t("dashboard.ofQuota", { quota: formatTokens(tokenUsage.quota) })}`}
             icon={Zap}
           />
           <StatCard
-            label="Total Cost"
+            label={t("dashboard.totalCost")}
             value={formatCost(overview.totalCost)}
-            subtitle={`${overview.totalTokens.toLocaleString()} total tokens`}
+            subtitle={`${overview.totalTokens.toLocaleString()} ${t("dashboard.totalTokens")}`}
             icon={DollarSign}
           />
           <StatCard
-            label="Resources"
+            label={t("dashboard.resources")}
             value={overview.totalAgents}
-            subtitle={`${overview.totalKnowledgeBases} KB, ${overview.totalMemories} memories`}
+            subtitle={t("dashboard.kbCount", { kb: overview.totalKnowledgeBases, mem: overview.totalMemories })}
             icon={Bot}
           />
         </div>
@@ -181,7 +181,7 @@ export default function DashboardPage() {
         <div className="rounded-xl border border-card-border bg-card p-5">
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-medium">Token Quota</h3>
+              <h3 className="text-sm font-medium">{t("dashboard.tokenQuota")}</h3>
               <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
                 {tokenUsage.plan}
               </span>
@@ -213,12 +213,18 @@ export default function DashboardPage() {
             <LineChart
               data={dailyUsage}
               dataKey="tokens"
-              title="Token Usage Trend (14 days)"
+              title={t("dashboard.usageTrend")}
+              emptyText={t("dashboard.noUsageData")}
             />
           </div>
           {/* 环形图占 1 列 */}
           <div>
-            <DonutChart data={modelBreakdown} title="Model Distribution" />
+            <DonutChart
+              data={modelBreakdown}
+              title={t("dashboard.modelDistribution")}
+              emptyText={t("dashboard.noModelData")}
+              totalLabel={t("dashboard.totalTokens")}
+            />
           </div>
         </div>
 

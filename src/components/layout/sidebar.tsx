@@ -3,10 +3,11 @@
 // ============================================================
 // 功能：
 // 1. 新建对话按钮
-// 2. 对话列表（Zustand 管理状态）
-// 3. 当前对话高亮
-// 4. 删除对话
-// 5. 底部：主题切换 + 用户信息 + 登出
+// 2. Dashboard 入口
+// 3. 对话列表（Zustand 管理状态）
+// 4. 当前对话高亮
+// 5. 删除对话
+// 6. 底部：主题切换 + 语言切换 + 用户信息 + 登出
 //
 // 样式参考 Evose：浅灰底侧边栏、微妙 hover、干净分割线
 
@@ -15,9 +16,10 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useChatStore } from "@/stores/chat";
-import { Plus, MessageSquare, Trash2, Loader2, LogOut, Settings, Key, Bot, Database, BarChart3 } from "lucide-react";
+import { Plus, MessageSquare, Trash2, Loader2, LogOut, Key, Bot, Database, BarChart3, Languages } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { ThemeToggle } from "./theme-toggle";
+import { useTranslation, useLocaleStore } from "@/lib/i18n";
 
 interface SidebarProps {
   user: {
@@ -30,6 +32,8 @@ interface SidebarProps {
 export function Sidebar({ user }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { t } = useTranslation();
+  const { locale, setLocale } = useLocaleStore();
   const {
     conversations,
     isLoading,
@@ -70,6 +74,10 @@ export function Sidebar({ user }: SidebarProps) {
     }
   };
 
+  const toggleLocale = () => {
+    setLocale(locale === "en" ? "zh" : "en");
+  };
+
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-background-secondary">
       {/* Logo + 新建对话 */}
@@ -77,13 +85,13 @@ export function Sidebar({ user }: SidebarProps) {
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold tracking-tight">OpenCat</span>
           <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-            beta
+            {t("sidebar.beta")}
           </span>
         </div>
         <button
           onClick={handleNewChat}
           className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[var(--sidebar-hover)] hover:text-foreground"
-          title="New Chat"
+          title={t("sidebar.newChat")}
         >
           <Plus className="h-4 w-4" />
         </button>
@@ -100,7 +108,7 @@ export function Sidebar({ user }: SidebarProps) {
           }`}
         >
           <BarChart3 className="h-3.5 w-3.5 shrink-0" />
-          <span>Dashboard</span>
+          <span>{t("sidebar.dashboard")}</span>
         </button>
       </div>
 
@@ -112,7 +120,7 @@ export function Sidebar({ user }: SidebarProps) {
           </div>
         ) : conversations.length === 0 ? (
           <p className="px-3 py-8 text-center text-xs text-muted">
-            No conversations yet
+            {t("sidebar.noConversations")}
           </p>
         ) : (
           <div className="space-y-0.5">
@@ -131,7 +139,7 @@ export function Sidebar({ user }: SidebarProps) {
                 <button
                   onClick={(e) => handleDeleteConversation(e, conv.id)}
                   className="hidden shrink-0 rounded p-0.5 text-muted/60 transition-colors hover:text-danger group-hover:block"
-                  title="Delete"
+                  title={t("common.delete")}
                 >
                   <Trash2 className="h-3 w-3" />
                 </button>
@@ -143,27 +151,35 @@ export function Sidebar({ user }: SidebarProps) {
 
       {/* 底部操作栏 */}
       <div className="border-t border-border p-3">
-        {/* 工具行：主题切换 + Agents + API Keys */}
+        {/* 工具行：主题切换 + 语言切换 + Agents + Knowledge + API Keys */}
         <div className="mb-2 flex items-center gap-1">
           <ThemeToggle />
+          {/* 语言切换按钮 */}
+          <button
+            onClick={toggleLocale}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[var(--sidebar-hover)] hover:text-foreground"
+            title={locale === "en" ? "切换到中文" : "Switch to English"}
+          >
+            <span className="text-[10px] font-bold">{locale === "en" ? "中" : "EN"}</span>
+          </button>
           <button
             onClick={() => router.push("/settings/agents")}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[var(--sidebar-hover)] hover:text-foreground"
-            title="Agents"
+            title={t("sidebar.agents")}
           >
             <Bot className="h-4 w-4" />
           </button>
           <button
             onClick={() => router.push("/settings/knowledge")}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[var(--sidebar-hover)] hover:text-foreground"
-            title="Knowledge Base"
+            title={t("sidebar.knowledgeBase")}
           >
             <Database className="h-4 w-4" />
           </button>
           <button
             onClick={() => router.push("/settings")}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[var(--sidebar-hover)] hover:text-foreground"
-            title="API Keys"
+            title={t("sidebar.apiKeys")}
           >
             <Key className="h-4 w-4" />
           </button>
@@ -183,7 +199,7 @@ export function Sidebar({ user }: SidebarProps) {
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-muted transition-colors hover:bg-[var(--sidebar-hover)] hover:text-danger"
-            title="Sign out"
+            title={t("sidebar.signOut")}
           >
             <LogOut className="h-3.5 w-3.5" />
           </button>

@@ -15,6 +15,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Bot, Wrench } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 // ---------- Agent 数据类型（从 API 返回） ----------
 export interface AgentOption {
@@ -39,6 +40,7 @@ export function AgentSelector({ value, onChange }: AgentSelectorProps) {
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [loading, setLoading] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
+  const { t } = useTranslation();
 
   // ---- 点击外部关闭 ----
   useEffect(() => {
@@ -81,7 +83,7 @@ export function AgentSelector({ value, onChange }: AgentSelectorProps) {
       >
         <Bot className="h-3 w-3 text-muted" />
         <span className="text-muted">
-          {current ? current.name : "Default"}
+          {current ? current.name : t('chat.defaultAgent')}
         </span>
         <ChevronDown
           className={`h-3 w-3 text-muted transition-transform ${open ? "rotate-180" : ""}`}
@@ -103,8 +105,8 @@ export function AgentSelector({ value, onChange }: AgentSelectorProps) {
                 : "text-foreground/80 hover:bg-[var(--sidebar-hover)]"
             }`}
           >
-            <span className="flex-1">Default (no agent)</span>
-            <span className="text-[10px] text-muted">plain chat</span>
+            <span className="flex-1">{t('chat.defaultAgentDesc')}</span>
+            <span className="text-[10px] text-muted">{t('chat.plainChat')}</span>
           </button>
 
           {/* 分隔线 */}
@@ -114,15 +116,15 @@ export function AgentSelector({ value, onChange }: AgentSelectorProps) {
 
           {/* Agent 列表 */}
           {loading ? (
-            <p className="px-2.5 py-3 text-center text-[11px] text-muted">Loading...</p>
+            <p className="px-2.5 py-3 text-center text-[11px] text-muted">{t('common.loading')}</p>
           ) : agents.length === 0 ? (
             <p className="px-2.5 py-3 text-center text-[11px] text-muted">
-              No agents yet. Create one in Settings.
+              {t('chat.noAgents')}
             </p>
           ) : (
             <>
               <p className="px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                Custom Agents
+                {t('chat.customAgents')}
               </p>
               {agents.map((agent) => (
                 <button

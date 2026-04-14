@@ -25,6 +25,7 @@ import {
   CheckCircle2, XCircle, Clock,
 } from "lucide-react";
 import Link from "next/link";
+import { useTranslation } from "@/lib/i18n";
 
 // ---------- 类型定义 ----------
 
@@ -75,6 +76,8 @@ function StatusIcon({ status }: { status: string }) {
 // 主组件
 // ============================================================
 export default function KnowledgePage() {
+  const { t } = useTranslation();
+
   // ---- 状态 ----
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,7 +153,7 @@ export default function KnowledgePage() {
     // 校验文件类型（只支持 .txt 和 .md）
     const ext = file.name.split(".").pop()?.toLowerCase();
     if (!["txt", "md"].includes(ext || "")) {
-      alert("目前只支持 .txt 和 .md 文件");
+      alert(t('knowledge.onlyTxtMd'));
       return;
     }
 
@@ -172,7 +175,7 @@ export default function KnowledgePage() {
       setExpandedId(uploadTargetId);
     } else {
       const data = await res.json();
-      alert(`上传失败: ${data.error || "Unknown error"}`);
+      alert(`${t('knowledge.uploadFailed')} ${data.error || t('common.unknownError')}`);
     }
 
     setUploading(null);
@@ -198,9 +201,9 @@ export default function KnowledgePage() {
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
-            <h1 className="text-lg font-semibold">Knowledge Base</h1>
+            <h1 className="text-lg font-semibold">{t('knowledge.title')}</h1>
             <p className="text-sm text-muted">
-              Upload documents for RAG — auto chunk, embed, and vector search
+              {t('knowledge.subtitle')}
             </p>
           </div>
         </div>
@@ -223,15 +226,15 @@ export default function KnowledgePage() {
           // ---- 空状态 ----
           <div className="rounded-xl border border-border bg-background-secondary p-8 text-center">
             <Database className="mx-auto h-8 w-8 text-muted/40" />
-            <p className="mt-3 text-sm text-muted">No knowledge bases yet</p>
+            <p className="mt-3 text-sm text-muted">{t('knowledge.noKb')}</p>
             <p className="mt-1 text-xs text-muted/60">
-              Create a knowledge base and upload documents for RAG retrieval
+              {t('knowledge.noKbDesc')}
             </p>
             <button
               onClick={() => setShowCreateForm(true)}
               className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-80"
             >
-              <Plus className="h-3.5 w-3.5" /> Create Knowledge Base
+              <Plus className="h-3.5 w-3.5" /> {t('knowledge.createKb')}
             </button>
           </div>
         ) : (
@@ -265,9 +268,9 @@ export default function KnowledgePage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{kb.name}</p>
                     <p className="text-[11px] text-muted/70">
-                      {kb._count.documents} document{kb._count.documents !== 1 ? "s" : ""}
+                      {kb._count.documents} {t('knowledge.documents')}
                       {" · "}
-                      {kb.documents.reduce((sum, d) => sum + d.chunkCount, 0)} chunks
+                      {kb.documents.reduce((sum, d) => sum + d.chunkCount, 0)} {t('knowledge.chunks')}
                     </p>
                   </div>
 
@@ -276,21 +279,21 @@ export default function KnowledgePage() {
                     onClick={() => triggerUpload(kb.id)}
                     disabled={uploading === kb.id}
                     className="flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted hover:text-foreground hover:border-foreground/20 disabled:opacity-50"
-                    title="Upload document"
+                    title={t('knowledge.uploadDoc')}
                   >
                     {uploading === kb.id ? (
                       <Loader2 className="h-3 w-3 animate-spin" />
                     ) : (
                       <Upload className="h-3 w-3" />
                     )}
-                    Upload
+                    {t('knowledge.upload')}
                   </button>
 
                   {/* 删除按钮 */}
                   <button
                     onClick={() => handleDelete(kb.id)}
                     className="rounded-lg p-1.5 text-muted hover:text-danger"
-                    title="Delete knowledge base"
+                    title={t('knowledge.deleteKb')}
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -301,7 +304,7 @@ export default function KnowledgePage() {
                   <div className="border-t border-border/60 px-4 py-3">
                     {kb.documents.length === 0 ? (
                       <p className="text-xs text-muted/60 text-center py-2">
-                        No documents yet. Click Upload to add one.
+                        {t('knowledge.noDocuments')}
                       </p>
                     ) : (
                       <div className="space-y-1.5">
@@ -323,7 +326,7 @@ export default function KnowledgePage() {
                               {formatFileSize(doc.fileSize)}
                             </span>
                             <span className="text-[10px] text-muted/60">
-                              {doc.chunkCount} chunks
+                              {doc.chunkCount} {t('knowledge.chunks')}
                             </span>
 
                             {/* 状态 */}
@@ -343,7 +346,7 @@ export default function KnowledgePage() {
                 onClick={() => setShowCreateForm(true)}
                 className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border p-3 text-sm text-muted hover:border-foreground/20 hover:text-foreground"
               >
-                <Plus className="h-3.5 w-3.5" /> Create another knowledge base
+                <Plus className="h-3.5 w-3.5" /> {t('knowledge.createAnother')}
               </button>
             )}
           </div>
@@ -352,13 +355,13 @@ export default function KnowledgePage() {
         {/* 创建知识库表单 */}
         {showCreateForm && (
           <div className="mt-4 rounded-xl border border-border bg-background-secondary p-5 space-y-4">
-            <h3 className="text-sm font-medium">Create Knowledge Base</h3>
+            <h3 className="text-sm font-medium">{t('knowledge.createKb')}</h3>
             <div>
-              <label className="mb-1 block text-xs text-muted">Name</label>
+              <label className="mb-1 block text-xs text-muted">{t('knowledge.nameLabel')}</label>
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="e.g. Product Docs, API Reference..."
+                placeholder={t('knowledge.namePlaceholder')}
                 className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50"
                 onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); }}
                 autoFocus
@@ -375,13 +378,13 @@ export default function KnowledgePage() {
                 ) : (
                   <Plus className="h-3.5 w-3.5" />
                 )}
-                Create
+                {t('common.create')}
               </button>
               <button
                 onClick={() => { setShowCreateForm(false); setNewName(""); }}
                 className="rounded-lg px-4 py-2 text-sm text-muted hover:text-foreground"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>

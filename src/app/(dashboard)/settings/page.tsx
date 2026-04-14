@@ -10,6 +10,7 @@ import Link from "next/link";
 import { PROVIDERS } from "@/lib/llm/registry";
 import { API_FORMAT_LABELS } from "@/lib/llm/types";
 import type { ApiFormat } from "@/lib/llm/types";
+import { useTranslation } from "@/lib/i18n";
 
 // ---- Provider → 默认 Format 映射 ----
 // 选择 Provider 时自动推荐对应的 API 格式
@@ -33,6 +34,7 @@ interface ApiKeyItem {
 }
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -177,8 +179,8 @@ export default function SettingsPage() {
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
-            <h1 className="text-lg font-semibold">API Keys</h1>
-            <p className="text-sm text-muted">Manage your LLM provider API keys</p>
+            <h1 className="text-lg font-semibold">{t('settings.title')}</h1>
+            <p className="text-sm text-muted">{t('settings.subtitle')}</p>
           </div>
         </div>
 
@@ -188,13 +190,13 @@ export default function SettingsPage() {
         ) : keys.length === 0 && !showForm ? (
           <div className="rounded-xl border border-border bg-background-secondary p-8 text-center">
             <Key className="mx-auto h-8 w-8 text-muted/40" />
-            <p className="mt-3 text-sm text-muted">No API keys configured</p>
-            <p className="mt-1 text-xs text-muted/60">Add a key to start chatting with AI models</p>
+            <p className="mt-3 text-sm text-muted">{t('settings.noKeys')}</p>
+            <p className="mt-1 text-xs text-muted/60">{t('settings.noKeysDesc')}</p>
             <button
               onClick={handleShowAdd}
               className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-80"
             >
-              <Plus className="h-3.5 w-3.5" /> Add API Key
+              <Plus className="h-3.5 w-3.5" /> {t('settings.addKey')}
             </button>
           </div>
         ) : (
@@ -222,7 +224,7 @@ export default function SettingsPage() {
                 <button
                   onClick={() => handleEdit(k)}
                   className="rounded-lg p-1.5 text-muted hover:text-foreground"
-                  title="Edit"
+                  title={t('common.edit')}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -232,7 +234,7 @@ export default function SettingsPage() {
                   disabled={testing === k.id}
                   className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground hover:border-foreground/20 disabled:opacity-50"
                 >
-                  {testing === k.id ? <Loader2 className="h-3 w-3 animate-spin" /> : "Test"}
+                  {testing === k.id ? <Loader2 className="h-3 w-3 animate-spin" /> : t('settings.test')}
                 </button>
                 <button
                   onClick={() => handleDelete(k.id)}
@@ -248,7 +250,7 @@ export default function SettingsPage() {
                 onClick={handleShowAdd}
                 className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border p-3 text-sm text-muted hover:border-foreground/20 hover:text-foreground"
               >
-                <Plus className="h-3.5 w-3.5" /> Add another key
+                <Plus className="h-3.5 w-3.5" /> {t('settings.addAnotherKey')}
               </button>
             )}
           </div>
@@ -258,11 +260,11 @@ export default function SettingsPage() {
         {showForm && (
           <div className="mt-4 rounded-xl border border-border bg-background-secondary p-5 space-y-4">
             <h3 className="text-sm font-medium">
-              {editingId ? "Edit API Key" : "Add API Key"}
+              {editingId ? t('settings.editKey') : t('settings.addKey')}
             </h3>
 
             <div>
-              <label className="mb-1 block text-xs text-muted">Provider</label>
+              <label className="mb-1 block text-xs text-muted">{t('settings.providerLabel')}</label>
               <select
                 value={provider}
                 onChange={(e) => {
@@ -276,14 +278,14 @@ export default function SettingsPage() {
                 {PROVIDERS.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
-                <option value="custom">Custom (OpenAI Compatible)</option>
+                <option value="custom">{t('settings.customProvider')}</option>
               </select>
             </div>
 
             <div>
               <label className="mb-1 block text-xs text-muted">
-                API Format
-                <span className="text-muted/50 ml-1">(auto-detected, change if using proxy)</span>
+                {t('settings.formatLabel')}
+                <span className="text-muted/50 ml-1">{t('settings.formatHelp')}</span>
               </label>
               <select
                 value={format}
@@ -298,24 +300,24 @@ export default function SettingsPage() {
 
             <div>
               <label className="mb-1 block text-xs text-muted">
-                API Key
-                {editingId && <span className="text-muted/50 ml-1">(leave empty to keep current)</span>}
+                {t('settings.apiKeyLabel')}
+                {editingId && <span className="text-muted/50 ml-1">{t('settings.keepCurrent')}</span>}
               </label>
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={editingId ? "Leave empty to keep unchanged" : "sk-..."}
+                placeholder={editingId ? t('settings.keepCurrentPlaceholder') : t('settings.apiKeyPlaceholder')}
                 className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-xs text-muted">Label (optional)</label>
+              <label className="mb-1 block text-xs text-muted">{t('settings.labelOptional')}</label>
               <input
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="My DeepSeek Key"
+                placeholder={t('settings.labelPlaceholder')}
                 className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50"
               />
             </div>
@@ -327,15 +329,15 @@ export default function SettingsPage() {
             {(provider === "custom" || provider === "deepseek" || provider === "google") && (
               <div>
                 <label className="mb-1 block text-xs text-muted">
-                  Base URL
+                  {t('settings.baseUrlLabel')}
                   {provider === "deepseek" && (
-                    <span className="text-muted/50 ml-1">(default: https://api.deepseek.com)</span>
+                    <span className="text-muted/50 ml-1">{t('settings.baseUrlHelp')}</span>
                   )}
                 </label>
                 <input
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://api.deepseek.com"
+                  placeholder={t('settings.baseUrlPlaceholder')}
                   className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50"
                 />
               </div>
@@ -348,7 +350,7 @@ export default function SettingsPage() {
                 className="flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-80 disabled:opacity-50"
               >
                 {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                {editingId ? "Save Changes" : "Save"}
+                {editingId ? t('settings.saveChanges') : t('common.save')}
               </button>
               <button
                 onClick={() => {
@@ -360,7 +362,7 @@ export default function SettingsPage() {
                 }}
                 className="rounded-lg px-4 py-2 text-sm text-muted hover:text-foreground"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>

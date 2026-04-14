@@ -12,6 +12,7 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Cat, Loader2, Mail, Lock } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 // lucide-react v1.8 移除了品牌图标，GitHub 图标用内联 SVG
 function GitHubIcon({ className }: { className?: string }) {
@@ -24,6 +25,7 @@ function GitHubIcon({ className }: { className?: string }) {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -44,13 +46,13 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError("Invalid email or password");
+        setError(t('auth.invalidCredentials'));
       } else {
         router.push("/chat");
         router.refresh(); // 刷新 server components 让它们读到新的 session
       }
     } catch {
-      setError("Something went wrong");
+      setError(t('auth.somethingWrong'));
     } finally {
       setLoading(false);
     }
@@ -70,8 +72,8 @@ export default function LoginPage() {
           <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-foreground/5">
             <Cat className="h-6 w-6 text-foreground" />
           </div>
-          <h1 className="text-xl font-semibold tracking-tight">OpenCat</h1>
-          <p className="mt-1 text-sm text-muted">Sign in to your account</p>
+          <h1 className="text-xl font-semibold tracking-tight">{t('auth.signInTitle')}</h1>
+          <p className="mt-1 text-sm text-muted">{t('auth.signInSubtitle')}</p>
         </div>
 
         {/* GitHub OAuth 按钮 */}
@@ -80,13 +82,13 @@ export default function LoginPage() {
           className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-sm font-medium transition-colors hover:bg-foreground/5"
         >
           <GitHubIcon className="h-4 w-4" />
-          Continue with GitHub
+          {t('auth.continueWithGithub')}
         </button>
 
         {/* 分割线 */}
         <div className="my-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-border" />
-          <span className="text-xs text-muted">or</span>
+          <span className="text-xs text-muted">{t('auth.or')}</span>
           <div className="h-px flex-1 bg-border" />
         </div>
 
@@ -96,7 +98,7 @@ export default function LoginPage() {
             <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <input
               type="email"
-              placeholder="Email"
+              placeholder={t('auth.emailPlaceholder')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -108,7 +110,7 @@ export default function LoginPage() {
             <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <input
               type="password"
-              placeholder="Password"
+              placeholder={t('auth.passwordPlaceholder')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -129,19 +131,19 @@ export default function LoginPage() {
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              "Sign In"
+              t('auth.signIn')
             )}
           </button>
         </form>
 
         {/* 注册链接 */}
         <p className="mt-6 text-center text-sm text-muted">
-          Don&apos;t have an account?{" "}
+          {t('auth.noAccount')}{" "}
           <Link
             href="/register"
             className="font-medium text-foreground underline-offset-4 hover:underline"
           >
-            Sign up
+            {t('auth.signUp')}
           </Link>
         </p>
       </div>

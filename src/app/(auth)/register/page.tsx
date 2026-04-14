@@ -5,9 +5,11 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Cat, Loader2, Mail, Lock, User } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -49,7 +51,7 @@ export default function RegisterPage() {
         router.refresh();
       }
     } catch {
-      setError("Something went wrong");
+      setError(t('auth.somethingWrong'));
     } finally {
       setLoading(false);
     }
@@ -62,8 +64,8 @@ export default function RegisterPage() {
           <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-foreground/5">
             <Cat className="h-6 w-6 text-foreground" />
           </div>
-          <h1 className="text-xl font-semibold tracking-tight">Create account</h1>
-          <p className="mt-1 text-sm text-muted">Get started with OpenCat</p>
+          <h1 className="text-xl font-semibold tracking-tight">{t('auth.createAccountTitle')}</h1>
+          <p className="mt-1 text-sm text-muted">{t('auth.createAccountSubtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -71,7 +73,7 @@ export default function RegisterPage() {
             <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <input
               type="text"
-              placeholder="Name (optional)"
+              placeholder={t('auth.namePlaceholder')}
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full rounded-lg border border-border bg-card py-2.5 pl-10 pr-4 text-sm outline-none transition-colors placeholder:text-muted/60 focus:border-accent"
@@ -82,7 +84,7 @@ export default function RegisterPage() {
             <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <input
               type="email"
-              placeholder="Email"
+              placeholder={t('auth.emailPlaceholder')}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
@@ -94,7 +96,7 @@ export default function RegisterPage() {
             <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
             <input
               type="password"
-              placeholder="Password (8+ characters)"
+              placeholder={t('auth.passwordHint')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -113,18 +115,18 @@ export default function RegisterPage() {
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              "Create Account"
+              t('auth.createAccount')
             )}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-muted">
-          Already have an account?{" "}
+          {t('auth.hasAccount')}{" "}
           <Link
             href="/login"
             className="font-medium text-foreground underline-offset-4 hover:underline"
           >
-            Sign in
+            {t('auth.signInLink')}
           </Link>
         </p>
       </div>

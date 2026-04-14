@@ -24,6 +24,7 @@
 import { useState } from "react";
 import { Cat, User, Wrench, ChevronDown, ChevronRight, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { Markdown } from "./markdown";
+import { useTranslation } from "@/lib/i18n";
 import type { UIMessage } from "ai";
 
 // AI SDK 6.x 的 UIMessagePart 需要两个泛型参数
@@ -83,20 +84,16 @@ function getToolPartInfo(part: MessagePart) {
 }
 
 // ============================================================
-// 工具名的中文映射 + 图标配色
+// 工具名的图标配色
 // ============================================================
-const TOOL_DISPLAY: Record<string, { label: string; color: string }> = {
-  calculator:      { label: "计算器",      color: "text-amber-600 dark:text-amber-400" },
-  datetime:        { label: "日期时间",    color: "text-sky-600 dark:text-sky-400" },
-  http_request:    { label: "HTTP 请求",   color: "text-emerald-600 dark:text-emerald-400" },
-  memory_save:     { label: "保存记忆",    color: "text-violet-600 dark:text-violet-400" },
-  memory_search:   { label: "搜索记忆",    color: "text-indigo-600 dark:text-indigo-400" },
-  call_agent:      { label: "调用 Agent",  color: "text-rose-600 dark:text-rose-400" },
+const TOOL_COLORS: Record<string, string> = {
+  calculator:      "text-amber-600 dark:text-amber-400",
+  datetime:        "text-sky-600 dark:text-sky-400",
+  http_request:    "text-emerald-600 dark:text-emerald-400",
+  memory_save:     "text-violet-600 dark:text-violet-400",
+  memory_search:   "text-indigo-600 dark:text-indigo-400",
+  call_agent:      "text-rose-600 dark:text-rose-400",
 };
-
-function getToolDisplay(name: string) {
-  return TOOL_DISPLAY[name] || { label: name, color: "text-muted" };
-}
 
 // ============================================================
 // ToolCallCard — 单个工具调用的卡片组件
@@ -109,9 +106,12 @@ function getToolDisplay(name: string) {
 function ToolCallCard({ part }: { part: MessagePart }) {
   // 是否展开详情（默认折叠，节省空间）
   const [expanded, setExpanded] = useState(false);
+  const { t } = useTranslation();
 
   const info = getToolPartInfo(part);
-  const display = getToolDisplay(info.toolName);
+  const toolKey = `tools.${info.toolName}` as Parameters<typeof t>[0];
+  const label = t(toolKey);
+  const color = TOOL_COLORS[info.toolName] || "text-muted";
 
   // 根据状态选择图标
   const stateIcon = (() => {
@@ -148,11 +148,11 @@ function ToolCallCard({ part }: { part: MessagePart }) {
         }
 
         {/* 工具图标 */}
-        <Wrench className={`h-3 w-3 shrink-0 ${display.color}`} />
+        <Wrench className={`h-3 w-3 shrink-0 ${color}`} />
 
         {/* 工具名 */}
-        <span className={`font-medium ${display.color}`}>
-          {display.label}
+        <span className={`font-medium ${color}`}>
+          {label}
         </span>
 
         {/* 状态图标（右侧） */}
@@ -166,7 +166,7 @@ function ToolCallCard({ part }: { part: MessagePart }) {
           {info.input != null && (
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-1">
-                输入参数
+                {t('tools.inputParams')}
               </p>
               <pre className="rounded-md bg-foreground/[0.04] px-2.5 py-1.5 text-[11px] text-foreground/80 overflow-x-auto">
                 {JSON.stringify(info.input, null, 2)}
@@ -178,7 +178,7 @@ function ToolCallCard({ part }: { part: MessagePart }) {
           {isDone && info.output != null && (
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted mb-1">
-                执行结果
+                {t('tools.outputResult')}
               </p>
               <pre className="rounded-md bg-foreground/[0.04] px-2.5 py-1.5 text-[11px] text-foreground/80 overflow-x-auto">
                 {JSON.stringify(info.output, null, 2)}
@@ -190,7 +190,7 @@ function ToolCallCard({ part }: { part: MessagePart }) {
           {info.errorText && (
             <div>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-red-500 mb-1">
-                错误
+                {t('tools.error')}
               </p>
               <pre className="rounded-md bg-red-500/5 px-2.5 py-1.5 text-[11px] text-red-600 dark:text-red-400 overflow-x-auto">
                 {info.errorText}
@@ -208,6 +208,7 @@ function ToolCallCard({ part }: { part: MessagePart }) {
 // ============================================================
 export function MessageItem({ message }: { message: UIMessage }) {
   const isUser = message.role === "user";
+  const { t } = useTranslation();
 
   // ---- 分离 parts：文本 vs 工具调用 ----
   // message.parts 是一个数组，可能混合了文本和工具调用
@@ -239,7 +240,7 @@ export function MessageItem({ message }: { message: UIMessage }) {
       <div className={`max-w-[75%] ${isUser ? "text-right" : ""}`}>
         {/* 角色标签 */}
         <p className="mb-1 text-[11px] font-medium text-muted">
-          {isUser ? "You" : "OpenCat"}
+          {isUser ? t('chat.you') : t('chat.assistant')}
         </p>
 
         {/* 消息体 */}

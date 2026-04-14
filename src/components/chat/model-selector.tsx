@@ -15,6 +15,7 @@
 import { useState, useRef, useEffect } from "react";
 import { ChevronDown, Pencil } from "lucide-react";
 import { PROVIDERS } from "@/lib/llm/registry";
+import { useTranslation } from "@/lib/i18n";
 
 interface ModelSelectorProps {
   value: string;
@@ -27,6 +28,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
   const [customInput, setCustomInput] = useState("");     // 自定义输入框的值
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { t } = useTranslation();
 
   // 点击外部关闭
   useEffect(() => {
@@ -117,7 +119,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
                   if (e.key === "Enter") handleCustomSubmit();
                   if (e.key === "Escape") { setCustomMode(false); setCustomInput(""); }
                 }}
-                placeholder="Enter model ID, e.g. gpt-5.4"
+                placeholder={t('chat.enterModelId')}
                 className="w-full rounded-lg border border-border bg-input-bg px-2.5 py-2 text-xs outline-none focus:border-accent/50 placeholder:text-muted/40"
               />
               <div className="mt-1.5 flex gap-1.5">
@@ -126,13 +128,13 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
                   disabled={!customInput.trim()}
                   className="flex-1 rounded-lg bg-foreground px-2 py-1.5 text-[10px] font-medium text-background hover:opacity-80 disabled:opacity-40"
                 >
-                  Use this model
+                  {t('chat.useThisModel')}
                 </button>
                 <button
                   onClick={() => { setCustomMode(false); setCustomInput(""); }}
                   className="rounded-lg px-2 py-1.5 text-[10px] text-muted hover:text-foreground"
                 >
-                  Cancel
+                  {t('common.cancel')}
                 </button>
               </div>
             </div>
@@ -142,7 +144,7 @@ export function ModelSelector({ value, onChange }: ModelSelectorProps) {
               className="flex w-full items-center gap-1.5 rounded-lg px-2.5 py-2 text-left text-xs text-muted hover:bg-[var(--sidebar-hover)] hover:text-foreground"
             >
               <Pencil className="h-3 w-3" />
-              <span>Custom Model ID</span>
+              <span>{t('chat.customModelId')}</span>
             </button>
           )}
         </div>

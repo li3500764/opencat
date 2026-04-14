@@ -19,6 +19,7 @@ import { ModelSelector } from "./model-selector";
 import { AgentSelector } from "./agent-selector";
 import { useChatStore } from "@/stores/chat";
 import { Cat } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface ChatPanelProps {
   conversationId?: string;
@@ -39,6 +40,7 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages }: Ch
   const agentIdRef = useRef(agentId);
 
   const { fetchConversations, setActiveConversationId } = useChatStore();
+  const { t } = useTranslation();
 
   // ---- 保持 ref 同步 ----
   // 为什么用 ref？
@@ -117,7 +119,7 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages }: Ch
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground/[0.04]">
             <Cat className="h-6 w-6 text-muted" />
           </div>
-          <h2 className="text-lg font-medium">我能为你做什么？</h2>
+          <h2 className="text-lg font-medium">{t('chat.welcomeMessage')}</h2>
         </div>
       ) : (
         <MessageList messages={messages} isStreaming={isActive} />

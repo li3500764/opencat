@@ -26,6 +26,7 @@ interface LineChartProps {
   dataKey?: "tokens" | "messages" | "cost";  // 展示哪个指标
   title?: string;
   color?: string;  // 折线颜色（CSS 变量或 hex）
+  emptyText?: string;  // 无数据时的提示文案
 }
 
 // SVG 画布参数
@@ -42,13 +43,14 @@ export function LineChart({
   dataKey = "tokens",
   title = "Token Usage (14 days)",
   color = "var(--accent)",
+  emptyText = "No usage data yet",
 }: LineChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   if (!data || data.length === 0) {
     return (
       <div className="flex h-[280px] items-center justify-center rounded-xl border border-card-border bg-card p-5 text-sm text-muted">
-        No usage data yet
+        {emptyText}
       </div>
     );
   }

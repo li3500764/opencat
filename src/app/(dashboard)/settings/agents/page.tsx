@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { PROVIDERS } from "@/lib/llm/registry";
+import { useTranslation } from "@/lib/i18n";
 
 // ---------- Agent 数据类型 ----------
 // 与 API 返回的格式对应
@@ -72,6 +73,8 @@ const DEFAULT_FORM = {
 };
 
 export default function AgentsPage() {
+  const { t } = useTranslation();
+
   // ---- 状态 ----
   const [agents, setAgents] = useState<AgentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,9 +197,9 @@ export default function AgentsPage() {
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
-            <h1 className="text-lg font-semibold">Agents</h1>
+            <h1 className="text-lg font-semibold">{t('agents.title')}</h1>
             <p className="text-sm text-muted">
-              Create and manage AI agents with custom prompts and tools
+              {t('agents.subtitle')}
             </p>
           </div>
         </div>
@@ -209,15 +212,15 @@ export default function AgentsPage() {
         ) : agents.length === 0 && !showForm ? (
           <div className="rounded-xl border border-border bg-background-secondary p-8 text-center">
             <Bot className="mx-auto h-8 w-8 text-muted/40" />
-            <p className="mt-3 text-sm text-muted">No agents created yet</p>
+            <p className="mt-3 text-sm text-muted">{t('agents.noAgents')}</p>
             <p className="mt-1 text-xs text-muted/60">
-              Create an agent with custom system prompt and tools
+              {t('agents.noAgentsDesc')}
             </p>
             <button
               onClick={handleNew}
               className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-80"
             >
-              <Plus className="h-3.5 w-3.5" /> Create Agent
+              <Plus className="h-3.5 w-3.5" /> {t('agents.createAgent')}
             </button>
           </div>
         ) : (
@@ -242,7 +245,7 @@ export default function AgentsPage() {
                     <p className="text-sm font-medium truncate">{agent.name}</p>
                     {agent.isOrchestrator && (
                       <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
-                        Orchestrator
+                        {t('agents.orchestrator')}
                       </span>
                     )}
                   </div>
@@ -253,11 +256,11 @@ export default function AgentsPage() {
                     <span>{agent.model}</span>
                     <span className="flex items-center gap-0.5">
                       <Wrench className="h-2.5 w-2.5" />
-                      {(agent.tools as string[]).length} tools
+                      {(agent.tools as string[]).length} {t('agents.tools')}
                     </span>
                     <span className="flex items-center gap-0.5">
                       <MessageSquare className="h-2.5 w-2.5" />
-                      {agent._count.conversations} chats
+                      {agent._count.conversations} {t('agents.chats')}
                     </span>
                   </div>
                 </div>
@@ -266,14 +269,14 @@ export default function AgentsPage() {
                 <button
                   onClick={() => handleEdit(agent)}
                   className="rounded-lg p-1.5 text-muted hover:text-foreground"
-                  title="Edit"
+                  title={t('common.edit')}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => handleDelete(agent.id)}
                   className="rounded-lg p-1.5 text-muted hover:text-danger"
-                  title="Delete"
+                  title={t('common.delete')}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -286,7 +289,7 @@ export default function AgentsPage() {
                 onClick={handleNew}
                 className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border p-3 text-sm text-muted hover:border-foreground/20 hover:text-foreground"
               >
-                <Plus className="h-3.5 w-3.5" /> Create another agent
+                <Plus className="h-3.5 w-3.5" /> {t('agents.createAnother')}
               </button>
             )}
           </div>
@@ -296,12 +299,12 @@ export default function AgentsPage() {
         {showForm && (
           <div className="mt-4 rounded-xl border border-border bg-background-secondary p-5 space-y-4">
             <h3 className="text-sm font-medium">
-              {editingId ? "Edit Agent" : "Create Agent"}
+              {editingId ? t('agents.editAgent') : t('agents.createAgent')}
             </h3>
 
             {/* 名称 */}
             <div>
-              <label className="mb-1 block text-xs text-muted">Name</label>
+              <label className="mb-1 block text-xs text-muted">{t('agents.nameLabel')}</label>
               <input
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -312,7 +315,7 @@ export default function AgentsPage() {
 
             {/* 描述 */}
             <div>
-              <label className="mb-1 block text-xs text-muted">Description (optional)</label>
+              <label className="mb-1 block text-xs text-muted">{t('agents.descLabel')}</label>
               <input
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
@@ -323,7 +326,7 @@ export default function AgentsPage() {
 
             {/* 系统提示词 */}
             <div>
-              <label className="mb-1 block text-xs text-muted">System Prompt</label>
+              <label className="mb-1 block text-xs text-muted">{t('agents.systemPromptLabel')}</label>
               <textarea
                 value={form.systemPrompt}
                 onChange={(e) => setForm((f) => ({ ...f, systemPrompt: e.target.value }))}
@@ -335,7 +338,7 @@ export default function AgentsPage() {
 
             {/* 模型选择 */}
             <div>
-              <label className="mb-1 block text-xs text-muted">Model</label>
+              <label className="mb-1 block text-xs text-muted">{t('agents.modelLabel')}</label>
               <select
                 value={form.model}
                 onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
@@ -353,7 +356,7 @@ export default function AgentsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="mb-1 block text-xs text-muted">
-                  Temperature ({form.temperature})
+                  {t('agents.temperature', { val: form.temperature })}
                 </label>
                 <input
                   type="range"
@@ -368,7 +371,7 @@ export default function AgentsPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-muted">Max Steps</label>
+                <label className="mb-1 block text-xs text-muted">{t('agents.maxSteps')}</label>
                 <input
                   type="number"
                   min={1}
@@ -384,7 +387,7 @@ export default function AgentsPage() {
 
             {/* 工具选择（复选框） */}
             <div>
-              <label className="mb-1.5 block text-xs text-muted">Tools</label>
+              <label className="mb-1.5 block text-xs text-muted">{t('agents.toolsLabel')}</label>
               <div className="flex flex-wrap gap-2">
                 {BUILTIN_TOOLS.map((tool) => (
                   <label
@@ -417,7 +420,7 @@ export default function AgentsPage() {
                 className="accent-accent"
               />
               <span className="text-xs text-muted">
-                Orchestrator mode（可以调用其他 Agent）
+                {t('agents.orchestratorMode')}
               </span>
             </label>
 
@@ -433,13 +436,13 @@ export default function AgentsPage() {
                 ) : (
                   <Plus className="h-3.5 w-3.5" />
                 )}
-                {editingId ? "Save Changes" : "Create"}
+                {editingId ? t('agents.saveChanges') : t('common.create')}
               </button>
               <button
                 onClick={() => { setShowForm(false); setEditingId(null); }}
                 className="rounded-lg px-4 py-2 text-sm text-muted hover:text-foreground"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>

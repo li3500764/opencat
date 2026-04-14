@@ -8,6 +8,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ArrowUp, Square } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface ChatInputProps {
   isLoading: boolean;
@@ -18,6 +19,7 @@ interface ChatInputProps {
 export function ChatInput({ isLoading, onSend, onStop }: ChatInputProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -60,7 +62,7 @@ export function ChatInput({ isLoading, onSend, onStop }: ChatInputProps) {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Send a message..."
+            placeholder={t('chat.placeholder')}
             rows={1}
             className="flex-1 resize-none bg-transparent text-sm leading-relaxed outline-none placeholder:text-muted/50"
             disabled={isLoading}
@@ -71,7 +73,7 @@ export function ChatInput({ isLoading, onSend, onStop }: ChatInputProps) {
               type="button"
               onClick={onStop}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger text-white transition-colors hover:bg-danger/90"
-              title="Stop generating"
+              title={t('chat.stopGenerating')}
             >
               <Square className="h-3 w-3" fill="currentColor" />
             </button>
@@ -81,7 +83,7 @@ export function ChatInput({ isLoading, onSend, onStop }: ChatInputProps) {
               onClick={handleSubmit}
               disabled={!input.trim()}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground text-background transition-colors hover:opacity-80 disabled:opacity-20 disabled:cursor-not-allowed"
-              title="Send message"
+              title={t('chat.sendMessage')}
             >
               <ArrowUp className="h-4 w-4" />
             </button>
@@ -89,7 +91,7 @@ export function ChatInput({ isLoading, onSend, onStop }: ChatInputProps) {
         </div>
 
         <p className="mt-2 text-center text-[11px] text-muted/40">
-          OpenCat may make mistakes. Verify important information.
+          {t('chat.disclaimer')}
         </p>
       </div>
     </div>

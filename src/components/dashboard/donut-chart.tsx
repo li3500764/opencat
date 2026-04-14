@@ -24,6 +24,8 @@ interface ModelData {
 interface DonutChartProps {
   data: ModelData[];
   title?: string;
+  emptyText?: string;    // 无数据时的提示文案
+  totalLabel?: string;   // 中心 "total tokens" 文案
 }
 
 // 预定义配色（不用紫色，走暖色系）
@@ -45,13 +47,13 @@ const RADIUS = 70;
 const STROKE_WIDTH = 24;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
-export function DonutChart({ data, title = "Model Usage" }: DonutChartProps) {
+export function DonutChart({ data, title = "Model Usage", emptyText = "No model data yet", totalLabel = "total tokens" }: DonutChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   if (!data || data.length === 0) {
     return (
       <div className="flex h-full items-center justify-center rounded-xl border border-card-border bg-card p-5 text-sm text-muted">
-        No model data yet
+        {emptyText}
       </div>
     );
   }
@@ -139,7 +141,7 @@ export function DonutChart({ data, title = "Model Usage" }: DonutChartProps) {
               fontSize="11"
               fill="var(--muted)"
             >
-              total tokens
+              {totalLabel}
             </text>
           </svg>
         </div>
