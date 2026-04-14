@@ -86,10 +86,10 @@ export function DonutChart({ data, title = "Model Usage", emptyText = "No model 
   };
 
   return (
-    <div className="rounded-xl border border-card-border bg-card p-5">
-      <h3 className="mb-4 text-sm font-medium">{title}</h3>
+    <div className="overflow-hidden rounded-xl border border-card-border bg-card p-5">
+      <h3 className="mb-4 text-sm font-medium truncate">{title}</h3>
 
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-6 min-w-0">
         {/* 左侧：环形图 */}
         <div className="relative shrink-0">
           <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
@@ -147,7 +147,7 @@ export function DonutChart({ data, title = "Model Usage", emptyText = "No model 
         </div>
 
         {/* 右侧：图例列表 */}
-        <div className="flex-1 space-y-2">
+        <div className="min-w-0 flex-1 space-y-2 overflow-hidden">
           {segments.map((seg, i) => (
             <div
               key={i}
@@ -163,9 +163,9 @@ export function DonutChart({ data, title = "Model Usage", emptyText = "No model 
                 style={{ backgroundColor: seg.color }}
               />
               {/* 模型名 */}
-              <span className="flex-1 truncate font-medium">{seg.model}</span>
+              <span className="min-w-0 flex-1 truncate font-medium">{seg.model}</span>
               {/* 百分比 */}
-              <span className="text-muted">
+              <span className="shrink-0 text-muted">
                 {(seg.percentage * 100).toFixed(1)}%
               </span>
             </div>

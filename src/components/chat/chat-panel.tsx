@@ -24,19 +24,21 @@ import { useTranslation } from "@/lib/i18n";
 interface ChatPanelProps {
   conversationId?: string;
   initialMessages?: UIMessage[];
+  initialAgentId?: string | null;   // ★ 恢复 Agent 选择状态
+  initialModelId?: string | null;   // ★ 恢复模型选择状态
 }
 
-export function ChatPanel({ conversationId: initialConvId, initialMessages }: ChatPanelProps) {
+export function ChatPanel({ conversationId: initialConvId, initialMessages, initialAgentId, initialModelId }: ChatPanelProps) {
   // ---- 对话和模型状态 ----
   const [conversationId, setConversationId] = useState<string | null>(initialConvId ?? null);
   const conversationIdRef = useRef(conversationId);
-  const [modelId, setModelId] = useState("gpt-5.4-mini");
+  const [modelId, setModelId] = useState(initialModelId || "gpt-5.4-mini");
   const modelIdRef = useRef(modelId);
 
   // ---- ★ Day 5 新增：Agent 状态 ----
   // agentId 为 null 表示不使用 Agent（普通聊天模式）
   // 选择 Agent 后，Chat API 会加载 Agent 的配置（system prompt、tools、model 等）
-  const [agentId, setAgentId] = useState<string | null>(null);
+  const [agentId, setAgentId] = useState<string | null>(initialAgentId ?? null);
   const agentIdRef = useRef(agentId);
 
   const { fetchConversations, setActiveConversationId } = useChatStore();

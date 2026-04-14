@@ -275,7 +275,11 @@ export async function POST(req: Request) {
 
       await db.conversation.update({
         where: { id: conversationId! },
-        data: { updatedAt: new Date() },
+        data: {
+          updatedAt: new Date(),
+          // ★ 同步更新 agentId，确保切换 Agent 后下次打开对话能恢复
+          agentId: agentId || null,
+        },
       });
 
       if (totalUsage) {
