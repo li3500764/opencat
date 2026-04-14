@@ -2,11 +2,11 @@
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-config-schema/schema.json",
   "productName": "OpenCat",
   "version": "0.1.0",
-  "identifier": "dev.opencat.app",
+  "identifier": "dev.opencat.desktop",
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3001",
-    "beforeDevCommand": "",
+    "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": ""
   },
   "app": {

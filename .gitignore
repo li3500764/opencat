@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Tauri (Rust 编译产物 + 自动生成代码)
+/src-tauri/target/
+/src-tauri/gen/
+/src-tauri/icons/logo-converted.png
+/src-tauri/icons/logo-square.png
+
+# Tauri 生成的临时图标源
+/app-icon.png
+
+# .env.production (生产机密，模板文件 .example 可以提交)
+.env.production
