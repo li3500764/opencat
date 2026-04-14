@@ -1,0 +1,35 @@
+# OpenCat Docker ignore
+# 排除不需要打包到镜像的文件
+
+node_modules
+.next
+out
+.git
+.gitignore
+
+# Tauri 桌面端（Docker 不需要）
+src-tauri
+target
+
+# 开发环境文件
+.env
+.env.local
+.env.development
+*.log
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 文档
+README.md
+README_CN.md
+CLAUDE.md
+AGENTS.md
+LICENSE

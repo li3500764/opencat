@@ -15,7 +15,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useChatStore } from "@/stores/chat";
-import { Plus, MessageSquare, Trash2, Loader2, LogOut, Settings, Key, Bot, Database } from "lucide-react";
+import { Plus, MessageSquare, Trash2, Loader2, LogOut, Settings, Key, Bot, Database, BarChart3 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -86,6 +86,21 @@ export function Sidebar({ user }: SidebarProps) {
           title="New Chat"
         >
           <Plus className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Dashboard 入口 */}
+      <div className="border-b border-border p-2">
+        <button
+          onClick={() => router.push("/dashboard")}
+          className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors ${
+            pathname === "/dashboard"
+              ? "bg-[var(--sidebar-active)] font-medium text-foreground"
+              : "text-muted hover:bg-[var(--sidebar-hover)] hover:text-foreground"
+          }`}
+        >
+          <BarChart3 className="h-3.5 w-3.5 shrink-0" />
+          <span>Dashboard</span>
         </button>
       </div>
 
