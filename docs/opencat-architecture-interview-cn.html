@@ -1,0 +1,748 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>OpenCat 项目架构全解（面试版）</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 16mm 14mm 18mm;
+      }
+
+      :root {
+        --bg: #f7f3ea;
+        --paper: #fffdf8;
+        --ink: #1f1a14;
+        --muted: #6b6257;
+        --line: #e7dccb;
+        --accent: #b7791f;
+        --accent-soft: #fff2dc;
+        --quote: #f8efe1;
+        --code: #fbf7ef;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--bg);
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, rgba(211, 166, 95, 0.12), transparent 28%),
+          linear-gradient(180deg, #f7f3ea 0%, #f3ede3 100%);
+        font-family: "PingFang SC", "Hiragino Sans GB", "Noto Serif CJK SC",
+          "Source Han Serif SC", "Songti SC", serif;
+        line-height: 1.8;
+      }
+
+      .page {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 28px;
+      }
+
+      .paper {
+        background: var(--paper);
+        border: 1px solid rgba(183, 121, 31, 0.12);
+        border-radius: 24px;
+        box-shadow:
+          0 14px 40px rgba(73, 48, 16, 0.08),
+          inset 0 1px 0 rgba(255, 255, 255, 0.85);
+        overflow: hidden;
+      }
+
+      .hero {
+        padding: 48px 52px 28px;
+        background:
+          linear-gradient(135deg, rgba(255, 243, 220, 0.95), rgba(255, 253, 248, 0.98)),
+          linear-gradient(180deg, rgba(183, 121, 31, 0.06), transparent 70%);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .eyebrow {
+        display: inline-block;
+        padding: 6px 12px;
+        border-radius: 999px;
+        background: rgba(183, 121, 31, 0.12);
+        color: #8a5c16;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 18px 0 12px;
+        font-size: 34px;
+        line-height: 1.2;
+        letter-spacing: 0.02em;
+      }
+
+      .subtitle {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 22px;
+      }
+
+      .meta span {
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.75);
+        border: 1px solid var(--line);
+        color: #5f564c;
+        font-size: 12px;
+      }
+
+      article {
+        padding: 18px 52px 56px;
+      }
+
+      h2 {
+        margin: 34px 0 12px;
+        padding-top: 6px;
+        font-size: 24px;
+        line-height: 1.35;
+        border-top: 1px solid var(--line);
+      }
+
+      h3 {
+        margin: 22px 0 8px;
+        font-size: 18px;
+        line-height: 1.45;
+        color: #2d241b;
+      }
+
+      p,
+      li,
+      blockquote {
+        font-size: 14px;
+      }
+
+      p {
+        margin: 10px 0;
+      }
+
+      ul,
+      ol {
+        margin: 10px 0 14px;
+        padding-left: 22px;
+      }
+
+      li + li {
+        margin-top: 4px;
+      }
+
+      strong {
+        color: #19140f;
+      }
+
+      blockquote {
+        margin: 18px 0;
+        padding: 14px 16px;
+        background: var(--quote);
+        border-left: 4px solid var(--accent);
+        border-radius: 10px;
+        color: #5a4a39;
+      }
+
+      code {
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: var(--code);
+        border: 1px solid #efe4d1;
+        font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+        font-size: 0.92em;
+      }
+
+      pre {
+        overflow: auto;
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: #fcf8f1;
+        border: 1px solid #ecdfcb;
+      }
+
+      pre code {
+        padding: 0;
+        border: 0;
+        background: transparent;
+      }
+
+      hr {
+        border: 0;
+        height: 1px;
+        margin: 28px 0;
+        background: linear-gradient(90deg, transparent, var(--line), transparent);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 18px 0;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+        border-bottom: 1px solid var(--line);
+      }
+
+      th {
+        background: #fbf7ef;
+      }
+
+      .footer {
+        margin-top: 36px;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="paper">
+        <header class="hero">
+          <span class="eyebrow">OpenCat Interview Notes</span>
+          <h1>OpenCat 项目架构全解（面试版）</h1>
+          <p class="subtitle">
+            围绕项目定位、技术选型、运行时架构、核心链路、面试表达与简历写法整理的复习讲义。
+          </p>
+          <div class="meta">
+            <span>项目：OpenCat</span>
+            <span>方向：AI Agent 全栈 / 平台架构</span>
+            <span>导出时间：2026/4/15 09:29:51</span>
+          </div>
+        </header>
+        <article>
+          <h1>OpenCat 项目架构全解（面试版）</h1>
+<h2>1. 项目一句话定位</h2>
+<p>OpenCat 是一个类 OpenCow 的开源 AI Agent 编排平台，核心目标不是做一个“聊天网页”，而是做一套可自托管、可扩展、可解释的 Agent Runtime：支持多模型接入、Tool Calling、多 Agent 编排、Memory 自动记忆、RAG 知识库、用量统计，以及 Web / Desktop 双端分发。</p>
+<p>面试里可以先用一句话定调：</p>
+<blockquote>
+<p>我做的是一个 AI Agent 编排平台，不只是聊天 UI。它更像是把模型、工具、记忆、知识库和多 Agent 协作能力整合成了一套完整运行时。</p>
+</blockquote>
+<hr>
+<h2>2. 为什么做这个项目</h2>
+<p>这个项目的核心价值，不在于“调用了一次大模型 API”，而在于把 AI 应用里最关键的几层都自己串起来：</p>
+<ul>
+<li>上层是用户交互和对话体验。</li>
+<li>中间层是 Agent Runtime，包括模型选择、工具调用、推理循环、多 Agent 协作。</li>
+<li>下层是基础设施，包括 PostgreSQL、pgvector、Redis、鉴权、加密和计费日志。</li>
+</ul>
+<p>这个项目故意没有选 LangChain 或 AutoGen 这类重封装框架，原因有三个：</p>
+<ul>
+<li>第一，面试时要讲原理，自研 Runtime 更能证明我真正理解 Agent 是怎么跑起来的。</li>
+<li>第二，平台需要兼容不同 Provider 和不同 API 协议，自研抽象层更灵活。</li>
+<li>第三，很多 AI 框架升级很快、黑盒很多，自己做中间层之后，定位问题和扩展能力都更可控。</li>
+</ul>
+<p>一句话总结这个设计思想：</p>
+<blockquote>
+<p>不依赖黑盒框架，自己搭一套可解释、可扩展、可落地的 AI Agent 基础设施。</p>
+</blockquote>
+<hr>
+<h2>3. 技术选型与思路</h2>
+<h2>3.1 前端为什么选 Next.js 16</h2>
+<p>选 Next.js 16 的原因不是为了“追新”，而是因为这个项目同时有页面、API Route、鉴权和服务端逻辑，Next.js 可以把前后端边界收拢在一个仓库里，开发效率高，部署链路也更简单。</p>
+<p>这个项目主要使用了 App Router 结构，优点是：</p>
+<ul>
+<li>页面路由和接口路由统一管理。</li>
+<li>服务端逻辑可以直接写在 API Route 里，适合快速构建 AI 应用。</li>
+<li>后续接入 Tauri 桌面端时，Web 代码也能尽量复用。</li>
+</ul>
+<h2>3.2 为什么用 Prisma 7 + PostgreSQL 17</h2>
+<p>因为这个项目既需要传统业务数据，又需要向量检索能力。</p>
+<p>PostgreSQL 负责存这些结构化数据：</p>
+<ul>
+<li>用户、会话、OAuth 账号</li>
+<li>项目、Agent、对话、消息</li>
+<li>API Key、UsageLog</li>
+<li>知识库、文档、分块</li>
+</ul>
+<p>pgvector 负责存这些向量数据：</p>
+<ul>
+<li>用户 Memory 向量</li>
+<li>文档 Chunk 向量</li>
+</ul>
+<p>Prisma 7 负责 ORM 层，但这里我没有把 Prisma 当成“万能 ORM”。因为 vector 类型 Prisma 还不原生友好，所以我做了分层处理：</p>
+<ul>
+<li>普通业务表走 Prisma ORM。</li>
+<li>向量写入和相似度检索走原始 SQL。</li>
+</ul>
+<p>这其实是一个很典型的工程判断：ORM 提高开发效率，但遇到底层能力缺口时，要敢于回到 SQL。</p>
+<h2>3.3 为什么还要 Redis</h2>
+<p>当前版本 Redis 的使用不是最重的，但它是平台型架构必须预留的一层。它的价值主要在：</p>
+<ul>
+<li>未来可用于任务队列和异步处理。</li>
+<li>可用于热点数据缓存。</li>
+<li>复杂 Agent 工作流里，可做状态中转。</li>
+</ul>
+<p>所以 Redis 在这里更像是“面向后续扩展预埋的基础设施”。</p>
+<h2>3.4 为什么选 Vercel AI SDK 6.x</h2>
+<p>因为它把流式输出、Tool Calling、模型适配这些高频能力统一了，但我没有直接把业务逻辑绑死在 SDK 上，而是在它上面又封了一层 Provider 抽象和 Agent Engine。</p>
+<p>也就是说：</p>
+<ul>
+<li>AI SDK 解决模型调用层问题。</li>
+<li>我自己的代码解决业务编排层问题。</li>
+</ul>
+<p>这样既吃到了 SDK 的成熟能力，也保留了平台自己的控制权。</p>
+<hr>
+<h2>4. 整体架构怎么拆</h2>
+<p>如果面试官让你画架构图，你可以按“四层结构”来讲：</p>
+<h2>4.1 表现层</h2>
+<p>这一层就是前端界面，核心是：</p>
+<ul>
+<li>Chat 对话面板</li>
+<li>Sidebar 对话列表</li>
+<li>Settings 配置页</li>
+<li>Agents 管理页</li>
+<li>Knowledge Base 管理页</li>
+<li>Dashboard 统计页</li>
+</ul>
+<p>这一层主要负责：</p>
+<ul>
+<li>展示消息流</li>
+<li>展示工具调用过程</li>
+<li>管理模型和 Agent 选择</li>
+<li>管理 API Key、知识库和统计数据</li>
+</ul>
+<h2>4.2 接口层</h2>
+<p>也就是 Next.js App Router 下的 API Routes，比如：</p>
+<ul>
+<li><code>/api/chat</code></li>
+<li><code>/api/conversations</code></li>
+<li><code>/api/keys</code></li>
+<li><code>/api/agents</code></li>
+<li><code>/api/knowledge</code></li>
+<li><code>/api/memory</code></li>
+<li><code>/api/stats</code></li>
+</ul>
+<p>这一层的职责是：</p>
+<ul>
+<li>做鉴权</li>
+<li>接收前端参数</li>
+<li>调用 Runtime</li>
+<li>持久化数据</li>
+<li>返回流式或结构化结果</li>
+</ul>
+<h2>4.3 运行时层</h2>
+<p>这是整个项目最核心的一层，也是面试时最能拉开差距的一层。主要包括：</p>
+<ul>
+<li>LLM Provider Registry</li>
+<li>Tool Registry</li>
+<li>ReAct Agent Engine</li>
+<li>Orchestrator 多 Agent 协作</li>
+<li>Memory 检索</li>
+<li>RAG 检索</li>
+</ul>
+<p>这一层是整个平台的大脑，负责决定“用哪个模型、带哪些工具、怎么循环、怎么拿上下文、怎么协作”。</p>
+<h2>4.4 存储与基础设施层</h2>
+<p>包括：</p>
+<ul>
+<li>PostgreSQL 17</li>
+<li>pgvector</li>
+<li>Redis 7</li>
+<li>Prisma 7</li>
+<li>AES-256-GCM 加密</li>
+<li>NextAuth v5 鉴权</li>
+</ul>
+<p>这一层负责“数据可靠性、安全性和可追踪性”。</p>
+<hr>
+<h2>5. 数据模型为什么这样设计</h2>
+<p>这个项目数据库一共设计了 15 张表，核心思路不是“表越多越高级”，而是围绕平台能力做实体拆分。</p>
+<h2>5.1 用户和认证相关</h2>
+<ul>
+<li><code>User</code></li>
+<li><code>Account</code></li>
+<li><code>Session</code></li>
+<li><code>VerificationToken</code></li>
+</ul>
+<p>这部分是 NextAuth 的标准认证域，解决登录和 OAuth 问题。</p>
+<h2>5.2 平台业务核心域</h2>
+<ul>
+<li><code>Project</code></li>
+<li><code>Agent</code></li>
+<li><code>Conversation</code></li>
+<li><code>Message</code></li>
+<li><code>Tool</code></li>
+<li><code>UsageLog</code></li>
+</ul>
+<p>这里体现的是平台的主业务关系：</p>
+<ul>
+<li>一个用户可以有多个项目。</li>
+<li>一个项目可以有多个 Agent。</li>
+<li>一个对话归属于一个项目，也可以绑定一个 Agent。</li>
+<li>每条消息都持久化，方便历史回放和审计。</li>
+<li>每次模型调用都会记录 UsageLog，用于成本和数据看板。</li>
+</ul>
+<h2>5.3 AI 增强能力域</h2>
+<ul>
+<li><code>Memory</code></li>
+<li><code>KnowledgeBase</code></li>
+<li><code>Document</code></li>
+<li><code>DocumentChunk</code></li>
+</ul>
+<p>这是 AI 平台区别于普通聊天工具的关键：</p>
+<ul>
+<li><code>Memory</code> 用来保存长期用户信息。</li>
+<li><code>KnowledgeBase</code> 是知识库容器。</li>
+<li><code>Document</code> 保存原始文档。</li>
+<li><code>DocumentChunk</code> 保存分块文本和向量。</li>
+</ul>
+<p>面试里可以这么说：</p>
+<blockquote>
+<p>我的表设计不是围绕页面来切的，而是围绕 Agent 运行时能力来切的，所以能比较自然地支持 Memory、RAG、多 Agent 和用量追踪。</p>
+</blockquote>
+<hr>
+<h2>6. 核心链路一：用户发一条消息后，系统怎么跑</h2>
+<p>这是最重要的一个面试题，你一定要会讲。</p>
+<p>完整链路可以拆成 8 步：</p>
+<h3>第 1 步：前端发起请求</h3>
+<p>前端通过 <code>useChat</code> 和自定义 transport，把下面这些参数发给 <code>/api/chat</code>：</p>
+<ul>
+<li>当前消息</li>
+<li>conversationId</li>
+<li>modelId</li>
+<li>agentId</li>
+<li>enableTools</li>
+<li>toolNames</li>
+</ul>
+<p>这里的重点是：前端不只是“发个文本”，而是把当前会话上下文和运行配置一起发过去。</p>
+<h3>第 2 步：服务端校验身份与上下文</h3>
+<p><code>/api/chat</code> 先拿当前登录用户，再校验对话是否属于该用户。如果是首次发消息，还会自动创建默认项目和默认对话。</p>
+<p>这样做的原因是保证所有数据天然和用户隔离，不会串。</p>
+<h3>第 3 步：加载 Agent 配置</h3>
+<p>如果请求里带了 <code>agentId</code>，服务端会把 Agent 的配置取出来，包括：</p>
+<ul>
+<li>系统提示词</li>
+<li>模型</li>
+<li>温度</li>
+<li>最大步数</li>
+<li>可用工具</li>
+<li>是否开启 Orchestrator</li>
+</ul>
+<p>这一步决定这次对话到底是“普通聊天”还是“带策略的 Agent 对话”。</p>
+<h3>第 4 步：注入 Memory 和 RAG 上下文</h3>
+<p>在真正调用模型之前，系统会做两次召回：</p>
+<ul>
+<li>从 <code>Memory</code> 里按语义相似度检索相关记忆。</li>
+<li>从知识库分块里按语义相似度检索相关文档片段。</li>
+</ul>
+<p>然后把这些内容拼成系统提示词后缀，注入给 Agent。</p>
+<p>重点不是“把所有历史都塞给模型”，而是只塞跟当前问题最相关的上下文，这样能兼顾效果和成本。</p>
+<h3>第 5 步：创建模型实例</h3>
+<p>系统根据 <code>modelId</code> 和用户自己的 API Key，动态创建模型实例。这里走的是统一 Provider Registry。</p>
+<p>也就是说，OpenAI、Anthropic、DeepSeek、Gemini，在业务层看起来都是同一种调用方式。</p>
+<h3>第 6 步：进入 ReAct Agent Engine</h3>
+<p>如果开启了工具或 Agent，这次请求就不是一次简单的 <code>generateText</code>，而是进入 ReAct 循环：</p>
+<ul>
+<li>模型先思考下一步要不要行动。</li>
+<li>如果要行动，就调用某个工具。</li>
+<li>拿到工具结果后，再继续推理。</li>
+<li>直到达到停止条件。</li>
+</ul>
+<p>停止条件不是写死的 while true，而是通过 <code>stopWhen: stepCountIs(N)</code> 控制，防止无限循环。</p>
+<h3>第 7 步：流式返回结果</h3>
+<p>服务端通过 AI SDK 的流式响应接口，把结果持续推给前端。前端边收边渲染，用户看到的是类似 ChatGPT 的实时输出体验。</p>
+<p>如果过程里有工具调用，前端也会把工具卡片一起渲染出来，让整个链路可见。</p>
+<h3>第 8 步：异步持久化</h3>
+<p>最后系统会把这些数据落库：</p>
+<ul>
+<li>用户消息</li>
+<li>AI 回复</li>
+<li>Token 用量</li>
+<li>花费金额</li>
+<li>Conversation 元数据</li>
+</ul>
+<p>这样后续才能支撑：</p>
+<ul>
+<li>历史消息回放</li>
+<li>Dashboard 看板</li>
+<li>成本追踪</li>
+<li>面向企业场景的审计需求</li>
+</ul>
+<hr>
+<h2>7. 核心模块一：多模型 Provider 抽象</h2>
+<p>这个模块的价值在于把“模型接入问题”从业务逻辑里拆出去。</p>
+<h2>7.1 为什么一定要抽象 Provider 层</h2>
+<p>如果不抽象，业务代码里很快会充满这种判断：</p>
+<ul>
+<li>如果是 OpenAI 就调这个方法</li>
+<li>如果是 Anthropic 就改另一个参数</li>
+<li>如果是代理平台就换 baseUrl</li>
+</ul>
+<p>这样很快就会变成一团条件分支，后面维护很痛苦。</p>
+<p>所以我做了 <code>src/lib/llm/</code> 这层，统一处理：</p>
+<ul>
+<li>Provider 定义</li>
+<li>模型注册</li>
+<li>价格配置</li>
+<li>API 格式差异</li>
+<li>模型实例创建</li>
+</ul>
+<h2>7.2 这个模块解决了什么真实问题</h2>
+<p>AI SDK 6.x 有一个很现实的坑：OpenAI 官方默认可以走 Responses API，但很多第三方兼容平台其实只支持 Chat Completions。</p>
+<p>所以我引入了 <code>ApiFormat</code> 概念，区分：</p>
+<ul>
+<li><code>openai</code></li>
+<li><code>openai-responses</code></li>
+<li><code>anthropic</code></li>
+<li><code>google-genai</code></li>
+</ul>
+<p>这样做以后：</p>
+<ul>
+<li>OpenAI 官方可以走它自己的新协议。</li>
+<li>DeepSeek 和代理平台走 OpenAI 兼容协议。</li>
+<li>Google 和 Anthropic 走各自协议。</li>
+</ul>
+<p>这不是单纯“为了解耦”，而是为了解决真实兼容问题。</p>
+<h2>7.3 面试怎么说</h2>
+<blockquote>
+<p>我把模型适配做成了注册表 + 工厂模式，业务层只关心 modelId，不关心底层到底是 OpenAI、Anthropic 还是代理平台，这样后续接更多模型只要扩 Provider 层，不需要改聊天主流程。</p>
+</blockquote>
+<hr>
+<h2>8. 核心模块二：Tool Calling 与 ReAct Agent Engine</h2>
+<p>这是项目最核心的技术亮点之一。</p>
+<h2>8.1 Tool Registry 是干什么的</h2>
+<p>我先做了 Tool 的类型系统和注册中心，把工具统一成标准结构：</p>
+<ul>
+<li>名称</li>
+<li>描述</li>
+<li>输入 Schema</li>
+<li>执行函数</li>
+<li>开关状态</li>
+</ul>
+<p>这样做的好处是所有工具都能被统一管理，也能统一转给 AI SDK。</p>
+<p>目前内置工具包括：</p>
+<ul>
+<li><code>calculator</code></li>
+<li><code>datetime</code></li>
+<li><code>http_request</code></li>
+<li><code>memory_save</code></li>
+<li><code>memory_search</code></li>
+<li><code>call_agent</code></li>
+</ul>
+<h2>8.2 ReAct Engine 是怎么设计的</h2>
+<p>我没有把 Agent 理解成“一个模型接口”，而是理解成一个“推理循环控制器”。</p>
+<p>核心循环是：</p>
+<ol>
+<li>让模型看到问题、系统提示词和可用工具。</li>
+<li>模型判断是否需要调用工具。</li>
+<li>执行工具，拿到 observation。</li>
+<li>把 observation 回灌给模型继续推理。</li>
+<li>达到停止条件后输出最终答案。</li>
+</ol>
+<p>这个模式本质上就是 ReAct，只不过我把它工程化了。</p>
+<h2>8.3 为什么工具过程要可视化</h2>
+<p>很多 AI 产品的一个问题是：结果有了，但过程完全黑盒。</p>
+<p>我这里把工具调用状态也渲染到了消息流里，能看到：</p>
+<ul>
+<li>调用了哪个工具</li>
+<li>传了什么参数</li>
+<li>执行成功还是失败</li>
+<li>返回了什么结果</li>
+</ul>
+<p>对用户来说这是可解释性，对开发者来说这是调试能力。</p>
+<hr>
+<h2>9. 核心模块三：多 Agent 编排为什么不是噱头</h2>
+<p>很多项目写“多 Agent”，其实只是多个 prompt 模板。这个项目不是这么做的。</p>
+<h2>9.1 我的 Orchestrator 设计</h2>
+<p>我把子 Agent 调用做成了一个真实工具：<code>call_agent</code>。</p>
+<p>也就是说，主 Agent 并不是硬编码“先调 A 再调 B”，而是由 Orchestrator 根据当前任务判断：</p>
+<ul>
+<li>要不要拆分任务</li>
+<li>调哪个子 Agent</li>
+<li>子 Agent 的输出怎么再汇总</li>
+</ul>
+<p>这就形成了一个比较真实的多 Agent 调度模式。</p>
+<h2>9.2 这种设计的优点</h2>
+<ul>
+<li>扩展性好，后续新增子 Agent 不需要重写主流程。</li>
+<li>行为更自然，主 Agent 可以动态决策。</li>
+<li>能把复杂任务拆成更稳定的小任务。</li>
+</ul>
+<p>面试里可以这么说：</p>
+<blockquote>
+<p>我把多 Agent 协作建模成一种 Tool Calling，而不是单独再造一套协议。这样 Orchestrator 和普通工具共享一套机制，系统复杂度会低很多。</p>
+</blockquote>
+<p>这句话很加分，因为它说明你不是只会堆概念，而是会控制系统复杂度。</p>
+<hr>
+<h2>10. 核心模块四：Memory 和 RAG 为什么要分开</h2>
+<p>这是很多面试官会问的点。</p>
+<h2>10.1 Memory 解决什么问题</h2>
+<p>Memory 解决的是“关于用户本身的长期信息”，例如：</p>
+<ul>
+<li>用户偏好什么风格</li>
+<li>用户过去提过哪些固定背景</li>
+<li>用户习惯的输出方式</li>
+</ul>
+<p>它更像长期个性化记忆。</p>
+<h2>10.2 RAG 解决什么问题</h2>
+<p>RAG 解决的是“外部知识上下文补充”，例如：</p>
+<ul>
+<li>用户上传的产品文档</li>
+<li>内部 SOP</li>
+<li>项目说明文档</li>
+</ul>
+<p>它不是在记用户，而是在记知识资料。</p>
+<h2>10.3 为什么不能混成一套</h2>
+<p>因为它们的数据来源、生命周期和用途都不同：</p>
+<ul>
+<li>Memory 是对用户的长期抽象。</li>
+<li>RAG 是对文档内容的检索增强。</li>
+</ul>
+<p>如果混在一起，会出现两个问题：</p>
+<ul>
+<li>用户长期偏好和知识文档互相污染。</li>
+<li>检索策略很难调优。</li>
+</ul>
+<p>所以我把它们拆成两套，但在对话入口统一注入。</p>
+<p>这就是架构上的“分而治之，入口汇总”。</p>
+<h2>10.4 RAG 管线是怎么做的</h2>
+<p>文档上传后会经历：</p>
+<ol>
+<li>文本解析</li>
+<li>滑动窗口分块</li>
+<li>embedding 批量向量化</li>
+<li>写入 <code>DocumentChunk</code></li>
+<li>查询时做向量召回</li>
+</ol>
+<p>这里我专门做了句子边界感知和 chunk overlap，原因是纯定长切分很容易把语义切断，检索质量会下降。</p>
+<hr>
+<h2>11. 安全与工程化考虑</h2>
+<p>这个项目虽然是 7 天完成，但不是 Demo 思维，而是尽量按生产思维做。</p>
+<h2>11.1 API Key 为什么要 AES-256-GCM</h2>
+<p>用户自定义 Provider 的 API Key 是平台的高敏感信息，不能明文存库。</p>
+<p>所以我做了专门的加密模块，存储时加密、使用时解密，数据库里永远不落明文。</p>
+<p>这里选 AES-256-GCM 的原因是：</p>
+<ul>
+<li>强度足够</li>
+<li>带认证能力</li>
+<li>工程落地成熟</li>
+</ul>
+<h2>11.2 为什么要记录 UsageLog</h2>
+<p>因为 AI 平台如果没有用量日志，后面很多功能根本做不起来：</p>
+<ul>
+<li>成本统计</li>
+<li>模型对比</li>
+<li>用户配额</li>
+<li>Dashboard 趋势分析</li>
+<li>企业计费</li>
+</ul>
+<p>所以 UsageLog 不是“顺手记一下”，而是平台商业化的基础。</p>
+<h2>11.3 为什么做 Dashboard</h2>
+<p>Dashboard 的意义不是好看，而是验证平台有没有从“能用”进入“可运营”。</p>
+<p>它反映的是三个能力：</p>
+<ul>
+<li>数据被完整记录了</li>
+<li>数据能被正确聚合</li>
+<li>数据能被用户看懂</li>
+</ul>
+<p>所以我把 <code>/api/stats</code> 聚合做成单接口，并用原生 SVG 自己画图，不依赖重图表库，控制包体和可维护性。</p>
+<hr>
+<h2>12. 为什么还能做成桌面端</h2>
+<p>这个点在面试里也很好用，因为它说明项目不是单一交付形态。</p>
+<p>我选 Tauri 2.0 而不是 Electron，主要原因是：</p>
+<ul>
+<li>安装包更小</li>
+<li>资源占用更低</li>
+<li>Rust 底层对简历也更加分</li>
+</ul>
+<p>而且这个项目本身前端和接口边界清晰，所以 Web 版和 Desktop 版可以复用绝大多数代码。</p>
+<p>一句话总结：</p>
+<blockquote>
+<p>我不是额外重写了一套桌面应用，而是把 Web 架构设计成天然适合二次封装为 Desktop Client。</p>
+</blockquote>
+<hr>
+<h2>13. 这个项目最有价值的面试亮点</h2>
+<p>如果面试官问“你觉得这个项目最体现你能力的地方是什么”，你可以说下面 5 点：</p>
+<h3>亮点 1：不是简单接 API，而是自己搭了 Runtime</h3>
+<p>说明你不只是会调模型，而是理解 AI 应用中间层。</p>
+<h3>亮点 2：Provider 抽象做得比较完整</h3>
+<p>说明你有平台思维，不是只会写单点业务。</p>
+<h3>亮点 3：ReAct + Tool Calling + 多 Agent 是一套统一机制</h3>
+<p>说明你能控制复杂度，能把概念整合成工程实现。</p>
+<h3>亮点 4：Memory 和 RAG 做了明确边界</h3>
+<p>说明你理解 AI 增强能力在数据层面的区别。</p>
+<h3>亮点 5：有安全、成本、运营这些工程化设计</h3>
+<p>说明你不是做玩具项目，而是按真正产品思维在做。</p>
+<hr>
+<h2>14. 常见面试问题与推荐回答</h2>
+<h2>14.1 为什么不用 LangChain</h2>
+<p>推荐回答：</p>
+<blockquote>
+<p>我不是排斥 LangChain，而是这个项目的目标之一就是把 Agent Runtime 原理讲清楚、做扎实。自己实现 Provider Registry、Tool Registry、ReAct Loop 和 Memory/RAG 注入之后，后续不管是接 LangChain 还是继续自研，我都会更有控制力。</p>
+</blockquote>
+<h2>14.2 为什么 Memory 和 RAG 要分开</h2>
+<p>推荐回答：</p>
+<blockquote>
+<p>Memory 记的是用户长期信息，RAG 检索的是外部知识文档，这两个东西的数据来源和使用场景完全不一样。拆开之后检索质量和系统边界都会更清晰。</p>
+</blockquote>
+<h2>14.3 多 Agent 的价值是什么</h2>
+<p>推荐回答：</p>
+<blockquote>
+<p>复杂任务如果全压给一个 Agent，稳定性和可控性都差。多 Agent 的核心不是数量多，而是任务分工清晰。我的做法是让主 Agent 通过 <code>call_agent</code> 动态调子 Agent，本质上还是统一到 Tool Calling 机制里。</p>
+</blockquote>
+<h2>14.4 为什么日志和成本统计这么早就做</h2>
+<p>推荐回答：</p>
+<blockquote>
+<p>因为 AI 产品一旦上量，成本就是核心约束。如果前期不记录调用日志，后面很难做优化、限额、计费和模型路由决策。所以我在最早期就把 UsageLog 设计进去了。</p>
+</blockquote>
+<hr>
+<h2>15. 一段完整的面试表达模板</h2>
+<p>如果让你用 2 到 3 分钟介绍项目，可以直接按下面这套说：</p>
+<blockquote>
+<p>OpenCat 是我做的一个开源 AI Agent 编排平台，定位不是普通聊天应用，而是一套可自托管的 Agent Runtime。技术上我用 Next.js 16 做前后端一体化开发，Prisma 7 + PostgreSQL 17 负责业务数据，pgvector 负责 Memory 和 RAG 的向量检索，Redis 作为后续异步和缓存基础设施。</p>
+<p>架构上我把系统拆成四层：前端交互层、API 接口层、Agent Runtime 层和数据基础设施层。最核心的是 Runtime 层，我自己做了 Provider Registry 来统一 OpenAI、Anthropic、DeepSeek、Gemini 这类模型接入；做了 Tool Registry 和 ReAct Agent Engine 来支持工具调用和推理循环；又通过 <code>call_agent</code> 把多 Agent 协作统一进 Tool Calling 机制里。这样整个平台既能单 Agent 工作，也能做 Orchestrator 调度。</p>
+<p>在 AI 增强能力这块，我把 Memory 和 RAG 拆开建模。Memory 保存用户长期偏好和上下文，RAG 负责知识库文档的分块、向量化和检索，在每次对话前统一做语义召回并注入系统提示词。再配合 AES-256-GCM 的 API Key 加密、UsageLog 成本追踪和 Dashboard 数据看板，整个系统就不只是能跑，而是具备了平台化、工程化和可运营的基础。</p>
+</blockquote>
+<hr>
+<h2>16. 简历写法建议</h2>
+<p>如果要把这个项目写进简历，建议写成“平台能力 + 核心实现 + 工程价值”三段式。</p>
+<h3>项目名称</h3>
+<p>OpenCat AI Agent 编排平台</p>
+<h3>项目定位</h3>
+<p>自研可自托管 AI Agent 平台，支持多模型接入、Tool Calling、多 Agent 编排、Memory 自动记忆、RAG 知识库与成本统计。</p>
+<h3>简历亮点描述</h3>
+<ul>
+<li>基于 Next.js 16、TypeScript、Prisma 7、PostgreSQL 17、pgvector 与 Redis 搭建可自托管 AI Agent 平台，实现聊天、Agent、知识库与数据看板一体化交付。</li>
+<li>自研 LLM Provider 抽象层，统一适配 OpenAI、Anthropic、DeepSeek、Gemini 与 OpenAI 兼容代理接口，支持模型注册、格式差异处理与成本核算。</li>
+<li>自研 ReAct Agent Runtime，完成 Tool Registry、工具调用可视化、最大步数控制与多 Agent Orchestrator 协作机制，实现复杂任务拆分与执行。</li>
+<li>设计并落地 Memory 与 RAG 双检索体系，基于 pgvector 完成用户记忆语义检索、文档分块向量化与知识注入，提升上下文理解与回答相关性。</li>
+<li>从工程化角度补齐 AES-256-GCM API Key 加密、UsageLog 用量日志、Dashboard 聚合看板与 Tauri 2.0 桌面端封装，形成可展示、可运营、可扩展的完整产品形态。</li>
+</ul>
+<hr>
+<h2>17. 最后一层思路总结</h2>
+<p>如果面试官追问“你这个项目最核心的架构思想是什么”，你可以用下面这句话收尾：</p>
+<blockquote>
+<p>OpenCat 最核心的不是某一个功能点，而是我把模型、工具、记忆、知识、协作和数据基础设施，统一进了一套可解释、可扩展、可追踪的 Agent Runtime 里。这样这个项目才不是一个功能堆砌的 Demo，而是一套真正能继续演进的平台骨架。</p>
+</blockquote>
+
+
+          <p class="footer">
+            Source length: 10354 chars · Generated from Markdown by local export script
+          </p>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
