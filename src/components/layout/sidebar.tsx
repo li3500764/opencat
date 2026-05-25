@@ -19,7 +19,7 @@ import { useChatStore } from "@/stores/chat";
 import { Plus, MessageSquare, Trash2, Loader2, LogOut, Key, Bot, Database, BarChart3, Languages } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { ThemeToggle } from "./theme-toggle";
-import { useTranslation, useLocaleStore } from "@/lib/i18n";
+import { useTranslation, useLocaleStore, useLocaleHydration } from "@/lib/i18n";
 
 interface SidebarProps {
   user: {
@@ -32,6 +32,7 @@ interface SidebarProps {
 export function Sidebar({ user }: SidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  useLocaleHydration(); // 客户端挂载后从 localStorage 恢复语言，避免 hydration mismatch
   const { t } = useTranslation();
   const { locale, setLocale } = useLocaleStore();
   const {

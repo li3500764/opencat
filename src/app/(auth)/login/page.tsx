@@ -12,7 +12,7 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Cat, Loader2, Mail, Lock } from "lucide-react";
-import { useTranslation } from "@/lib/i18n";
+import { useTranslation, useLocaleHydration } from "@/lib/i18n";
 
 // lucide-react v1.8 移除了品牌图标，GitHub 图标用内联 SVG
 function GitHubIcon({ className }: { className?: string }) {
@@ -25,6 +25,7 @@ function GitHubIcon({ className }: { className?: string }) {
 
 export default function LoginPage() {
   const router = useRouter();
+  useLocaleHydration(); // 客户端挂载后从 localStorage 恢复语言
   const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

@@ -5,10 +5,11 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Cat, Loader2, Mail, Lock, User } from "lucide-react";
-import { useTranslation } from "@/lib/i18n";
+import { useTranslation, useLocaleHydration } from "@/lib/i18n";
 
 export default function RegisterPage() {
   const router = useRouter();
+  useLocaleHydration(); // 客户端挂载后从 localStorage 恢复语言
   const { t } = useTranslation();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
