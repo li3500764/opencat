@@ -29,15 +29,18 @@ import {
   generateEmbedding,
   searchMemories,
   getEmbeddingApiKey,
+  getEmbeddingBaseUrl,
 } from "./embedding";
 
 // ---------- Memory 类型定义 ----------
 export interface MemoryInput {
   userId: string;
   content: string;
-  category: "preference" | "background" | "behavior" | "project_context" | "fact";
+  category: "preference" | "background" | "behavior" | "project_context" | "fact" | "workflow";
   importance?: number;      // 0-1，默认 0.5
   projectId?: string;       // 关联项目（可选）
+  conversationId?: string;  // 关联会话（可选）
+  imageUrl?: string;        // 关联图片（可选）
 }
 
 export interface MemorySearchResult {
@@ -46,6 +49,8 @@ export interface MemorySearchResult {
   category: string;
   importance: number;
   similarity: number;
+  conversationId?: string | null;
+  imageUrl?: string | null;
 }
 
 // ============================================================
@@ -59,6 +64,7 @@ export interface MemorySearchResult {
 //
 export async function saveMemory(input: MemoryInput): Promise<{ id: string }> {
   const apiKey = await getEmbeddingApiKey(input.userId);
+  const baseUrl = await getEmbeddingBaseUrl(input.userId);
 
   let embeddingVector: number[] | null = null;
 
@@ -66,7 +72,7 @@ export async function saveMemory(input: MemoryInput): Promise<{ id: string }> {
   // 没有 Key 也能存记忆（只是没法向量搜索，只能按 category 查）
   if (apiKey) {
     try {
-      embeddingVector = await generateEmbedding(input.content, apiKey);
+      embeddingVector = await generateEmbedding(input.content, apiKey, baseUrl);
     } catch (err) {
       console.error("[Memory] Embedding generation failed:", err);
       // 降级：不存向量，仍然存文本
@@ -79,15 +85,17 @@ export async function saveMemory(input: MemoryInput): Promise<{ id: string }> {
     const id = generateId();
 
     await db.$executeRaw`
-      INSERT INTO "Memory" (id, "userId", "projectId", content, embedding, category, importance, "createdAt")
+      INSERT INTO "Memory" (id, "userId", "projectId", "conversationId", content, embedding, category, importance, "imageUrl", "createdAt")
       VALUES (
         ${id},
         ${input.userId},
         ${input.projectId || null},
+        ${input.conversationId || null},
         ${input.content},
         ${vectorStr}::vector,
         ${input.category}::"MemoryCategory",
         ${input.importance ?? 0.5},
+        ${input.imageUrl || null},
         NOW()
       )
     `;
@@ -99,9 +107,11 @@ export async function saveMemory(input: MemoryInput): Promise<{ id: string }> {
       data: {
         userId: input.userId,
         projectId: input.projectId,
+        conversationId: input.conversationId,
         content: input.content,
-        category: input.category,
+        category: input.category as any, // 强转以避开Prisma生成类型的延迟问题
         importance: input.importance ?? 0.5,
+        imageUrl: input.imageUrl,
       },
     });
 
@@ -125,30 +135,33 @@ export async function searchRelevantMemories(
   options: {
     limit?: number;
     projectId?: string;
+    conversationId?: string;
     minSimilarity?: number;
   } = {}
 ): Promise<MemorySearchResult[]> {
   const apiKey = await getEmbeddingApiKey(userId);
+  const baseUrl = await getEmbeddingBaseUrl(userId);
 
   if (!apiKey) {
     // 没有 API Key，无法进行向量搜索
     // 降级：返回最近的记忆
-    return getFallbackMemories(userId, options.limit ?? 5, options.projectId);
+    return getFallbackMemories(userId, options.limit ?? 5, options.projectId, options.conversationId);
   }
 
   try {
     // 1. 将查询文本转成向量
-    const queryEmbedding = await generateEmbedding(query, apiKey);
+    const queryEmbedding = await generateEmbedding(query, apiKey, baseUrl);
 
     // 2. 用向量在 Memory 表中搜索最相似的记录
     return await searchMemories(queryEmbedding, userId, {
       limit: options.limit ?? 5,
       projectId: options.projectId,
+      conversationId: options.conversationId,
       minSimilarity: options.minSimilarity ?? 0.3,
     });
   } catch (err) {
     console.error("[Memory] Search failed:", err);
-    return getFallbackMemories(userId, options.limit ?? 5, options.projectId);
+    return getFallbackMemories(userId, options.limit ?? 5, options.projectId, options.conversationId);
   }
 }
 
@@ -156,12 +169,17 @@ export async function searchRelevantMemories(
 async function getFallbackMemories(
   userId: string,
   limit: number,
-  projectId?: string
+  projectId?: string,
+  conversationId?: string
 ): Promise<MemorySearchResult[]> {
   const memories = await db.memory.findMany({
     where: {
       userId,
       ...(projectId ? { projectId } : {}),
+      OR: [
+        { conversationId: null },
+        ...(conversationId ? [{ conversationId }] : []),
+      ],
     },
     orderBy: [
       { importance: "desc" },
@@ -173,6 +191,8 @@ async function getFallbackMemories(
       content: true,
       category: true,
       importance: true,
+      conversationId: true,
+      imageUrl: true,
     },
   });
 
@@ -187,12 +207,19 @@ async function getFallbackMemories(
 // ============================================================
 export async function getUserMemories(
   userId: string,
-  projectId?: string
+  projectId?: string,
+  conversationId?: string
 ) {
   return db.memory.findMany({
     where: {
       userId,
       ...(projectId ? { projectId } : {}),
+      ...(conversationId ? {
+        OR: [
+          { conversationId: null },
+          { conversationId }
+        ]
+      } : {}),
     },
     orderBy: { createdAt: "desc" },
     select: {
@@ -200,6 +227,8 @@ export async function getUserMemories(
       content: true,
       category: true,
       importance: true,
+      conversationId: true,
+      imageUrl: true,
       createdAt: true,
     },
   });

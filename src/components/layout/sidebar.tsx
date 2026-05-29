@@ -16,7 +16,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useChatStore } from "@/stores/chat";
-import { Plus, MessageSquare, Trash2, Loader2, LogOut, Key, Bot, Database, BarChart3, Languages } from "lucide-react";
+import { Plus, MessageSquare, Trash2, Loader2, LogOut, Key, Bot, Database, BarChart3, Languages, Users } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { ThemeToggle } from "./theme-toggle";
 import { useTranslation, useLocaleStore, useLocaleHydration } from "@/lib/i18n";
@@ -80,7 +80,7 @@ export function Sidebar({ user }: SidebarProps) {
   };
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-background-secondary">
+    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-background-secondary">
       {/* Logo + 新建对话 */}
       <div className="flex h-14 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-2">
@@ -98,8 +98,22 @@ export function Sidebar({ user }: SidebarProps) {
         </button>
       </div>
 
-      {/* Dashboard 入口 */}
-      <div className="border-b border-border p-2">
+      {/* 工作区主导航 (置顶置首) */}
+      <div className="border-b border-border p-2 space-y-1">
+        {/* 客户工作台 */}
+        <button
+          onClick={() => router.push("/customers")}
+          className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors ${
+            pathname.startsWith("/customers")
+              ? "bg-[var(--sidebar-active)] font-medium text-foreground"
+              : "text-muted hover:bg-[var(--sidebar-hover)] hover:text-foreground"
+          }`}
+        >
+          <Users className="h-3.5 w-3.5 shrink-0" />
+          <span>{locale === "en" ? "Customers" : "客户工作台"}</span>
+        </button>
+
+        {/* 数据看板 (ROI仪表盘) */}
         <button
           onClick={() => router.push("/dashboard")}
           className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors ${
@@ -113,8 +127,15 @@ export function Sidebar({ user }: SidebarProps) {
         </button>
       </div>
 
+      {/* 对话列表 (调试沙箱分组) */}
+      <div className="px-4 pt-3 pb-0.5">
+        <span className="text-[9px] font-bold text-muted uppercase tracking-wider">
+          {locale === "en" ? "Agent Sandbox" : "Agent 调试沙箱"}
+        </span>
+      </div>
+
       {/* 对话列表 */}
-      <nav className="flex-1 overflow-y-auto p-2">
+      <nav className="flex-1 overflow-y-auto p-2 pt-0">
         {isLoading && conversations.length === 0 ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-4 w-4 animate-spin text-muted" />
@@ -153,7 +174,7 @@ export function Sidebar({ user }: SidebarProps) {
       {/* 底部操作栏 */}
       <div className="border-t border-border p-3">
         {/* 工具行：主题切换 + 语言切换 + Agents + Knowledge + API Keys */}
-        <div className="mb-2 flex items-center gap-1">
+        <div className="mb-2 flex flex-wrap items-center gap-1">
           <ThemeToggle />
           {/* 语言切换按钮 */}
           <button

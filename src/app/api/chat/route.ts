@@ -192,7 +192,10 @@ export async function POST(req: Request) {
   // (a) 搜索相关记忆
   if (userText) {
     try {
-      const memories = await searchRelevantMemories(userText, userId, { limit: 5 });
+      const memories = await searchRelevantMemories(userText, userId, { 
+        limit: 5,
+        conversationId: conversationId || undefined
+      });
       systemPromptSuffix += formatMemoriesForPrompt(memories);
     } catch (err) {
       console.error("[Chat] Memory retrieval failed:", err);
@@ -219,7 +222,8 @@ export async function POST(req: Request) {
   // 不在这里拼接 suffix，而是把 suffix 传给 Agent Engine，
   // 让 Engine 统一处理系统提示词的拼装。
   // 这里只负责确定"基础系统提示词"是什么。
-  const baseSystemPrompt = agentConfig?.systemPrompt || undefined;
+  const defaultSystemPrompt = "你是一个智能个人助理。当你从对话中发现关于用户的偏好、偏恶、职业背景、交互行为习惯或常用工作流等高价值长期信息时，你应当主动调用 `memory_save` 工具将此条信息沉淀为长期记忆。而在回答时，系统已自动把相关的长期记忆作为小抄拼入你的上下文，你应尽量参考这些记忆来表达对用户的熟悉感与拟人化偏好。";
+  const baseSystemPrompt = agentConfig?.systemPrompt || defaultSystemPrompt;
 
   // ---- 8. 创建模型实例 ----
   // ★ keyFormat 优先（用户在 Settings 里选的格式）
@@ -232,8 +236,9 @@ export async function POST(req: Request) {
   const modelMessages = await convertToModelMessages(messages);
 
   // ---- 9. 使用 Agent Engine 创建流式响应 ----
+  const defaultTools = ["memory_save", "memory_search"];
   const finalToolNames = enableTools
-    ? (agentConfig?.toolNames ?? toolNames)
+    ? (agentConfig?.toolNames ?? toolNames ?? defaultTools)
     : [];
 
   const result = createAgentStream(

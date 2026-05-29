@@ -66,25 +66,32 @@ export const memorySaveTool: ToolDefinition<MemorySaveInput> = {
 
   execute: async (input, context) => {
     try {
-      const result = await saveMemory({
-        userId: context.userId,
-        content: input.content,
-        category: input.category,
-        importance: input.importance,
-        projectId: context.projectId,
-      });
+      // 1. 防噪阈值过滤：仅高价值的偏好/背景才会被推送提示，其余普通琐碎内容自动忽略
+      if (input.importance < 0.4) {
+        return {
+          success: true,
+          data: {
+            message: `记忆重要度较低 (${input.importance})，系统已自动忽略。`,
+            silent: true,
+          },
+        };
+      }
 
+      // 2. 延迟落库拦截：后端不再执行物理写库，而是直接将包装好的 pending 包返回，交由前端接管并由用户裁决
       return {
         success: true,
         data: {
-          id: result.id,
-          message: `已记住: "${input.content}"`,
+          pending: true,
+          content: input.content,
+          category: input.category,
+          importance: input.importance,
+          conversationId: context.conversationId || null,
         },
       };
     } catch (err) {
       return {
         success: false,
-        error: `保存记忆失败: ${err instanceof Error ? err.message : "未知错误"}`,
+        error: `拦截记忆失败: ${err instanceof Error ? err.message : "未知错误"}`,
       };
     }
   },

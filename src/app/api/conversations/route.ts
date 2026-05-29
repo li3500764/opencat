@@ -62,3 +62,45 @@ export async function DELETE(req: Request) {
 
   return Response.json({ success: true });
 }
+
+// PATCH — 更新对话的元数据（如 Emoji 头像，保存在本对话中）
+export async function PATCH(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { conversationId, metadata } = await req.json();
+    if (!conversationId) {
+      return Response.json({ error: "conversationId required" }, { status: 400 });
+    }
+
+    // 校验所有权：对话 → 项目 → 用户
+    const conversation = await db.conversation.findFirst({
+      where: {
+        id: conversationId,
+        project: { userId: session.user.id },
+      },
+    });
+
+    if (!conversation) {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
+
+    // 安全地合并与更新 metadata 字段
+    const currentMeta = (conversation.metadata as Record<string, any>) || {};
+    const updatedMeta = { ...currentMeta, ...metadata };
+
+    const updated = await db.conversation.update({
+      where: { id: conversationId },
+      data: { metadata: updatedMeta },
+    });
+
+    return Response.json({ success: true, metadata: updated.metadata });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return Response.json({ error: `Failed to update metadata: ${msg}` }, { status: 500 });
+  }
+}
+

@@ -1,85 +1,106 @@
 // ============================================================
-// LLM Provider 动态工厂
+// LLM Provider 注册表 (仅保留 OpenAI 兼容格式)
 // ============================================================
-// 核心职责：
-// 1. createModel()  — 根据协议格式动态创建 AI SDK 的 LanguageModel 实例
-// 2. calculateCost() — 根据 token 用量和单价计算费用
-//
-// 不再维护静态 Provider 注册表，所有 Provider 和模型信息
-// 都来自用户在 Settings 中的配置（数据库 ApiKey 表）
 
 import { createOpenAI } from "@ai-sdk/openai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
-import type { ApiFormat } from "./types";
+import type { ProviderInfo, ModelInfo, ApiFormat } from "./types";
 
 // ============================================================
-// 根据协议格式创建 AI SDK LanguageModel 实例
+// 静态 Provider 预设注册表（仅保留 OpenAI 兼容格式的内置推荐）
 // ============================================================
-//
-// 不再依赖静态注册表，完全动态：
-//   format + apiKey + baseUrl → LanguageModel
-//
-// 各协议格式的创建方式：
-//   openai           → createOpenAI().chat(modelId)   走 /chat/completions
-//   openai-responses → createOpenAI()(modelId)        走 /responses（有 baseUrl 时降级走 .chat()）
-//   anthropic        → createAnthropic()(modelId)     走 /messages
-//   google-genai     → createGoogleGenerativeAI()(modelId)
-//
+export const PROVIDERS: ProviderInfo[] = [
+  {
+    id: "openai",
+    name: "OpenAI",
+    format: "openai",
+    models: [
+      { id: "gpt-4o",        name: "GPT-4o",          provider: "openai", inputPrice: 2.5,   outputPrice: 10 },
+      { id: "gpt-4o-mini",   name: "GPT-4o Mini",     provider: "openai", inputPrice: 0.15,  outputPrice: 0.6 },
+      { id: "deepseek-chat",     name: "DeepSeek V3",     provider: "openai", inputPrice: 0.27, outputPrice: 1.1 },
+      { id: "deepseek-reasoner", name: "DeepSeek R1",     provider: "openai", inputPrice: 0.55, outputPrice: 2.19 },
+    ],
+  }
+];
+
+// 所有默认模型的扁平列表
+export const ALL_MODELS: ModelInfo[] = PROVIDERS.flatMap((p) => p.models);
+
+// 通过 modelId 找到对应的 provider ID
+export function getProviderForModel(modelId: string): string | null {
+  const model = ALL_MODELS.find((m) => m.id === modelId);
+  return model?.provider ?? null;
+}
+
+// 通过 provider ID 找到 ProviderInfo
+export function getProviderInfo(providerId: string): ProviderInfo | null {
+  return PROVIDERS.find((p) => p.id === providerId) ?? null;
+}
+
+// 通过 modelId 找到 ModelInfo
+export function getModelInfo(modelId: string): ModelInfo | null {
+  return ALL_MODELS.find((m) => m.id === modelId) ?? null;
+}
+
+// ============================================================
+// 仅支持 OpenAI 兼容格式的通用模型创建工厂
+// ============================================================
 export function createModel(
   modelId: string,
   apiKey: string,
-  format: ApiFormat,
-  baseUrl?: string,
+  optionsOrFormat?: ApiFormat | {
+    baseUrl?: string;
+    providerId?: string;
+    format?: ApiFormat;
+  },
+  maybeBaseUrl?: string
 ): LanguageModel {
-  switch (format) {
-    case "openai": {
-      // OpenAI Chat Completions 兼容格式 — 用 .chat() 走 /chat/completions
-      const client = createOpenAI({ apiKey, baseURL: baseUrl });
-      return client.chat(modelId);
-    }
+  let baseUrl: string | undefined;
 
-    case "openai-responses": {
-      // OpenAI Responses API — 直接调用走 /responses
-      // 但如果用户配了自定义 baseUrl（代理平台），降级走 .chat()
-      // 因为代理平台基本都不支持 Responses API
-      const client = createOpenAI({ apiKey, baseURL: baseUrl });
-      if (baseUrl) {
-        return client.chat(modelId);
-      }
-      return client(modelId);
+  // 1. 如果第三个参数是 string (代表 format / url)
+  if (typeof optionsOrFormat === "string") {
+    // 兼容可能传入 baseurl 的老旧代码
+    if (optionsOrFormat.startsWith("http")) {
+      baseUrl = optionsOrFormat;
+    } else {
+      baseUrl = maybeBaseUrl;
     }
+  }
+  // 2. 如果第三个参数是 options 对象
+  else if (optionsOrFormat) {
+    baseUrl = optionsOrFormat.baseUrl;
+  }
 
-    case "anthropic": {
-      const client = createAnthropic({ apiKey, baseURL: baseUrl });
-      return client(modelId);
-    }
+  // 统一通过 @ai-sdk/openai 构建 OpenAI 兼容模型实例
+  const client = createOpenAI({ apiKey, baseURL: baseUrl });
+  return client.chat(modelId);
+}
 
-    case "google-genai": {
-      const client = createGoogleGenerativeAI({ apiKey, baseURL: baseUrl });
-      return client(modelId);
-    }
-
-    default:
-      throw new Error(`未知的 API 协议格式: ${format}，模型: ${modelId}`);
+// ============================================================
+// 计算费用 (支持 inputPrice / outputPrice 动态计费与默认计费)
+// ============================================================
+export function calculateCost(
+  modelIdOrInputTokens: string | number,
+  inputTokensOrOutputTokens: number,
+  outputTokensOrInputPrice?: number,
+  outputPrice?: number,
+): number {
+  if (typeof modelIdOrInputTokens === "string") {
+    const model = getModelInfo(modelIdOrInputTokens);
+    if (!model) return 0;
+    return (
+      (inputTokensOrOutputTokens / 1_000_000) * model.inputPrice +
+      ((outputTokensOrInputPrice ?? 0) / 1_000_000) * model.outputPrice
+    );
+  } else {
+    const inputTokens = modelIdOrInputTokens;
+    const outputTokens = inputTokensOrOutputTokens;
+    const inputPrice = outputTokensOrInputPrice ?? 0;
+    const outPrice = outputPrice ?? 0;
+    return (
+      (inputTokens / 1_000_000) * inputPrice +
+      (outputTokens / 1_000_000) * outPrice
+    );
   }
 }
 
-// ============================================================
-// 计算本次调用费用
-// ============================================================
-// price 单位：美元/百万 tokens
-// 不再从静态注册表查价格，由调用方传入（来自用户配置的模型信息）
-//
-export function calculateCost(
-  inputTokens: number,
-  outputTokens: number,
-  inputPrice: number,
-  outputPrice: number,
-): number {
-  return (
-    (inputTokens / 1_000_000) * inputPrice +
-    (outputTokens / 1_000_000) * outputPrice
-  );
-}

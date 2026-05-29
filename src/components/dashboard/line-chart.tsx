@@ -16,14 +16,16 @@ import { useState } from "react";
 
 interface DataPoint {
   date: string;    // "2026-04-01"
-  tokens: number;
-  cost: number;
-  messages: number;
+  tokens?: number;
+  cost?: number;
+  messages?: number;
+  value?: number;
+  hours?: number;
 }
 
 interface LineChartProps {
   data: DataPoint[];
-  dataKey?: "tokens" | "messages" | "cost";  // 展示哪个指标
+  dataKey?: "tokens" | "messages" | "cost" | "value" | "hours";  // 展示哪个指标
   title?: string;
   color?: string;  // 折线颜色（CSS 变量或 hex）
   emptyText?: string;  // 无数据时的提示文案
@@ -56,7 +58,7 @@ export function LineChart({
   }
 
   // 取值
-  const values = data.map((d) => d[dataKey] as number);
+  const values = data.map((d) => (d[dataKey] ?? 0) as number);
   const maxVal = Math.max(...values, 1); // 至少 1 避免除零
 
   // 数据点 → SVG 坐标
@@ -86,7 +88,8 @@ export function LineChart({
 
   // 格式化数值
   const formatVal = (v: number) => {
-    if (dataKey === "cost") return `$${v.toFixed(2)}`;
+    if (dataKey === "cost" || dataKey === "value") return `$${v.toLocaleString("en-US", { maximumFractionDigits: 1 })}`;
+    if (dataKey === "hours") return `${v.toFixed(1)}h`;
     if (v >= 1000000) return `${(v / 1000000).toFixed(1)}M`;
     if (v >= 1000) return `${(v / 1000).toFixed(1)}K`;
     return v.toString();

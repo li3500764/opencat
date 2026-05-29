@@ -22,12 +22,22 @@
 export type ApiFormat = "openai" | "openai-responses" | "anthropic" | "google-genai";
 
 // ---- 模型信息 ----
-// 单个模型的配置信息（不包含 provider，因为模型挂在 Provider 配置下）
+// 单个模型的配置信息（可选包含 provider，以向后兼容）
 export interface ModelInfo {
   id: string;          // 模型 ID，如 "gpt-4o"
   name: string;        // 显示名，如 "GPT-4o"
+  provider?: string;   // 归属的 provider ID，如 "openai" (可选)
   inputPrice: number;  // 每百万 input tokens 美元价格
   outputPrice: number; // 每百万 output tokens 美元价格
+}
+
+// ---- 静态 Provider 信息（向后兼容前端页面用） ----
+export interface ProviderInfo {
+  id: string;          // "openai" | "anthropic" | "deepseek" | "google" | "custom"
+  name: string;        // "OpenAI" | "Anthropic" | "DeepSeek" | "Google"
+  format: ApiFormat;   // ★ API 协议格式
+  defaultBaseUrl?: string;  // 默认 API 地址
+  models: ModelInfo[];
 }
 
 // ---- 用户配置的 Provider ----
@@ -60,31 +70,15 @@ export const API_FORMAT_LABELS: Record<ApiFormat, string> = {
   "google-genai":     "Google Generative AI",
 };
 
-// ---- 预设模型建议 ----
-// 用户添加 Provider 时可以从这里快速选择，省去手动填写模型 ID 和价格
-// 按 API 协议格式分组，每组列出该协议下常用的模型
 export const SUGGESTED_MODELS: Record<ApiFormat, ModelInfo[]> = {
   "openai": [
-    { id: "gpt-4.1", name: "GPT-4.1", inputPrice: 2, outputPrice: 8 },
-    { id: "gpt-4.1-mini", name: "GPT-4.1 Mini", inputPrice: 0.4, outputPrice: 1.6 },
-    { id: "gpt-4.1-nano", name: "GPT-4.1 Nano", inputPrice: 0.1, outputPrice: 0.4 },
     { id: "gpt-4o", name: "GPT-4o", inputPrice: 2.5, outputPrice: 10 },
     { id: "gpt-4o-mini", name: "GPT-4o Mini", inputPrice: 0.15, outputPrice: 0.6 },
     { id: "deepseek-chat", name: "DeepSeek V3", inputPrice: 0.27, outputPrice: 1.1 },
     { id: "deepseek-reasoner", name: "DeepSeek R1", inputPrice: 0.55, outputPrice: 2.19 },
   ],
-  "openai-responses": [
-    { id: "gpt-4.1", name: "GPT-4.1", inputPrice: 2, outputPrice: 8 },
-    { id: "gpt-4.1-mini", name: "GPT-4.1 Mini", inputPrice: 0.4, outputPrice: 1.6 },
-    { id: "gpt-4.1-nano", name: "GPT-4.1 Nano", inputPrice: 0.1, outputPrice: 0.4 },
-  ],
-  "anthropic": [
-    { id: "claude-opus-4-20250514", name: "Claude Opus 4", inputPrice: 15, outputPrice: 75 },
-    { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", inputPrice: 3, outputPrice: 15 },
-    { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", inputPrice: 0.8, outputPrice: 4 },
-  ],
-  "google-genai": [
-    { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", inputPrice: 0.15, outputPrice: 0.6 },
-    { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", inputPrice: 1.25, outputPrice: 10 },
-  ],
+  "openai-responses": [],
+  "anthropic": [],
+  "google-genai": [],
 };
+

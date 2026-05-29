@@ -37,6 +37,7 @@ export default function ConversationPage() {
   const [messages, setMessages] = useState<UIMessage[] | null>(null);
   const [agentId, setAgentId] = useState<string | null>(null);
   const [lastModel, setLastModel] = useState<string | null>(null);
+  const [metadata, setMetadata] = useState<any>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,10 +49,11 @@ export default function ConversationPage() {
           return;
         }
         const data = await res.json();
-        // API 现在返回 { messages, agentId, lastModel }
+        // API 现在返回 { messages, agentId, lastModel, metadata }
         setMessages(toUIMessages(data.messages));
         setAgentId(data.agentId || null);
         setLastModel(data.lastModel || null);
+        setMetadata(data.metadata || {});
       } catch {
         setError("Failed to load conversation");
       }
@@ -84,6 +86,8 @@ export default function ConversationPage() {
       initialMessages={messages}
       initialAgentId={agentId}
       initialModelId={lastModel}
+      initialMetadata={metadata}
     />
   );
+
 }

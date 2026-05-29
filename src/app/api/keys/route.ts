@@ -11,11 +11,15 @@ import { z } from "zod/v4";
 
 // 添加 Key 的校验 schema
 const addKeySchema = z.object({
-  provider: z.string().min(1),      // "openai" | "anthropic" | "deepseek" | "google" | "custom"
   apiKey: z.string().min(1),         // 原始 API Key
   label: z.string().optional(),      // 备注名
-  baseUrl: z.string().url().optional(), // 自定义 Provider 的 base URL
-  format: z.enum(["openai", "openai-responses", "anthropic", "google-genai"]).optional(),  // ★ API 协议格式
+  baseUrl: z.string().optional().nullable(), // 自定义 Base URL
+  models: z.array(
+    z.object({
+      id: z.string().min(1),
+      name: z.string().min(1),
+    })
+  ).min(1, "至少需要配置一个模型"),
 });
 
 // GET — 列出 API Keys（脱敏）
@@ -31,35 +35,34 @@ export async function GET() {
     select: {
       id: true,
       provider: true,
-      format: true,        // ★ 返回 API 格式
+      format: true,        
       label: true,
       baseUrl: true,
       isActive: true,
       createdAt: true,
-      encryptedKey: true, // 需要解密后脱敏
+      encryptedKey: true, 
       iv: true,
+      models: true, // 也需要返回给前端展示使用
     },
   });
 
   // 返回脱敏的 Key（只显示最后 4 位）
   const safeKeys = keys.map((k) => {
-    // 不在响应里暴露加密数据，只返回脱敏的 masked key
     let masked = "****";
     try {
-      // 不解密了，直接用一个固定的 mask 格式
-      // 实际上我们不需要解密来展示，用 label 区分就行
       masked = `sk-****${k.id.slice(-4)}`;
     } catch {}
 
     return {
       id: k.id,
       provider: k.provider,
-      format: k.format,      // ★ 返回 API 格式
+      format: k.format,      
       label: k.label,
       baseUrl: k.baseUrl,
       isActive: k.isActive,
       maskedKey: masked,
       createdAt: k.createdAt,
+      models: k.models, // 传回前端
     };
   });
 
@@ -82,20 +85,29 @@ export async function POST(req: Request) {
     );
   }
 
-  const { provider, apiKey, label, baseUrl, format } = parsed.data;
+  const { apiKey, label, baseUrl, models } = parsed.data;
 
   // 加密 API Key
   const { encrypted, iv } = encrypt(apiKey);
 
+  // 格式化模型以满足数据库中的 models 字段结构
+  const formattedModels = models.map((m) => ({
+    id: m.id.trim(),
+    name: m.name.trim(),
+    inputPrice: 0,
+    outputPrice: 0,
+  }));
+
   const key = await db.apiKey.create({
     data: {
       userId: session.user.id,
-      provider,
-      format: format || "openai",     // ★ 存储 API 格式，默认 openai（Chat Completions）
+      provider: "openai", // 统一存为 "openai" 兼容提供商
+      format: "openai",
       encryptedKey: encrypted,
       iv,
-      label: label || `${provider} key`,
+      label: label || "OpenAI 兼容密钥",
       baseUrl: baseUrl || null,
+      models: formattedModels as any,
     },
   });
 
@@ -109,3 +121,4 @@ export async function POST(req: Request) {
     { status: 201 }
   );
 }
+

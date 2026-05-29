@@ -19,7 +19,7 @@ export async function GET(
 
   const { id: conversationId } = await params;
 
-  // 校验所有权，同时读取 agentId
+  // 校验所有权，同时读取 agentId 与 metadata
   const conversation = await db.conversation.findFirst({
     where: {
       id: conversationId,
@@ -28,6 +28,7 @@ export async function GET(
     select: {
       id: true,
       agentId: true,
+      metadata: true, // ★ 追加读取元信息
     },
   });
 
@@ -56,5 +57,7 @@ export async function GET(
     messages,
     agentId: conversation.agentId || null,
     lastModel,
+    metadata: conversation.metadata || {}, // ★ 返回元数据
   });
 }
+

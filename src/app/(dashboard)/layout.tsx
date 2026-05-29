@@ -11,7 +11,7 @@
 
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { Sidebar } from "@/components/layout/sidebar";
+import { DashboardLayoutClient } from "@/components/layout/dashboard-layout-client";
 
 export default async function DashboardLayout({
   children,
@@ -25,20 +25,14 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex h-full">
-      {/* 侧边栏（客户端组件） */}
-      <Sidebar
-        user={{
-          name: session.user.name,
-          email: session.user.email,
-          image: session.user.image,
-        }}
-      />
-
-      {/* 主内容区 */}
-      <main className="flex flex-1 flex-col overflow-hidden">
-        {children}
-      </main>
-    </div>
+    <DashboardLayoutClient
+      user={{
+        name: session.user.name,
+        email: session.user.email,
+        image: session.user.image,
+      }}
+    >
+      {children}
+    </DashboardLayoutClient>
   );
 }

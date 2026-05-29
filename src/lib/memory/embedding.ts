@@ -94,12 +94,13 @@ const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || "openai";
 // 所以不管是 OpenAI 官方、代理平台、还是国产模型，
 // 只要兼容这个格式，传入 baseURL 就能用。
 //
-function getEmbeddingModel(apiKey: string) {
+function getEmbeddingModel(apiKey: string, baseUrl?: string) {
+  const activeBaseUrl = EMBEDDING_BASE_URL || baseUrl;
   const openai = createOpenAI({
     apiKey,
     // 如果配了自定义 baseURL，走代理/私有端点
     // 没配就用 @ai-sdk/openai 的默认值（OpenAI 官方）
-    ...(EMBEDDING_BASE_URL ? { baseURL: EMBEDDING_BASE_URL } : {}),
+    ...(activeBaseUrl ? { baseURL: activeBaseUrl } : {}),
   });
   return openai.textEmbeddingModel(EMBEDDING_MODEL);
 }
@@ -147,14 +148,26 @@ export async function getEmbeddingApiKey(userId: string): Promise<string | null>
 // 也用于 Embedding 请求。
 // 优先级：环境变量 EMBEDDING_BASE_URL > 用户 Key 的 baseUrl
 //
+// 注意：如果用户的 Key 存在自定义中转（如 provider 为 "custom"），由于
+// 我们的 API Key 可能被存在 provider="custom" 记录下，
+// 我们在此应当做一个 fallback，即如果 provider=EMBEDDING_PROVIDER 没有匹配到，
+// 我们尝试匹配 provider="custom"，以最大限度兼容用户配置。
+//
 export async function getEmbeddingBaseUrl(userId: string): Promise<string | undefined> {
   // 环境变量已经配了就直接用
   if (EMBEDDING_BASE_URL) return EMBEDDING_BASE_URL;
 
   // 否则看用户的 Key 有没有 baseUrl
-  const userKey = await db.apiKey.findFirst({
+  let userKey = await db.apiKey.findFirst({
     where: { userId, provider: EMBEDDING_PROVIDER, isActive: true },
   });
+
+  // 如果没有精确匹配上默认的 provider，尝试获取 "custom" provider
+  if (!userKey && EMBEDDING_PROVIDER !== "custom") {
+    userKey = await db.apiKey.findFirst({
+      where: { userId, provider: "custom", isActive: true },
+    });
+  }
 
   return userKey?.baseUrl || undefined;
 }
@@ -192,9 +205,10 @@ async function resolveEmbeddingModel(userId: string) {
 //
 export async function generateEmbedding(
   text: string,
-  apiKey: string
+  apiKey: string,
+  baseUrl?: string
 ): Promise<number[]> {
-  const model = getEmbeddingModel(apiKey);
+  const model = getEmbeddingModel(apiKey, baseUrl);
 
   const result = await embed({
     model,
@@ -213,11 +227,12 @@ export async function generateEmbedding(
 //
 export async function generateEmbeddings(
   texts: string[],
-  apiKey: string
+  apiKey: string,
+  baseUrl?: string
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
-  const model = getEmbeddingModel(apiKey);
+  const model = getEmbeddingModel(apiKey, baseUrl);
 
   const result = await embedMany({
     model,
@@ -275,13 +290,15 @@ export async function searchMemories(
   options: {
     limit?: number;
     projectId?: string;
+    conversationId?: string;
     category?: string;
     minSimilarity?: number;
   } = {}
-): Promise<Array<{ id: string; content: string; category: string; importance: number; similarity: number }>> {
+): Promise<Array<{ id: string; content: string; category: string; importance: number; similarity: number; conversationId: string | null; imageUrl: string | null }>> {
   const {
     limit = 5,
     projectId,
+    conversationId,
     category,
     minSimilarity = 0.3, // 最低相似度阈值，低于这个的不返回
   } = options;
@@ -304,6 +321,8 @@ export async function searchMemories(
       category: string;
       importance: number;
       similarity: number;
+      conversationId: string | null;
+      imageUrl: string | null;
     }>
   >`
     SELECT
@@ -311,10 +330,13 @@ export async function searchMemories(
       content,
       category,
       importance,
+      "conversationId",
+      "imageUrl",
       1 - (embedding <=> ${vectorStr}::vector) as similarity
     FROM "Memory"
     WHERE "userId" = ${userId}
       AND embedding IS NOT NULL
+      AND ("conversationId" IS NULL OR "conversationId" = ${conversationId || null})
       ${projectId ? db.$queryRaw`AND "projectId" = ${projectId}` : db.$queryRaw``}
       ${category ? db.$queryRaw`AND category = ${category}` : db.$queryRaw``}
     ORDER BY embedding <=> ${vectorStr}::vector

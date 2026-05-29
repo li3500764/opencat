@@ -25,7 +25,6 @@ import {
   Pencil, Wrench, MessageSquare, Crown,
 } from "lucide-react";
 import Link from "next/link";
-import { PROVIDERS } from "@/lib/llm/registry";
 import { useTranslation } from "@/lib/i18n";
 
 // ---------- Agent 数据类型 ----------
@@ -46,12 +45,6 @@ interface AgentItem {
   _count: { conversations: number };
 }
 
-// ---------- 所有可用模型的扁平列表（从 Provider 注册表取） ----------
-// 用于 Agent 的模型选择下拉框
-const ALL_MODELS = PROVIDERS.flatMap((p) =>
-  p.models.map((m) => ({ id: m.id, name: m.name, provider: p.name }))
-);
-
 // ---------- 内置工具列表（硬编码，与 Day 4 注册的工具对应） ----------
 // 将来可以从 /api/tools 动态获取
 const BUILTIN_TOOLS = [
@@ -65,12 +58,13 @@ const DEFAULT_FORM = {
   name: "",
   description: "",
   systemPrompt: "你是一个有帮助的 AI 助手。请用中文回复用户。",
-  model: "gpt-5.4-mini",
+  model: "gpt-4o-mini", // 修正为常用的 gpt-4o-mini 模型
   temperature: 0.7,
   maxSteps: 10,
   tools: [] as string[],
   isOrchestrator: false,
 };
+
 
 export default function AgentsPage() {
   const { t } = useTranslation();
@@ -79,6 +73,9 @@ export default function AgentsPage() {
   const [agents, setAgents] = useState<AgentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [defaultProjectId, setDefaultProjectId] = useState<string | null>(null);
+
+  // 动态模型列表状态
+  const [modelsList, setModelsList] = useState<{ id: string; name: string; provider: string }[]>([]);
 
   // 表单状态
   const [showForm, setShowForm] = useState(false);
@@ -104,10 +101,30 @@ export default function AgentsPage() {
     }
   }, []);
 
+  // ---- 从 API 动态加载模型列表 ----
+  const fetchModels = useCallback(async () => {
+    try {
+      const res = await fetch("/api/models");
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.map((m: any) => ({
+          id: m.id,
+          name: m.name,
+          provider: m.providerLabel || "自定义",
+        }));
+        setModelsList(list);
+      }
+    } catch (err) {
+      console.error("加载可用模型列表失败:", err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchAgents();
     fetchDefaultProject();
-  }, [fetchAgents, fetchDefaultProject]);
+    fetchModels();
+  }, [fetchAgents, fetchDefaultProject, fetchModels]);
+
 
   // ---- 打开新建表单 ----
   const handleNew = () => {
@@ -342,15 +359,25 @@ export default function AgentsPage() {
               <select
                 value={form.model}
                 onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
-                className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50"
+                className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50 animate-fadeIn"
               >
-                {ALL_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.provider} — {m.name}
-                  </option>
-                ))}
+                {(() => {
+                  const fallbackModels = [
+                    { id: "gpt-4o", name: "GPT-4o", provider: "内置推荐" },
+                    { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "内置推荐" },
+                    { id: "deepseek-chat", name: "DeepSeek V3", provider: "内置推荐" },
+                    { id: "deepseek-reasoner", name: "DeepSeek R1", provider: "内置推荐" }
+                  ];
+                  const activeModelsList = modelsList.length > 0 ? modelsList : fallbackModels;
+                  return activeModelsList.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.provider} — {m.name} ({m.id})
+                    </option>
+                  ));
+                })()}
               </select>
             </div>
+
 
             {/* 温度 + 最大步数（水平布局） */}
             <div className="grid grid-cols-2 gap-4">

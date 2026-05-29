@@ -43,7 +43,7 @@ export async function GET() {
 
   for (const provider of providers) {
     // models 字段是 JSON，需要安全解析
-    const models = (provider.models as ModelInfo[]) || [];
+    const models = (provider.models as unknown as ModelInfo[]) || [];
 
     for (const model of models) {
       allModels.push({

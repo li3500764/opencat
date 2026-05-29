@@ -206,7 +206,17 @@ function ToolCallCard({ part }: { part: MessagePart }) {
 // ============================================================
 // MessageItem — 单条消息主组件
 // ============================================================
-export function MessageItem({ message }: { message: UIMessage }) {
+export function MessageItem({
+  message,
+  userAvatar,
+  aiAvatar,
+  onAvatarClick,
+}: {
+  message: UIMessage;
+  userAvatar: string;
+  aiAvatar: string;
+  onAvatarClick: (type: "user" | "ai") => void;
+}) {
   const isUser = message.role === "user";
   const { t } = useTranslation();
 
@@ -225,16 +235,15 @@ export function MessageItem({ message }: { message: UIMessage }) {
 
   return (
     <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
-      {/* 头像 */}
-      <div
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-          isUser
-            ? "bg-accent/10 text-accent"
-            : "bg-foreground/[0.06] text-muted"
-        }`}
+      {/* 极富 Premium 动效的 Emoji 点击修改头像组件 */}
+      <button
+        onClick={() => onAvatarClick(isUser ? "user" : "ai")}
+        title="点击修改头像 Emoji"
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[15px] border border-border/50 bg-card shadow-sm cursor-pointer hover:shadow hover:scale-[1.12] hover:rotate-[6deg] active:scale-[0.88] hover:border-foreground/10 transition-all select-none`}
       >
-        {isUser ? <User className="h-3.5 w-3.5" /> : <Cat className="h-3.5 w-3.5" />}
-      </div>
+        {isUser ? userAvatar : aiAvatar}
+      </button>
+
 
       {/* 消息内容 */}
       <div className={`max-w-[75%] ${isUser ? "text-right" : ""}`}>

@@ -11,9 +11,12 @@ import type { UIMessage } from "ai";
 interface MessageListProps {
   messages: UIMessage[];
   isStreaming: boolean;
+  userAvatar: string;
+  aiAvatar: string;
+  onAvatarClick: (type: "user" | "ai") => void;
 }
 
-export function MessageList({ messages, isStreaming }: MessageListProps) {
+export function MessageList({ messages, isStreaming, userAvatar, aiAvatar, onAvatarClick }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -21,15 +24,21 @@ export function MessageList({ messages, isStreaming }: MessageListProps) {
   }, [messages, isStreaming]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-6">
+    <div className="flex-1 overflow-y-auto px-4 py-6 animate-fadeIn">
       <div className="mx-auto max-w-3xl space-y-6">
         {messages.map((message) => (
-          <MessageItem key={message.id} message={message} />
+          <MessageItem
+            key={message.id}
+            message={message}
+            userAvatar={userAvatar}
+            aiAvatar={aiAvatar}
+            onAvatarClick={onAvatarClick}
+          />
         ))}
 
         {/* 等待 AI 回复的指示器 */}
         {isStreaming && messages[messages.length - 1]?.role !== "assistant" && (
-          <div className="flex items-center gap-2 text-muted">
+          <div className="flex items-center gap-2 text-muted animate-pulse">
             <div className="flex gap-1">
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted/60 [animation-delay:0ms]" />
               <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted/60 [animation-delay:150ms]" />
@@ -44,3 +53,4 @@ export function MessageList({ messages, isStreaming }: MessageListProps) {
     </div>
   );
 }
+

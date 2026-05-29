@@ -32,7 +32,7 @@ export async function DELETE(
   return Response.json({ success: true });
 }
 
-// PUT — 编辑 API Key（label / baseUrl / provider / apiKey 都可改）
+// PUT — 编辑 API Key（label / baseUrl / models / apiKey 都可改）
 export async function PUT(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -53,12 +53,11 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const { label, baseUrl, provider, apiKey: newApiKey, format } = body as {
+  const { label, baseUrl, apiKey: newApiKey, models } = body as {
     label?: string;
     baseUrl?: string;
-    provider?: string;
     apiKey?: string;
-    format?: string;      // ★ API 协议格式
+    models?: { id: string; name: string }[];
   };
 
   // 构建更新数据
@@ -67,8 +66,17 @@ export async function PUT(
 
   if (label !== undefined) updateData.label = label;
   if (baseUrl !== undefined) updateData.baseUrl = baseUrl || null;
-  if (provider !== undefined) updateData.provider = provider;
-  if (format !== undefined) updateData.format = format;    // ★ 更新 API 格式
+  updateData.provider = "openai";
+  updateData.format = "openai";
+
+  if (models !== undefined) {
+    updateData.models = models.map((m) => ({
+      id: m.id.trim(),
+      name: m.name.trim(),
+      inputPrice: 0,
+      outputPrice: 0,
+    }));
+  }
 
   // 如果传了新的 API Key，重新加密
   if (newApiKey && newApiKey.trim()) {
@@ -91,7 +99,7 @@ export async function PUT(
     },
   });
 
-  // 动态生成 maskedKey（和 GET /api/keys 保持一致）
+  // 动态生成 maskedKey
   const decryptedKey = decrypt(updated.encryptedKey, updateData.iv ?? key.iv);
   return Response.json({
     ...updated,
@@ -123,19 +131,16 @@ export async function POST(
     // 解密 API Key
     const apiKey = decrypt(key.encryptedKey, key.iv);
 
-    // 选一个小模型测试
-    const testModelMap: Record<string, string> = {
-      openai: "gpt-5.4-nano",
-      anthropic: "claude-3-5-haiku-20241022",
-      deepseek: "deepseek-chat",
-      google: "gemini-3-flash",
-    };
-    const testModel = testModelMap[key.provider] || "gpt-5.4-nano";
+    // 优先从配置的模型中选择第一个进行测试，否则使用 gpt-4o-mini
+    let testModel = "gpt-4o-mini";
+    const models = (key.models as unknown as { id: string }[]) || [];
+    if (models.length > 0 && models[0]?.id) {
+      testModel = models[0].id;
+    }
 
     const model = createModel(testModel, apiKey, {
       baseUrl: key.baseUrl || undefined,
-      providerId: key.provider === "custom" ? "custom" : undefined,
-      format: (key.format as "openai" | "openai-responses" | "anthropic" | "google-genai") || undefined,
+      format: "openai",
     });
 
     // 发一个极短的测试请求
@@ -157,3 +162,4 @@ export async function POST(
     );
   }
 }
+

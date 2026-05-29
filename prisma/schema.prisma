@@ -44,6 +44,7 @@ model User {
   projects      Project[]
   memories      Memory[]
   usageLogs     UsageLog[]
+  organization  Organization?
 }
 
 enum Plan {
@@ -171,6 +172,7 @@ model Conversation {
   project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   agent    Agent?   @relation(fields: [agentId], references: [id])
   messages Message[]
+  memories Memory[]
 
   @@index([projectId])
 }
@@ -227,21 +229,25 @@ enum ToolType {
 // 向量化存储的长期记忆
 
 model Memory {
-  id         String   @id @default(cuid())
-  userId     String
-  projectId  String?  // null = 用户级全局记忆
-  content    String   @db.Text        // 记忆的文本内容
+  id             String   @id @default(cuid())
+  userId         String
+  projectId      String?  // null = 用户级全局记忆
+  conversationId String?  // 新增：关联特定会话。null = 全局记忆
+  content        String   @db.Text        // 记忆的文本内容
   // embedding 字段需要 pgvector 扩展，后面用 raw SQL 创建
   // Prisma 目前不原生支持 vector 类型，我们用 Unsupported 占位
-  embedding  Unsupported("vector(1536)")?
-  category   MemoryCategory
-  importance Float    @default(0.5)   // 0-1 重要性权重
-  createdAt  DateTime @default(now())
+  embedding      Unsupported("vector(1536)")?
+  category       MemoryCategory
+  importance     Float    @default(0.5)   // 0-1 重要性权重
+  imageUrl       String?  @db.Text        // 新增：支持图片记忆
+  createdAt      DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([projectId])
+  @@index([conversationId])
 }
 
 enum MemoryCategory {
@@ -250,6 +256,7 @@ enum MemoryCategory {
   behavior      // 行为模式（"经常催进度"）
   project_context // 项目上下文
   fact          // 事实信息
+  workflow      // 工作流模式（喜好流程、常用工具链）
 }
 
 // ==================== 知识库 ====================
@@ -309,4 +316,187 @@ model UsageLog {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+// ============================================================
+// ==================== CRI 客户关系智能业务表 ====================
+// ============================================================
+
+// 企业/工作区模型 - 一个用户默认拥有一个组织 (Organization)
+model Organization {
+  id        String     @id @default(cuid())
+  name      String     // 组织/企业名称
+  userId    String     @unique // 每个用户默认关联一个主组织，保证 MVP 简单性
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customers Customer[]
+}
+
+// 客户/公司主体模型
+model Customer {
+  id             String           @id @default(cuid())
+  organizationId String
+  name           String           // 客户名称/公司名称
+  contactName    String?          // 主要联系人姓名
+  email          String?          // 邮箱
+  phone          String?          // 电话/微信
+  industry       String?          // 行业 (如 "B2B SaaS", "医疗", "教育")
+  size           String?          // 规模 (如 "1-50人", "50-200人")
+  budget         Float?           // 预算估计 (以美元为单位)
+  stage          CustomerStage    @default(LEAD) // 当前所处阶段
+  ownerId        String?          // 负责人 ID
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leads          Lead[]
+  interactions   Interaction[]
+  signals        CustomerSignal[]
+  recommendations Recommendation[]
+  outcomes       Outcome[]
+
+  @@index([organizationId])
+  @@index([stage])
+}
+
+enum CustomerStage {
+  LEAD        // 线索阶段
+  TRIAL       // 试用阶段
+  OPPORTUNITY // 核心商机
+  CUSTOMER    // 已成交签约客户
+  CHURNED     // 已流失
+}
+
+// 销售线索模型 (对应商机/具体转化点)
+model Lead {
+  id         String     @id @default(cuid())
+  customerId String
+  source     String?    // 来源 (如 "官网注册", "转介绍", "展会")
+  status     LeadStatus @default(NEW)
+  value      Float?     // 线索估算金额
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  UNQUALIFIED
+  LOST
+}
+
+// 沟通记录模型
+model Interaction {
+  id          String          @id @default(cuid())
+  customerId  String
+  type        InteractionType @default(NOTE)
+  content     String          @db.Text // 详细沟通内容/邮件全文/客服聊天记录
+  summary     String?         @db.Text // AI 生成的摘要结构
+  contactDate DateTime        @default(now()) // 实际沟通发生的时间
+  createdAt   DateTime        @default(now())
+
+  customer    Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+enum InteractionType {
+  EMAIL
+  CALL
+  MEETING
+  CHAT
+  NOTE
+}
+
+// 结构化信号模型（用于触发 SLA 预警、流失预警等）
+model CustomerSignal {
+  id          String      @id @default(cuid())
+  customerId  String
+  type        String      // 信号类型，如 "no_followup" (漏跟进), "sla_breach" (响应超时), "competitor_mention" (提及竞品)
+  level       SignalLevel @default(INFO)
+  description String      @db.Text
+  isResolved  Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  resolvedAt  DateTime?
+
+  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+enum SignalLevel {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+// AI 智能建议模型
+model Recommendation {
+  id            String               @id @default(cuid())
+  customerId    String
+  intentScore   String               // 意向等级: "hot" | "warm" | "cold" | "at-risk"
+  riskReason    String?              @db.Text // 潜在流失/商机停滞的原因
+  nextAction    String               @db.Text // AI 推荐的下一步动作
+  talkTrack     String?              @db.Text // 生成的个性化邮件/话术草稿
+  evidence      Json                 // 证据链：包含了哪些沟通记录、售后工单或SOP条款
+  isEscalated   Boolean              @default(false) // 是否触发复杂问题转人工/主管介入
+  status        RecommendationStatus @default(PENDING)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  customer      Customer             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  reviews       HumanReview[]
+
+  @@index([customerId])
+}
+
+enum RecommendationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DISMISSED
+}
+
+// 人工确认/回写反馈模型
+model HumanReview {
+  id               String               @id @default(cuid())
+  recommendationId String
+  userId           String               // 审批人 ID
+  action           RecommendationAction // 审批动作
+  modifiedContent  String?              @db.Text // 销售人员人工修改后的建议话术
+  feedbackReason   String?              @db.Text // 拒绝/忽略的理由反馈（用于后续优化 prompt）
+  createdAt        DateTime             @default(now())
+
+  recommendation   Recommendation       @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+
+  @@index([recommendationId])
+}
+
+enum RecommendationAction {
+  APPROVE
+  REJECT
+  DISMISS
+  ESCALATE
+}
+
+// ROI 价值闭环复盘表
+model Outcome {
+  id         String        @id @default(cuid())
+  customerId String
+  stage      CustomerStage // 复盘时的成交/流失状态
+  savedValue Float?        // 本次挽回或成交带来的 Pipeline 价值金额 (USD)
+  savedHours Float?        // 预估节省的人工时间 (小时)
+  feedback   String?       @db.Text // 复盘总结纪要
+  createdAt  DateTime      @default(now())
+
+  customer   Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
 }
