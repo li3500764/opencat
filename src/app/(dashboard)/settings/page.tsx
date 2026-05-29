@@ -31,6 +31,11 @@ export default function SettingsPage() {
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // ---- 默认模型相关状态 ----
+  const [defaultModel, setDefaultModel] = useState<string>("gpt-5.4-mini");
+  const [defaultEmbeddingModel, setDefaultEmbeddingModel] = useState<string>("text-embedding-3-small");
+  const [savingModel, setSavingModel] = useState(false);
+
   // 添加/编辑表单
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null); // null = 新增模式
@@ -56,7 +61,45 @@ export default function SettingsPage() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchKeys(); }, [fetchKeys]);
+  const fetchProject = useCallback(async () => {
+    const res = await fetch("/api/projects/default");
+    if (res.ok) {
+      const data = await res.json();
+      if (data.defaultModel) setDefaultModel(data.defaultModel);
+      if (data.defaultEmbeddingModel) setDefaultEmbeddingModel(data.defaultEmbeddingModel);
+    }
+  }, []);
+
+  useEffect(() => { 
+    fetchKeys(); 
+    fetchProject();
+  }, [fetchKeys, fetchProject]);
+
+  const handleUpdateDefaultModel = async (modelId: string) => {
+    setDefaultModel(modelId);
+    setSavingModel(true);
+    await fetch("/api/projects/default", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ defaultModel: modelId })
+    });
+    setSavingModel(false);
+  };
+
+  const handleUpdateDefaultEmbeddingModel = async (modelId: string) => {
+    setDefaultEmbeddingModel(modelId);
+    setSavingModel(true);
+    await fetch("/api/projects/default", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ defaultEmbeddingModel: modelId })
+    });
+    setSavingModel(false);
+  };
+
+  const allAvailableModels = Array.from(
+    new Map(keys.flatMap(k => k.models || []).map(m => [m.id, m.name])).entries()
+  ).map(([id, name]) => ({ id, name }));
 
   // ---- 打开新增表单 ----
   const handleShowAdd = () => {
@@ -220,6 +263,62 @@ export default function SettingsPage() {
             <p className="text-sm text-muted">自定义你的 OpenAI 兼容格式大模型提供商及密钥</p>
           </div>
         </div>
+
+        {/* 全局默认模型设置 */}
+        {!loading && (
+          <div className="mb-6 rounded-xl border border-border bg-background-secondary p-5 space-y-4">
+            {/* 对话 & 诊断基座模型 */}
+            <div>
+              <h2 className="text-sm font-semibold">全局默认大模型</h2>
+              <p className="text-xs text-muted mt-1">设置系统中默认调用的 AI 模型（如 CRI 分析、默认 Agent 兜底策略）。</p>
+              <div className="flex items-center gap-3 mt-3">
+                <select
+                  value={defaultModel}
+                  onChange={(e) => handleUpdateDefaultModel(e.target.value)}
+                  disabled={savingModel || keys.length === 0}
+                  className="w-full max-w-xs rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50 disabled:opacity-50"
+                >
+                  {allAvailableModels.length === 0 ? (
+                    <option value={defaultModel}>{defaultModel} (无可用 Key)</option>
+                  ) : (
+                    allAvailableModels.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.id})
+                      </option>
+                    ))
+                  )}
+                </select>
+                {savingModel && <Loader2 className="h-4 w-4 animate-spin text-muted" />}
+                {keys.length === 0 && <span className="text-xs text-danger">请先在下方配置 API Key</span>}
+              </div>
+            </div>
+
+            {/* Embedding 向量化模型 */}
+            <div className="pt-3 border-t border-border/40">
+              <h2 className="text-sm font-semibold">全局向量化 (Embedding) 模型</h2>
+              <p className="text-xs text-muted mt-1">用于 RAG 知识库与记忆库的文档嵌入与相似度检索。</p>
+              <div className="flex items-center gap-3 mt-3">
+                <select
+                  value={defaultEmbeddingModel}
+                  onChange={(e) => handleUpdateDefaultEmbeddingModel(e.target.value)}
+                  disabled={savingModel || keys.length === 0}
+                  className="w-full max-w-xs rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50 disabled:opacity-50"
+                >
+                  {allAvailableModels.length === 0 ? (
+                    <option value={defaultEmbeddingModel}>{defaultEmbeddingModel} (无可用 Key)</option>
+                  ) : (
+                    allAvailableModels.map(m => (
+                      <option key={`emb-${m.id}`} value={m.id}>
+                        {m.name} ({m.id})
+                      </option>
+                    ))
+                  )}
+                </select>
+                {savingModel && <Loader2 className="h-4 w-4 animate-spin text-muted" />}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 密钥卡片列表 */}
         {loading ? (

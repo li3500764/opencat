@@ -28,6 +28,7 @@ import {
   getEmbeddingBaseUrl,
   generateEmbedding,
   searchDocumentChunks,
+  getEmbeddingModelId,
 } from "./embedding";
 
 // ---------- 分块配置 ----------
@@ -136,11 +137,12 @@ export async function processDocument(
     // ---- 3. 批量向量化 ----
     const apiKey = await getEmbeddingApiKey(userId);
     const baseUrl = await getEmbeddingBaseUrl(userId);
+    const modelId = await getEmbeddingModelId(userId);
     let embeddings: number[][] | null = null;
 
     if (apiKey) {
       try {
-        embeddings = await generateEmbeddings(chunks, apiKey, baseUrl);
+        embeddings = await generateEmbeddings(chunks, apiKey, baseUrl, modelId);
       } catch (err) {
         console.error("[RAG] Batch embedding failed:", err);
         // 降级：不存向量，仍然存文本（关键词搜索仍可用）
@@ -210,6 +212,7 @@ export async function retrieveRelevantChunks(
 ): Promise<Array<{ content: string; similarity: number; chunkIndex: number }>> {
   const apiKey = await getEmbeddingApiKey(userId);
   const baseUrl = await getEmbeddingBaseUrl(userId);
+  const modelId = await getEmbeddingModelId(userId);
 
   if (!apiKey) {
     // 无 API Key，降级为文本匹配（简单 LIKE 搜索）
@@ -218,7 +221,7 @@ export async function retrieveRelevantChunks(
 
   try {
     // 1. 将查询转成向量
-    const queryEmbedding = await generateEmbedding(query, apiKey, baseUrl);
+    const queryEmbedding = await generateEmbedding(query, apiKey, baseUrl, modelId);
 
     // 2. 向量相似度搜索
     return await searchDocumentChunks(queryEmbedding, knowledgeBaseId, {

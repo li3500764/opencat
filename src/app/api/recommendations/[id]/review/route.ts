@@ -86,7 +86,7 @@ export async function POST(
         },
       });
 
-      // (c) 如果是采纳 (APPROVE)，可以记录或模拟 ROI 节省时间 (Outcome)
+      // (c) 如果是采纳 (APPROVE)，可以记录或模拟 ROI 节省时间 (Outcome)，并自动写入时间轴跟进足迹，消除漏跟进警告！
       if (body.action === RecommendationAction.APPROVE) {
         // 自动评估节省的销售整理工时：AI 生成 360 画像和草稿平均节省 15 分钟 (0.25 小时)
         await tx.outcome.create({
@@ -96,6 +96,32 @@ export async function POST(
             savedHours: 0.25,      // 节省 0.25 小时
             feedback: `采纳 AI 智能跟进建议与邮件话术: ${body.modifiedContent || "保留原版草稿"}`,
           },
+        });
+
+        // 自动往沟通纪要(Interaction)里写入一条新记录，让时间轴立刻刷新展现采纳结果！
+        const rawContent = body.modifiedContent || updatedRec.talkTrack || updatedRec.nextAction;
+        const interactionType = updatedRec.nextAction.includes("电话") ? "CALL" : "EMAIL";
+        await tx.interaction.create({
+          data: {
+            customerId: recommendation.customerId,
+            type: interactionType,
+            content: `[已采纳 AI 销售SOP建议并发起跟进]\n跟进话术内容：\n${rawContent}`,
+            summary: `销售采纳了 AI SOP 建议并发起了沟通。系统已自动进行工时抵扣(0.25小时)与ROI沉淀。`,
+            contactDate: new Date(),
+          }
+        });
+
+        // 自动消除可能存在的“漏跟进/未跟进”预警信号
+        await tx.customerSignal.updateMany({
+          where: {
+            customerId: recommendation.customerId,
+            type: "no_followup",
+            isResolved: false
+          },
+          data: {
+            isResolved: true,
+            resolvedAt: new Date()
+          }
         });
       }
 

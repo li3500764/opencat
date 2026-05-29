@@ -40,6 +40,28 @@ export function RecommendationCard({
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   
+  // 拟真 AI 诊断步骤进度状态
+  const [activeStep, setActiveStep] = useState(0);
+
+  React.useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (analyzing) {
+      setActiveStep(0);
+      timer = setInterval(() => {
+        setActiveStep((prev) => {
+          if (prev < 2) return prev + 1;
+          clearInterval(timer);
+          return prev;
+        });
+      }, 950);
+    } else {
+      setActiveStep(0);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [analyzing]);
+
   // 人工修改草稿状态
   const [isEditingTrack, setIsEditingTrack] = useState(false);
   const [editedTrack, setEditedTrack] = useState("");
@@ -119,7 +141,84 @@ export function RecommendationCard({
     }
   };
 
-  // 没有建议时的空状态或正在分析状态
+  // 1. 正在分析诊断中的动态酷炫面板
+  if (analyzing) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-md relative overflow-hidden space-y-5"
+        style={{ boxShadow: "var(--input-shadow), 0 4px 20px rgba(0,0,0,0.03)" }}
+      >
+        {/* 流光背景条 */}
+        <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-amber-500 via-emerald-500 to-indigo-500 animate-shimmer" 
+          style={{ backgroundSize: "200% 100%" }}
+        />
+        
+        <div className="flex items-center gap-2 pb-3 border-b border-border">
+          <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
+          <h3 className="text-xs font-bold text-foreground">OpenCat AI 智能决策中枢深度透视中...</h3>
+        </div>
+
+        <div className="space-y-4 py-2">
+          {/* 步骤 1 */}
+          <div className="flex items-center gap-3">
+            <div className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+              activeStep >= 0 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
+            }`}>
+              {activeStep > 0 ? "✓" : "1"}
+            </div>
+            <div className="flex-1">
+              <p className={`text-xs ${activeStep >= 0 ? "text-foreground font-semibold" : "text-muted"}`}>
+                全面穿透客户 360° 立体画像与交互足迹
+              </p>
+              {activeStep === 0 && (
+                <span className="text-[10px] text-accent animate-pulse block">正在梳理商机阶段、历史沟通纪要与未决警报...</span>
+              )}
+            </div>
+          </div>
+
+          {/* 步骤 2 */}
+          <div className="flex items-center gap-3">
+            <div className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+              activeStep >= 1 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
+            }`}>
+              {activeStep > 1 ? "✓" : "2"}
+            </div>
+            <div className="flex-1">
+              <p className={`text-xs ${activeStep >= 1 ? "text-foreground font-semibold" : "text-muted"}`}>
+                智能对齐专属销售 SOP / Playbook 知识库
+              </p>
+              {activeStep === 1 && (
+                <span className="text-[10px] text-accent animate-pulse block">进行 pgvector 向量 RAG 检索，提取销售金牌条款...</span>
+              )}
+            </div>
+          </div>
+
+          {/* 步骤 3 */}
+          <div className="flex items-center gap-3">
+            <div className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+              activeStep >= 2 ? "bg-amber-500/10 text-amber-600 animate-pulse" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400"
+            }`}>
+              {"3"}
+            </div>
+            <div className="flex-1">
+              <p className={`text-xs ${activeStep >= 2 ? "text-foreground font-semibold" : "text-muted"}`}>
+                决策生成最佳跟进路线与个性化沟通话术
+              </p>
+              {activeStep === 2 && (
+                <span className="text-[10px] text-amber-500 animate-pulse block">大模型推理融合中，正在撰写强类型专家级话术...</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 底部装饰提示 */}
+        <p className="text-[10px] text-muted text-center italic">
+          系统已采用克制且有据可查原则，杜绝无意义的万能套话。
+        </p>
+      </div>
+    );
+  }
+
+  // 没有建议时的空状态
   if (!recommendation) {
     return (
       <div className="rounded-2xl border border-dashed border-border bg-card p-6 text-center space-y-4">
@@ -139,59 +238,94 @@ export function RecommendationCard({
           disabled={analyzing}
           className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-xs font-semibold text-background hover:opacity-85 disabled:opacity-40"
         >
-          {analyzing ? (
-            <>
-              <Loader2 className="h-3 w-3 animate-spin" />
-              {t("customers.diagnosing")}
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-3.5 w-3.5 fill-current" />
-              {t("customers.diagnose")}
-            </>
-          )}
+          <Sparkles className="h-3.5 w-3.5 fill-current" />
+          {t("customers.diagnose")}
         </button>
       </div>
     );
   }
 
-  // 已处理状态的卡片
+  // 2. 已处理状态 (采纳/驳回/忽略) 的超级视觉卡片 (Premium 印章印记风格)
   if (recommendation.status !== "PENDING") {
+    const isApproved = recommendation.status === "APPROVED";
+    const isRejected = recommendation.status === "REJECTED";
+    const isDismissed = recommendation.status === "DISMISSED";
+    
     return (
-      <div className="rounded-2xl border border-border bg-background-secondary p-4 space-y-3">
+      <div className={`rounded-2xl border p-5 space-y-4 relative overflow-hidden transition-all ${
+        isApproved 
+          ? "border-emerald-500/35 bg-gradient-to-br from-card via-card to-emerald-500/[0.03] shadow-sm" 
+          : isRejected 
+            ? "border-red-500/30 bg-gradient-to-br from-card via-card to-red-500/[0.02]"
+            : "border-border bg-background-secondary"
+      }`}
+        style={{ boxShadow: isApproved ? "0 4px 15px rgba(16,185,129,0.03)" : undefined }}
+      >
+        {/* 精致的右上角状态盖章徽章 */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs text-muted">
-            <Sparkles className="h-3.5 w-3.5 text-accent" />
+          <div className="flex items-center gap-1.5 text-xs text-muted font-medium">
+            <Sparkles className={`h-3.5 w-3.5 ${isApproved ? "text-emerald-500 animate-pulse" : "text-zinc-400"}`} />
             <span>{isEn ? "Intelligent Diagnosis Archive" : "智能诊断记录 (已归档)"}</span>
           </div>
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-            recommendation.status === "APPROVED" 
-              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-              : recommendation.status === "REJECTED"
-                ? "bg-red-500/10 text-red-600 dark:text-red-400"
+          
+          <div className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+            isApproved 
+              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+              : isRejected 
+                ? "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
                 : "bg-zinc-500/10 text-zinc-500"
           }`}>
-            {recommendation.status === "APPROVED" && (isEn ? "Approved" : "已采纳下一步建议")}
-            {recommendation.status === "REJECTED" && (isEn ? "Rejected" : "AI 建议已被驳回")}
-            {recommendation.status === "DISMISSED" && (isEn ? "Dismissed" : "已忽略此建议")}
-          </span>
-        </div>
-        <div className="border-t border-border pt-2 space-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted">{isEn ? "Intent Rating:" : "评估意向："}</span>
-            <IntentBadge score={recommendation.intentScore} />
+            <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse mr-0.5" />
+            {isApproved && "已采纳下一步建议"}
+            {isRejected && "建议已被销售驳回"}
+            {isDismissed && "建议已忽略归档"}
           </div>
-          <p className="text-xs text-foreground/80 leading-relaxed">
-            <strong className="text-foreground">{isEn ? "Next Action: " : "下一步动作："}</strong>
-            {recommendation.nextAction}
-          </p>
         </div>
+
+        {/* 核心内容区 */}
+        <div className="border-t border-border/80 pt-3 space-y-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted">评估意向：</span>
+            <IntentBadge score={recommendation.intentScore} />
+            {isApproved && (
+              <span className="inline-flex items-center gap-1 rounded bg-emerald-500/5 px-1.5 py-0.5 text-[9px] text-emerald-600 dark:text-emerald-400 font-mono font-medium border border-emerald-500/10">
+                ⏱️ ROI 价值：已省工时 0.25h (15m)
+              </span>
+            )}
+          </div>
+          
+          <div className="space-y-1">
+            <span className="text-[10px] font-semibold text-muted uppercase tracking-wider block">
+              下一步跟进动作：
+            </span>
+            <p className="text-xs text-foreground/90 leading-relaxed font-medium bg-background-secondary p-2.5 rounded-lg border border-border">
+              {recommendation.nextAction}
+            </p>
+          </div>
+
+          {/* 重点：即使在已采纳状态下，也依然精美展示当时采纳的话术跟进内容！ */}
+          {recommendation.talkTrack && isApproved && (
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-semibold text-muted uppercase tracking-wider block">
+                已执行跟进话术草稿：
+              </span>
+              <div className="rounded-lg border border-emerald-500/10 bg-emerald-500/[0.01] p-3.5 text-xs text-foreground/80 font-mono leading-relaxed relative whitespace-pre-wrap">
+                <span className="absolute top-1.5 right-2.5 text-2xl font-serif text-emerald-500/15 pointer-events-none">”</span>
+                {recommendation.talkTrack}
+              </div>
+              <span className="text-[10px] text-emerald-500/90 font-medium block pt-0.5">
+                ✓ 系统已自动将该沟通话术与抵扣日志沉淀到下方“足迹时间轴”中。
+              </span>
+            </div>
+          )}
+        </div>
+
         <button
           onClick={onAnalyzeTrigger}
           disabled={analyzing}
-          className="w-full text-center rounded-lg border border-border py-1.5 text-xs font-medium text-muted hover:bg-[var(--sidebar-hover)] hover:text-foreground animate-none"
+          className="w-full text-center rounded-lg border border-border py-1.5 text-xs font-semibold text-muted hover:bg-[var(--sidebar-hover)] hover:text-foreground transition-all duration-200"
         >
-          {isEn ? "Regenerate AI Analysis Suggestion" : "重新生成 AI 分析建议"}
+          重新诊断客户 (生成实时最新 SOP 建议)
         </button>
       </div>
     );

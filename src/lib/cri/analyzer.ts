@@ -6,7 +6,7 @@
 //   1. 提取客户的 360 度立体足迹上下文 (Customer, Leads, Interactions, Signals)。
 //   2. 基于项目的 RAG 知识库，检索匹配相关的销售 SOP / Playbook 条款。
 //   3. 解密匹配用户的 LLM API Key，创建大模型实例。
-//   4. 调用 Vercel AI SDK 6.x generateObject 进行强类型输出校验。
+//   4. 调用 Vercel AI SDK 6.x generateText + 手动 JSON 解析，彻底绕开 structured outputs 兼容性问题
 //
 // ============================================================
 
@@ -14,7 +14,7 @@ import { db } from "@/server/db";
 import { decrypt } from "@/lib/crypto";
 import { createModel, getProviderForModel } from "@/lib/llm";
 import { retrieveRelevantChunks } from "@/lib/memory";
-import { generateObject } from "ai";
+import { generateText } from "ai";
 import { z } from "zod";
 
 // 定义大模型强类型输出的 Zod Schema
@@ -123,14 +123,26 @@ export async function analyzeCustomerContext(
 2. **高水准话术草稿**：
    - 话术草稿 (talkTrack) 必须融入客户主要联系人的称呼，针对性回应其行业痛点。
    - 语言必须专业、得体、严谨，语气保持温和与克制。
-   - **绝对禁止使用浮夸套话**（如“祝您生活愉快”、“我们是全网最强的AI”、“为您保驾护航”等）。
+   - **绝对禁止使用浮夸套话**（如"祝您生活愉快"、"我们是全网最强的AI"、"为您保驾护航"等）。
    - 如果提供了【销售 SOP / Playbook 规范】，你必须完全遵循规范中的沟通思路 and 话术模版。
 3. **分阶段诊断原则**：
    - LEAD (线索)：关注响应速度 (SLA)，摸清客户预算痛点及决策链。
    - TRIAL (试用)：监控活跃度，提供技术避坑指南，解答配置疑问。
    - OPPORTUNITY (商机)：商务推进，对齐关键决策人，发送针对性商务报价草稿，推进签约。
    - CUSTOMER (成交)：客户成功关怀，收集满意度和采纳率，维系长期信任。
-   - CHURNED (流失)：保持轻度弱联系，发送季报，探寻重组机会。`;
+   - CHURNED (流失)：保持轻度弱联系，发送季报，探寻重组机会。
+
+【输出格式要求】
+你必须且只能输出一个合法的 JSON 对象，不要包含任何多余的文字、代码块标记或解释。JSON 结构如下：
+{
+  "intentScore": "hot" | "warm" | "cold" | "at-risk",
+  "riskReason": "风险原因描述（无风险则为 null）",
+  "nextAction": "下一步推荐动作",
+  "talkTrack": "个性化沟通话术草稿",
+  "evidence": [
+    { "type": "signal|interaction|customer|lead|outcome|playbook", "source": "来源", "text": "依据描述" }
+  ]
+}`;
 
   // 准备客户立体信息文本
   const customerInfoText = `
@@ -176,11 +188,11 @@ ${customerInfoText}
 
 ${
   sopContext
-    ? `【销售 SOP / Playbook 规范】\n以下是匹配到的企业专属销售 SOP 规范，请在撰写“下一步动作 (nextAction)” and “话术草稿 (talkTrack)”时予以严格执行和融入：\n${sopContext}\n`
+    ? `【销售 SOP / Playbook 规范】\n以下是匹配到的企业专属销售 SOP 规范，请在撰写"下一步动作 (nextAction)" and "话术草稿 (talkTrack)"时予以严格执行和融入：\n${sopContext}\n`
     : ""
 }
 
-请严格按照要求的 JSON 结构输出你的判定结果。
+请严格只输出 JSON 对象，不要有任何额外文字。
   `;
 
   // ------------------------------------------------------------
@@ -191,9 +203,15 @@ ${
     const modelId = defaultProject?.defaultModel || "gpt-5.4-mini";
     const providerId = getProviderForModel(modelId) || "openai";
 
-    const userKey = await db.apiKey.findFirst({
+    // 查找用户的 API Key — 先按 provider 精确匹配，找不到则降级取任意可用 Key
+    let userKey = await db.apiKey.findFirst({
       where: { userId, provider: providerId, isActive: true },
     });
+    if (!userKey) {
+      userKey = await db.apiKey.findFirst({
+        where: { userId, isActive: true },
+      });
+    }
 
     if (!userKey) {
       // 降级：无密钥时走本地规则引擎
@@ -209,15 +227,23 @@ ${
       providerId,
     });
 
-    // 调用 Vercel AI SDK generateObject 输出强类型
-    const response = await generateObject({
+    // 使用 generateText 代替 generateObject，彻底绕开 DeepSeek 等模型
+    // 不支持 OpenAI structured outputs (json_schema / response_format) 的兼容性问题
+    const response = await generateText({
       model,
       system: systemPrompt,
       prompt: inputPrompt,
-      schema: analysisResultSchema,
     });
 
-    return response.object;
+    // 从大模型返回的纯文本中提取 JSON
+    const rawText = response.text.trim();
+    // 兼容大模型可能在 JSON 外包裹 ```json ... ``` 代码块的情况
+    const jsonStr = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    const parsed = JSON.parse(jsonStr);
+    // 用 Zod 做运行时类型校验，确保输出格式合规
+    const validated = analysisResultSchema.parse(parsed);
+
+    return validated;
   } catch (error) {
     console.error("[CRI Analyzer] AI 智能诊断失败，无缝降级到本地规则引擎:", error);
     return getFallbackAnalysisResult(customer);

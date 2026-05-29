@@ -94,7 +94,7 @@ const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || "openai";
 // 所以不管是 OpenAI 官方、代理平台、还是国产模型，
 // 只要兼容这个格式，传入 baseURL 就能用。
 //
-function getEmbeddingModel(apiKey: string, baseUrl?: string) {
+function getEmbeddingModel(apiKey: string, baseUrl?: string, modelId: string = EMBEDDING_MODEL) {
   const activeBaseUrl = EMBEDDING_BASE_URL || baseUrl;
   const openai = createOpenAI({
     apiKey,
@@ -102,7 +102,7 @@ function getEmbeddingModel(apiKey: string, baseUrl?: string) {
     // 没配就用 @ai-sdk/openai 的默认值（OpenAI 官方）
     ...(activeBaseUrl ? { baseURL: activeBaseUrl } : {}),
   });
-  return openai.textEmbeddingModel(EMBEDDING_MODEL);
+  return openai.textEmbeddingModel(modelId);
 }
 
 // ============================================================
@@ -173,6 +173,18 @@ export async function getEmbeddingBaseUrl(userId: string): Promise<string | unde
 }
 
 // ============================================================
+// 动态获取用户的 Embedding 模型 (从默认 Project 配置中读取)
+// ============================================================
+export async function getEmbeddingModelId(userId: string): Promise<string> {
+  const project = await db.project.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" }
+  });
+  // Project > 环境变量 > "text-embedding-3-small"
+  return project?.defaultEmbeddingModel || process.env.EMBEDDING_MODEL || "text-embedding-3-small";
+}
+
+// ============================================================
 // 获取完整的 Embedding 模型实例（含 Key + baseUrl 解析）
 // ============================================================
 //
@@ -185,13 +197,14 @@ async function resolveEmbeddingModel(userId: string) {
 
   // 如果环境变量没配 baseUrl，尝试用用户 Key 上的 baseUrl
   const userBaseUrl = await getEmbeddingBaseUrl(userId);
+  const modelId = await getEmbeddingModelId(userId);
 
   const openai = createOpenAI({
     apiKey,
     ...(userBaseUrl ? { baseURL: userBaseUrl } : {}),
   });
 
-  return openai.textEmbeddingModel(EMBEDDING_MODEL);
+  return openai.textEmbeddingModel(modelId);
 }
 
 // ============================================================
@@ -206,9 +219,11 @@ async function resolveEmbeddingModel(userId: string) {
 export async function generateEmbedding(
   text: string,
   apiKey: string,
-  baseUrl?: string
+  baseUrl?: string,
+  modelId?: string
 ): Promise<number[]> {
-  const model = getEmbeddingModel(apiKey, baseUrl);
+  const activeModelId = modelId || EMBEDDING_MODEL;
+  const model = getEmbeddingModel(apiKey, baseUrl, activeModelId);
 
   const result = await embed({
     model,
@@ -228,11 +243,13 @@ export async function generateEmbedding(
 export async function generateEmbeddings(
   texts: string[],
   apiKey: string,
-  baseUrl?: string
+  baseUrl?: string,
+  modelId?: string
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
 
-  const model = getEmbeddingModel(apiKey, baseUrl);
+  const activeModelId = modelId || EMBEDDING_MODEL;
+  const model = getEmbeddingModel(apiKey, baseUrl, activeModelId);
 
   const result = await embedMany({
     model,

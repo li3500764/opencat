@@ -22,9 +22,10 @@ export async function GET() {
   }
   const userId = session.user.id;
 
-  // 查找已有的 Default 项目
+  // 查找已有的项目 (这里不硬编码 Name="Default", 而是直接找用户的第一个项目)
   let project = await db.project.findFirst({
-    where: { userId, name: "Default" },
+    where: { userId },
+    orderBy: { createdAt: "asc" }
   });
 
   // 如果没有，自动创建
@@ -36,6 +37,39 @@ export async function GET() {
         description: "Default project",
         defaultModel: "gpt-5.4-mini",
       },
+    });
+  }
+
+  return Response.json(project);
+}
+
+export async function PUT(req: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const userId = session.user.id;
+
+  const body = await req.json();
+  const { defaultModel, defaultEmbeddingModel } = body;
+
+  let project = await db.project.findFirst({
+    where: { userId },
+    orderBy: { createdAt: "asc" }
+  });
+
+  if (!project) {
+    return Response.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  const updateData: any = {};
+  if (defaultModel) updateData.defaultModel = defaultModel;
+  if (defaultEmbeddingModel) updateData.defaultEmbeddingModel = defaultEmbeddingModel;
+
+  if (Object.keys(updateData).length > 0) {
+    project = await db.project.update({
+      where: { id: project.id },
+      data: updateData
     });
   }
 
