@@ -102,6 +102,7 @@ model ApiKey {
   iv           String   // 加密初始化向量（每个 key 不同，防止相同明文产生相同密文）
   label        String   @default("Default")  // 用户给这个 key 的备注名
   baseUrl      String?  // 自定义 Provider 的 API 地址（如 heiyu）
+  models       Json     @default("[]") // 模型列表: [{ id: "gpt-4o", name: "GPT-4o", inputPrice: 2.5, outputPrice: 10 }]
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
 
