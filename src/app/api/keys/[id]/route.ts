@@ -4,6 +4,7 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/server/db";
+import { classifyDatabaseError } from "@/server/db/errors";
 import { decrypt, encrypt, isEncryptionConfigError } from "@/lib/crypto";
 import { createModel } from "@/lib/llm";
 import type { Prisma } from "@prisma/client";
@@ -134,6 +135,15 @@ export async function PUT(
           code: "ENCRYPTION_CONFIG_ERROR",
         },
         { status: 503 }
+      );
+    }
+
+    const databaseError = classifyDatabaseError(error);
+    if (databaseError) {
+      console.error("Failed to update API key", error);
+      return Response.json(
+        { error: databaseError.message, code: databaseError.code },
+        { status: databaseError.status }
       );
     }
 

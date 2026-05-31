@@ -1,4 +1,1 @@
-ignoredBuiltDependencies:
-  - sharp
-  - unrs-resolver
-onlyBuiltDependencies: '["@prisma/engines", "prisma"]'
+onlyBuiltDependencies: '["@prisma/engines", "@prisma/client", "prisma", "sharp", "unrs-resolver"]'

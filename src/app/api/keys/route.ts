@@ -6,6 +6,7 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/server/db";
+import { classifyDatabaseError } from "@/server/db/errors";
 import { encrypt, isEncryptionConfigError, maskApiKey } from "@/lib/crypto";
 import type { Prisma } from "@prisma/client";
 import { z } from "zod/v4";
@@ -131,6 +132,15 @@ export async function POST(req: Request) {
           code: "ENCRYPTION_CONFIG_ERROR",
         },
         { status: 503 }
+      );
+    }
+
+    const databaseError = classifyDatabaseError(error);
+    if (databaseError) {
+      console.error("Failed to create API key", error);
+      return Response.json(
+        { error: databaseError.message, code: databaseError.code },
+        { status: databaseError.status }
       );
     }
 
