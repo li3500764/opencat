@@ -104,22 +104,22 @@ export async function GET() {
         by: ["type"],
         where: { customer: { organizationId: orgId }, isResolved: false },
         _count: { id: true },
-        orderBy: { _count: { id: "desc" } },
       }),
 
-      // (f) 最近 14 天每日挽回增益 (SQL Raw 物理加总，避免 Node 端串行算力消耗)
-      db.$queryRaw<Array<{ date: string; value: number; hours: number }>>`
-        SELECT
-          TO_CHAR(o."createdAt", 'YYYY-MM-DD') as date,
-          SUM(o."savedValue")::float as value,
-          SUM(o."savedHours")::float as hours
-        FROM "Outcome" o
-        JOIN "Customer" c ON o."customerId" = c.id
-        WHERE c."organizationId" = ${orgId}
-          AND o."createdAt" >= NOW() - INTERVAL '14 days'
-        GROUP BY TO_CHAR(o."createdAt", 'YYYY-MM-DD')
-        ORDER BY date ASC
-      `,
+      // (f) 最近 14 天每日挽回增益 (使用 Prisma Client 提升兼容性，替代原生 SQL)
+      db.outcome.findMany({
+        where: {
+          customer: { organizationId: orgId },
+          createdAt: {
+            gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+          },
+        },
+        select: {
+          createdAt: true,
+          savedValue: true,
+          savedHours: true,
+        },
+      }),
 
       // (g) Outcomes 闭环流水明细 ledger
       db.outcome.findMany({
@@ -163,15 +163,21 @@ export async function GET() {
     });
 
     // 5. 格式化风险排行榜
-    const signalStats = signalStatsRaw.map((s) => ({
-      type: s.type,
-      count: s._count.id,
-    }));
+    const signalStats = signalStatsRaw
+      .map((s) => ({
+        type: s.type,
+        count: s._count.id,
+      }))
+      .sort((a, b) => b.count - a.count);
 
     // 6. 填充 14 天内缺失日期 (防图表折线跳水和时区断开)
     const dailyMap = new Map<string, { value: number; hours: number }>();
     for (const row of dailyRoiRaw) {
-      dailyMap.set(row.date, { value: row.value || 0, hours: row.hours || 0 });
+      const dateStr = row.createdAt.toISOString().split("T")[0];
+      const existing = dailyMap.get(dateStr) || { value: 0, hours: 0 };
+      existing.value += row.savedValue || 0;
+      existing.hours += row.savedHours || 0;
+      dailyMap.set(dateStr, existing);
     }
 
     const dailyRoiTrend: Array<{ date: string; value: number; hours: number }> = [];
