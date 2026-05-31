@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:sync-api-key": "node scripts/sync-api-key-schema.mjs",
+    "db:sync-memory": "node scripts/sync-memory-schema.mjs",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
     "postinstall": "prisma generate",

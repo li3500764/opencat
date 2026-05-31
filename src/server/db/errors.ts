@@ -19,7 +19,15 @@ export function classifyDatabaseError(
 ): ClassifiedDatabaseError | null {
   const code = getErrorCode(error);
 
-  if (code === "P2021" || code === "P2022") {
+  if (
+    code === "P2021" ||
+    code === "P2022" ||
+    code === "42703" ||
+    code === "22P02" ||
+    code === "42704" ||
+    code === "42883" ||
+    code === "0A000"
+  ) {
     return {
       code: "DATABASE_SCHEMA_OUT_OF_SYNC",
       status: 503,

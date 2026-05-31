@@ -9,6 +9,25 @@
 
 import { auth } from "@/lib/auth";
 import { getUserMemories, deleteMemory, saveMemory } from "@/lib/memory";
+import { classifyDatabaseError } from "@/server/db/errors";
+
+function memoryErrorResponse(error: unknown) {
+  const databaseError = classifyDatabaseError(error);
+  if (databaseError) {
+    return Response.json(
+      { error: databaseError.message, code: databaseError.code },
+      { status: databaseError.status }
+    );
+  }
+
+  return Response.json(
+    {
+      error: error instanceof Error ? error.message : "Internal Server Error",
+      code: "MEMORY_REQUEST_FAILED",
+    },
+    { status: 500 }
+  );
+}
 
 // GET — 获取用户记忆列表
 export async function GET(req: Request) {
@@ -20,8 +39,13 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const conversationId = searchParams.get("conversationId") || undefined;
 
-  const memories = await getUserMemories(session.user.id, undefined, conversationId);
-  return Response.json(memories);
+  try {
+    const memories = await getUserMemories(session.user.id, undefined, conversationId);
+    return Response.json(memories);
+  } catch (err) {
+    console.error("[Memory API] Failed to list memories:", err);
+    return memoryErrorResponse(err);
+  }
 }
 
 // POST — 手动新增一条记忆
@@ -50,7 +74,7 @@ export async function POST(req: Request) {
     return Response.json({ success: true, id: result.id });
   } catch (err) {
     console.error("[Memory API] Failed to save memory:", err);
-    return Response.json({ error: err instanceof Error ? err.message : "Internal Server Error" }, { status: 500 });
+    return memoryErrorResponse(err);
   }
 }
 
@@ -66,10 +90,15 @@ export async function DELETE(req: Request) {
     return Response.json({ error: "id is required" }, { status: 400 });
   }
 
-  const deleted = await deleteMemory(id, session.user.id);
-  if (!deleted) {
-    return Response.json({ error: "Not found" }, { status: 404 });
-  }
+  try {
+    const deleted = await deleteMemory(id, session.user.id);
+    if (!deleted) {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
 
-  return Response.json({ success: true });
+    return Response.json({ success: true });
+  } catch (err) {
+    console.error("[Memory API] Failed to delete memory:", err);
+    return memoryErrorResponse(err);
+  }
 }
