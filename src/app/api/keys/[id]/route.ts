@@ -4,9 +4,25 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/server/db";
-import { decrypt, encrypt } from "@/lib/crypto";
+import { decrypt, encrypt, isEncryptionConfigError } from "@/lib/crypto";
 import { createModel } from "@/lib/llm";
+import type { Prisma } from "@prisma/client";
 import { generateText } from "ai";
+import { z } from "zod/v4";
+
+const updateKeySchema = z.object({
+  label: z.string().trim().optional(),
+  baseUrl: z.string().trim().optional(),
+  apiKey: z.string().trim().optional(),
+  models: z
+    .array(
+      z.object({
+        id: z.string().trim().min(1),
+        name: z.string().trim().min(1),
+      })
+    )
+    .optional(),
+});
 
 // DELETE — 删除指定的 API Key
 export async function DELETE(
@@ -53,16 +69,17 @@ export async function PUT(
   }
 
   const body = await req.json();
-  const { label, baseUrl, apiKey: newApiKey, models } = body as {
-    label?: string;
-    baseUrl?: string;
-    apiKey?: string;
-    models?: { id: string; name: string }[];
-  };
+  const parsed = updateKeySchema.safeParse(body);
+  if (!parsed.success) {
+    return Response.json(
+      { error: "Invalid input", details: parsed.error.issues },
+      { status: 400 }
+    );
+  }
+  const { label, baseUrl, apiKey: newApiKey, models } = parsed.data;
 
-  // 构建更新数据
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updateData: Record<string, any> = {};
+  const updateData: Prisma.ApiKeyUpdateInput = {};
+  let updatedIv = key.iv;
 
   if (label !== undefined) updateData.label = label;
   if (baseUrl !== undefined) updateData.baseUrl = baseUrl || null;
@@ -71,41 +88,61 @@ export async function PUT(
 
   if (models !== undefined) {
     updateData.models = models.map((m) => ({
-      id: m.id.trim(),
-      name: m.name.trim(),
+      id: m.id,
+      name: m.name,
       inputPrice: 0,
       outputPrice: 0,
     }));
   }
 
-  // 如果传了新的 API Key，重新加密
-  if (newApiKey && newApiKey.trim()) {
-    const { encrypted, iv } = encrypt(newApiKey.trim());
-    updateData.encryptedKey = encrypted;
-    updateData.iv = iv;
+  try {
+    // 如果传了新的 API Key，重新加密
+    if (newApiKey) {
+      const { encrypted, iv } = encrypt(newApiKey);
+      updateData.encryptedKey = encrypted;
+      updateData.iv = iv;
+      updatedIv = iv;
+    }
+
+    const updated = await db.apiKey.update({
+      where: { id },
+      data: updateData,
+      select: {
+        id: true,
+        provider: true,
+        label: true,
+        baseUrl: true,
+        isActive: true,
+        encryptedKey: true,
+        createdAt: true,
+      },
+    });
+
+    // 动态生成 maskedKey
+    const decryptedKey = decrypt(updated.encryptedKey, updatedIv);
+    return Response.json({
+      ...updated,
+      encryptedKey: undefined,
+      maskedKey: decryptedKey.slice(0, 4) + "..." + decryptedKey.slice(-4),
+    });
+  } catch (error) {
+    if (isEncryptionConfigError(error)) {
+      return Response.json(
+        {
+          error:
+            "Server encryption is not configured. Set ENCRYPTION_KEY to a 64-character hex string, then restart the app.",
+          code: "ENCRYPTION_CONFIG_ERROR",
+        },
+        { status: 503 }
+      );
+    }
+
+    console.error("Failed to update API key", error);
+    return Response.json(
+      { error: "Failed to update API key", code: "API_KEY_UPDATE_FAILED" },
+      { status: 500 }
+    );
   }
-
-  const updated = await db.apiKey.update({
-    where: { id },
-    data: updateData,
-    select: {
-      id: true,
-      provider: true,
-      label: true,
-      baseUrl: true,
-      isActive: true,
-      encryptedKey: true,
-      createdAt: true,
-    },
-  });
-
-  // 动态生成 maskedKey
-  const decryptedKey = decrypt(updated.encryptedKey, updateData.iv ?? key.iv);
-  return Response.json({
-    ...updated,
-    encryptedKey: undefined,
-    maskedKey: decryptedKey.slice(0, 4) + "..." + decryptedKey.slice(-4),
-  });
 }
 
 // POST — 测试 API Key 是否可用
@@ -162,4 +199,3 @@ export async function POST(
     );
   }
 }
-

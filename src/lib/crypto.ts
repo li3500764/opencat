@@ -26,6 +26,13 @@ function getEncryptionKey(): Buffer {
   return Buffer.from(key, "hex"); // 64 hex chars → 32 bytes = 256 bits
 }
 
+export function isEncryptionConfigError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.startsWith("ENCRYPTION_KEY must be a 64-character hex string")
+  );
+}
+
 export function encrypt(plaintext: string): {
   encrypted: string;
   iv: string;

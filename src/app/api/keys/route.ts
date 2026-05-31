@@ -6,20 +6,21 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/server/db";
-import { encrypt, maskApiKey } from "@/lib/crypto";
+import { encrypt, isEncryptionConfigError, maskApiKey } from "@/lib/crypto";
+import type { Prisma } from "@prisma/client";
 import { z } from "zod/v4";
+
+const modelSchema = z.object({
+  id: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+});
 
 // 添加 Key 的校验 schema
 const addKeySchema = z.object({
-  apiKey: z.string().min(1),         // 原始 API Key
-  label: z.string().optional(),      // 备注名
-  baseUrl: z.string().optional().nullable(), // 自定义 Base URL
-  models: z.array(
-    z.object({
-      id: z.string().min(1),
-      name: z.string().min(1),
-    })
-  ).min(1, "至少需要配置一个模型"),
+  apiKey: z.string().trim().min(1), // 原始 API Key
+  label: z.string().trim().optional(), // 备注名
+  baseUrl: z.string().trim().optional().nullable(), // 自定义 Base URL
+  models: z.array(modelSchema).min(1, "至少需要配置一个模型"),
 });
 
 // GET — 列出 API Keys（脱敏）
@@ -85,40 +86,58 @@ export async function POST(req: Request) {
     );
   }
 
-  const { apiKey, label, baseUrl, models } = parsed.data;
+  try {
+    const { apiKey, label, baseUrl, models } = parsed.data;
 
-  // 加密 API Key
-  const { encrypted, iv } = encrypt(apiKey);
+    // 加密 API Key
+    const { encrypted, iv } = encrypt(apiKey);
 
-  // 格式化模型以满足数据库中的 models 字段结构
-  const formattedModels = models.map((m) => ({
-    id: m.id.trim(),
-    name: m.name.trim(),
-    inputPrice: 0,
-    outputPrice: 0,
-  }));
+    // 格式化模型以满足数据库中的 models 字段结构
+    const formattedModels: Prisma.InputJsonValue = models.map((m) => ({
+      id: m.id,
+      name: m.name,
+      inputPrice: 0,
+      outputPrice: 0,
+    }));
 
-  const key = await db.apiKey.create({
-    data: {
-      userId: session.user.id,
-      provider: "openai", // 统一存为 "openai" 兼容提供商
-      format: "openai",
-      encryptedKey: encrypted,
-      iv,
-      label: label || "OpenAI 兼容密钥",
-      baseUrl: baseUrl || null,
-      models: formattedModels as any,
-    },
-  });
+    const key = await db.apiKey.create({
+      data: {
+        userId: session.user.id,
+        provider: "openai", // 统一存为 "openai" 兼容提供商
+        format: "openai",
+        encryptedKey: encrypted,
+        iv,
+        label: label || "OpenAI 兼容密钥",
+        baseUrl: baseUrl || null,
+        models: formattedModels,
+      },
+    });
 
-  return Response.json(
-    {
-      id: key.id,
-      provider: key.provider,
-      label: key.label,
-      maskedKey: maskApiKey(apiKey),
-    },
-    { status: 201 }
-  );
+    return Response.json(
+      {
+        id: key.id,
+        provider: key.provider,
+        label: key.label,
+        maskedKey: maskApiKey(apiKey),
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    if (isEncryptionConfigError(error)) {
+      return Response.json(
+        {
+          error:
+            "Server encryption is not configured. Set ENCRYPTION_KEY to a 64-character hex string, then restart the app.",
+          code: "ENCRYPTION_CONFIG_ERROR",
+        },
+        { status: 503 }
+      );
+    }
+
+    console.error("Failed to create API key", error);
+    return Response.json(
+      { error: "Failed to save API key", code: "API_KEY_SAVE_FAILED" },
+      { status: 500 }
+    );
+  }
 }
-
