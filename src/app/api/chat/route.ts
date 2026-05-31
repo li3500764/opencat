@@ -12,8 +12,9 @@
 import { convertToModelMessages, type UIMessage } from "ai";
 import { auth } from "@/lib/auth";
 import { db } from "@/server/db";
-import { decrypt } from "@/lib/crypto";
-import { createModel, getProviderForModel, calculateCost, getProviderInfo, type ApiFormat } from "@/lib/llm";
+import { classifyDatabaseError } from "@/server/db/errors";
+import { decrypt, isEncryptionConfigError } from "@/lib/crypto";
+import { createModel, getProviderForModel, calculateCost, type ApiFormat } from "@/lib/llm";
 import { createAgentStream } from "@/lib/agent";
 import {
   searchRelevantMemories,
@@ -23,6 +24,38 @@ import {
 } from "@/lib/memory";
 
 export async function POST(req: Request) {
+  try {
+    return await handleChatRequest(req);
+  } catch (error) {
+    const databaseError = classifyDatabaseError(error);
+    if (databaseError) {
+      console.error("[Chat API] Database error:", error);
+      return Response.json(
+        { error: databaseError.message, code: databaseError.code },
+        { status: databaseError.status }
+      );
+    }
+
+    if (isEncryptionConfigError(error)) {
+      return Response.json(
+        {
+          error:
+            "Server encryption is not configured. Set ENCRYPTION_KEY to a 64-character hex string, then restart the app.",
+          code: "ENCRYPTION_CONFIG_ERROR",
+        },
+        { status: 503 }
+      );
+    }
+
+    console.error("[Chat API] Request failed:", error);
+    return Response.json(
+      { error: "Chat request failed", code: "CHAT_REQUEST_FAILED" },
+      { status: 500 }
+    );
+  }
+}
+
+async function handleChatRequest(req: Request) {
   // ---- 1. 鉴权 ----
   const session = await auth();
   if (!session?.user?.id) {
