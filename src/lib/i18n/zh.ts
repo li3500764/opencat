@@ -141,6 +141,10 @@ const zh: TranslationKeys = {
     toolsLabel: "工具",
     orchestratorMode: "编排器模式（可以调用其他 Agent）",
     saveChanges: "保存修改",
+    generatePrompt: "AI 生成提示词",
+    generatingPrompt: "正在生成...",
+    generatePromptTip: "请先输入 Agent 名称",
+    generatePromptError: "生成提示词失败，请检查 API 配置",
   },
 
   // ---- 知识库 ----

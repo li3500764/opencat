@@ -22,7 +22,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Plus, Trash2, Loader2, ArrowLeft, Bot,
-  Pencil, Wrench, MessageSquare, Crown,
+  Pencil, Wrench, MessageSquare, Crown, Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { useTranslation } from "@/lib/i18n";
@@ -83,6 +83,10 @@ export default function AgentsPage() {
   const [form, setForm] = useState(DEFAULT_FORM);
   const [saving, setSaving] = useState(false);
 
+  // AI 提示词生成状态
+  const [generatingPrompt, setGeneratingPrompt] = useState(false);
+  const [promptError, setPromptError] = useState<string | null>(null);
+
   // ---- 获取 Agent 列表 ----
   const fetchAgents = useCallback(async () => {
     const res = await fetch("/api/agents");
@@ -131,6 +135,8 @@ export default function AgentsPage() {
     setForm(DEFAULT_FORM);
     setEditingId(null);
     setShowForm(true);
+    setPromptError(null);
+    setGeneratingPrompt(false);
   };
 
   // ---- 打开编辑表单 ----
@@ -147,6 +153,41 @@ export default function AgentsPage() {
     });
     setEditingId(agent.id);
     setShowForm(true);
+    setPromptError(null);
+    setGeneratingPrompt(false);
+  };
+
+  // ---- AI 自动生成系统提示词 ----
+  const handleGeneratePrompt = async () => {
+    if (!form.name.trim()) return;
+    setGeneratingPrompt(true);
+    setPromptError(null);
+
+    try {
+      const res = await fetch("/api/agents/generate-prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          description: form.description,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        if (data.systemPrompt) {
+          setForm((f) => ({ ...f, systemPrompt: data.systemPrompt }));
+        }
+      } else {
+        setPromptError(data.error || t('agents.generatePromptError'));
+      }
+    } catch (err) {
+      console.error("[Generate Prompt Error]", err);
+      setPromptError(t('agents.generatePromptError'));
+    } finally {
+      setGeneratingPrompt(false);
+    }
   };
 
   // ---- 保存（新建或更新） ----
@@ -343,14 +384,50 @@ export default function AgentsPage() {
 
             {/* 系统提示词 */}
             <div>
-              <label className="mb-1 block text-xs text-muted">{t('agents.systemPromptLabel')}</label>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="text-xs text-muted font-medium">{t('agents.systemPromptLabel')}</label>
+                <button
+                  type="button"
+                  onClick={handleGeneratePrompt}
+                  disabled={generatingPrompt || !form.name.trim()}
+                  title={!form.name.trim() ? t('agents.generatePromptTip') : undefined}
+                  className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-[11px] font-medium transition-all ${
+                    generatingPrompt
+                      ? "bg-accent/10 text-accent cursor-not-allowed"
+                      : !form.name.trim()
+                      ? "text-muted/40 cursor-not-allowed bg-transparent"
+                      : "bg-accent/10 text-accent hover:bg-accent/20 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                  }`}
+                >
+                  {generatingPrompt ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>{t('agents.generatingPrompt')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-3 w-3 animate-pulse" />
+                      <span>{t('agents.generatePrompt')}</span>
+                    </>
+                  )}
+                </button>
+              </div>
               <textarea
                 value={form.systemPrompt}
                 onChange={(e) => setForm((f) => ({ ...f, systemPrompt: e.target.value }))}
-                rows={4}
+                rows={6}
                 placeholder="你是一个专业的代码助手..."
-                className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50 resize-none"
+                className={`w-full rounded-lg border bg-input-bg px-3 py-2 text-sm outline-none resize-none transition-all duration-300 ${
+                  generatingPrompt
+                    ? "border-accent/50 ring-1 ring-accent/30 opacity-70"
+                    : "border-border focus:border-accent/50 focus:ring-1 focus:ring-accent/30"
+                }`}
               />
+              {promptError && (
+                <p className="mt-1 text-[11px] text-danger animate-fadeIn">
+                  {promptError}
+                </p>
+              )}
             </div>
 
             {/* 模型选择 */}

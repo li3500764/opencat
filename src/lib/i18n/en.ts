@@ -139,6 +139,10 @@ const en = {
     toolsLabel: "Tools",
     orchestratorMode: "Orchestrator mode (can call other Agents)",
     saveChanges: "Save Changes",
+    generatePrompt: "AI Generate",
+    generatingPrompt: "Generating...",
+    generatePromptTip: "Please enter Agent name first",
+    generatePromptError: "Failed to generate prompt, please check API settings",
   },
 
   // ---- Knowledge Base ----
