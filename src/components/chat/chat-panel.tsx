@@ -212,9 +212,11 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
     const lastMessage = currentMessages[currentMessages.length - 1] as any;
     if (lastMessage && lastMessage.parts) {
       lastMessage.parts.forEach((part: any) => {
+        if (!part) return; // 容错拦截空值
+        
         // 判断是否是 memory_save 工具调用，且已经执行完毕
         const isMemorySave = (part.type === "dynamic-tool" && part.toolName === "memory_save") ||
-                             (part.type && part.type === "tool-memory_save") ||
+                             (part.type === "tool-memory_save") ||
                              (part.type && part.type.startsWith("tool-memory_save"));
 
         if (isMemorySave && part.state === "output-available" && part.output) {

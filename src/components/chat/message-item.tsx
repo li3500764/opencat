@@ -44,6 +44,7 @@ type MessagePart = UIMessage["parts"][number];
 //
 // 我们用正则来判断是否是工具类型的 part
 function isToolPart(part: MessagePart): boolean {
+  if (!part || !part.type) return false;
   // 匹配 "tool-calculator"、"tool-datetime"、"tool-http_request" 等
   // 也匹配 "dynamic-tool"
   return part.type.startsWith("tool-") || part.type === "dynamic-tool";
@@ -220,14 +221,15 @@ export function MessageItem({
   const isUser = message.role === "user";
   const { t } = useTranslation();
 
-  // ---- 分离 parts：文本 vs 工具调用 ----
+  // ---- 分离 parts：文本 vs 工具调用 (全面安全容错处理) ----
   // message.parts 是一个数组，可能混合了文本和工具调用
   // 例如：[text, tool-calculator, text, tool-datetime, text]
-  // 我们需要按顺序渲染它们
-  const textParts = message.parts.filter(
-    (p): p is { type: "text"; text: string } => p.type === "text"
+  const parts = message.parts || [{ type: "text" as const, text: message.content || "" }];
+  
+  const textParts = parts.filter(
+    (p): p is { type: "text"; text: string } => p && p.type === "text"
   );
-  const toolParts = message.parts.filter(isToolPart);
+  const toolParts = parts.filter((p) => p && isToolPart(p));
   const fullText = textParts.map((p) => p.text).join("");
 
   // 如果没有任何内容（既没文本也没工具调用），不渲染
