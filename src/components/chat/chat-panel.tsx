@@ -12,6 +12,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
@@ -40,6 +41,9 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ conversationId: initialConvId, initialMessages, initialAgentId, initialModelId, initialMetadata }: ChatPanelProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+
   // ---- 对话和模型状态 ----
   const [conversationId, setConversationId] = useState<string | null>(initialConvId ?? null);
   const conversationIdRef = useRef(conversationId);
@@ -220,6 +224,14 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
   useEffect(() => {
     if (conversationId) setActiveConversationId(conversationId);
   }, [conversationId, setActiveConversationId]);
+
+  // 当在新对话发送消息生成 conversationId 时，自动将路由更新为当前对话的详细路由
+  // 从而使得侧边栏的“新开 chat”按钮（即跳转到 /chat）能够正常触发页面重载与状态重置
+  useEffect(() => {
+    if (conversationId && pathname === "/chat") {
+      router.replace(`/chat/${conversationId}`);
+    }
+  }, [conversationId, pathname, router]);
 
   // 监听并拦截 AI SDK 流式返回的工具调用结果包 (扫描自定义 parts 数组)
   useEffect(() => {
