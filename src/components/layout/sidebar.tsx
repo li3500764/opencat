@@ -16,7 +16,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useChatStore } from "@/stores/chat";
-import { Plus, MessageSquare, Trash2, Loader2, LogOut, Key, Bot, Database, BarChart3, Languages, Users } from "lucide-react";
+import { Plus, MessageSquare, Trash2, Loader2, LogOut, Key, Bot, Database, BarChart3, Languages, Users, Layers } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { ThemeToggle } from "./theme-toggle";
 import { useTranslation, useLocaleStore, useLocaleHydration } from "@/lib/i18n";
@@ -100,7 +100,7 @@ export function Sidebar({ user }: SidebarProps) {
 
       {/* 工作区主导航 (置顶置首) */}
       <div className="border-b border-border p-2 space-y-1">
-        {/* 客户工作台 */}
+        {/* 智能工作台 */}
         <button
           onClick={() => router.push("/customers")}
           className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors ${
@@ -109,8 +109,8 @@ export function Sidebar({ user }: SidebarProps) {
               : "text-muted hover:bg-[var(--sidebar-hover)] hover:text-foreground"
           }`}
         >
-          <Users className="h-3.5 w-3.5 shrink-0" />
-          <span>{locale === "en" ? "Customers" : "客户工作台"}</span>
+          <Layers className="h-3.5 w-3.5 shrink-0" />
+          <span>{locale === "en" ? "Smart Workspace" : "智能工作台"}</span>
         </button>
 
         {/* 数据看板 (ROI仪表盘) */}

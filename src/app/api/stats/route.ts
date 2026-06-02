@@ -1,15 +1,16 @@
 // ============================================================
 // GET /api/stats
-// CRI Dashboard 商业价值与 ROI 统计 API (Day 11 重构版)
+// OpenCat 个人 AI 生产力与用量大盘统计 API (重构版)
 // ============================================================
 //
 // 职责：
-//   1. 身份验证与组织校验隔离。
-//   2. 高并发并行拉取 Outcome ROI 数据（ savedValue / savedHours 的 Sum 加总）。
-//   3. 聚合统计 Recommendation 采纳率与 Stage 阶段漏斗。
-//   4. 提取 14 天每日挽回价值和节省工时趋势，并提取最近的 Outcomes 流水账本。
-//   5. 优雅处理未初始化组织的空数据。
-//   6. 向后兼容原有 overview 对话/Agent 等计数。
+//   1. 身份验证与用户隔离安全校验。
+//   2. 高并发并行查询用户的基本计数（对话数、消息数、知识库数、Agent数等）。
+//   3. 查询 User 表中的 tokenQuota 与已用 tokenUsed 额度。
+//   4. 聚合 UsageLog 表，算得该用户累计消耗的总 Token、总 API 花费（Cost USD）。
+//   5. 按天分组过去 14 天的每日 Token 用量、费用及请求数趋势，解决断点跳水问题。
+//   6. 提取 Model 分布，计算各模型消耗 Token、生成次数和费用占比。
+//   7. 提取最近 15 次真实的 AI 对话请求日志，进行精细化账目展示。
 //
 // ============================================================
 
@@ -25,208 +26,166 @@ export async function GET() {
   const userId = session.user.id;
 
   try {
-    // 1. 安全获取用户的组织主体
-    const organization = await db.organization.findUnique({
-      where: { userId },
-    });
-
-    // 若组织尚未建立，优雅返回零值默认包
-    if (!organization) {
-      return Response.json({
-        totalSavedValue: 0,
-        totalSavedHours: 0,
-        activeSignalsCount: 0,
-        adoptionRate: 0,
-        recStats: { PENDING: 0, APPROVED: 0, REJECTED: 0, DISMISSED: 0 },
-        stageDistribution: { LEAD: 0, TRIAL: 0, OPPORTUNITY: 0, CUSTOMER: 0, CHURNED: 0 },
-        signalStats: [],
-        dailyRoiTrend: Array.from({ length: 14 }).map((_, i) => {
-          const d = new Date();
-          d.setDate(d.getDate() - (13 - i));
-          return { date: d.toISOString().split("T")[0], value: 0, hours: 0 };
-        }),
-        outcomesLedger: [],
-        overview: {
-          totalConversations: 0,
-          totalMessages: 0,
-          totalAgents: 0,
-          totalKnowledgeBases: 0,
-          totalMemories: 0,
-        }
-      });
-    }
-
-    const orgId = organization.id;
-
-    // 2. 并发拉取高阶 CRI 关系型统计数据，极大提高响应效率并降低 Waterfall 延迟
+    // 1. 并发并行拉取基础表计数量 + 用量日志聚合 (极高吞吐效率)
     const [
-      outcomeAgg,
-      activeSignalsCount,
-      recStatsRaw,
-      stagesRaw,
-      signalStatsRaw,
-      dailyRoiRaw,
-      outcomesLedger,
-      // 向后兼容指标计数
+      user,
       totalConversations,
       totalMessages,
       totalAgents,
       totalKnowledgeBases,
       totalMemories,
+      usageStatsAgg,
+      modelStatsRaw,
+      recentUsageLogs,
+      usageLogsTrendRaw,
     ] = await Promise.all([
-      // (a) 累计 savedValue (挽回金额) 和 savedHours (节省时间)
-      db.outcome.aggregate({
-        where: { customer: { organizationId: orgId } },
-        _sum: { savedValue: true, savedHours: true },
+      // (a) 查询用户个人的配额信息
+      db.user.findUnique({
+        where: { id: userId },
+        select: { tokenQuota: true, tokenUsed: true, name: true, email: true },
       }),
 
-      // (b) 活跃的预警信号总数
-      db.customerSignal.count({
-        where: { customer: { organizationId: orgId }, isResolved: false },
+      // (b) 基础计数
+      db.conversation.count({ where: { project: { userId } } }),
+      db.message.count({ where: { conversation: { project: { userId } } } }),
+      db.agent.count({ where: { project: { userId } } }),
+      db.knowledgeBase.count({ where: { project: { userId } } }),
+      db.memory.count({ where: { userId } }),
+
+      // (c) 累计 Token 消耗与费用总和
+      db.usageLog.aggregate({
+        where: { userId },
+        _sum: { totalTokens: true, cost: true },
       }),
 
-      // (c) 建议状态分布 (用于计算采纳率)
-      db.recommendation.groupBy({
-        by: ["status"],
-        where: { customer: { organizationId: orgId } },
+      // (d) 模型用量占比分布
+      db.usageLog.groupBy({
+        by: ["model", "provider"],
+        where: { userId },
+        _sum: { totalTokens: true, cost: true },
         _count: { id: true },
       }),
 
-      // (d) 客户生命周期阶段数量分布 (用于漏斗分析)
-      db.customer.groupBy({
-        by: ["stage"],
-        where: { organizationId: orgId },
-        _count: { id: true },
+      // (e) 最近 15 次 API 活动记录
+      db.usageLog.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        take: 15,
       }),
 
-      // (e) 活跃的异动风险信号类型排行 (Top Alerts)
-      db.customerSignal.groupBy({
-        by: ["type"],
-        where: { customer: { organizationId: orgId }, isResolved: false },
-        _count: { id: true },
-      }),
-
-      // (f) 最近 14 天每日挽回增益 (使用 Prisma Client 提升兼容性，替代原生 SQL)
-      db.outcome.findMany({
+      // (f) 过去 14 天的每日详细用量（折线图使用）
+      db.usageLog.findMany({
         where: {
-          customer: { organizationId: orgId },
+          userId,
           createdAt: {
             gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
           },
         },
         select: {
           createdAt: true,
-          savedValue: true,
-          savedHours: true,
+          totalTokens: true,
+          cost: true,
         },
       }),
-
-      // (g) Outcomes 闭环流水明细 ledger
-      db.outcome.findMany({
-        where: { customer: { organizationId: orgId } },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-        include: {
-          customer: {
-            select: { name: true, contactName: true }
-          }
-        }
-      }),
-
-      // (h) 向后兼容的基础计数量
-      db.conversation.count({ where: { project: { userId } } }),
-      db.message.count({ where: { conversation: { project: { userId } } } }),
-      db.agent.count({ where: { project: { userId } } }),
-      db.knowledgeBase.count({ where: { project: { userId } } }),
-      db.memory.count({ where: { userId } }),
     ]);
 
-    // 3. 格式化 AI 建议分布并精密计算采纳率 (APPROVED / (APPROVED + REJECTED + DISMISSED))
-    const recStats = { PENDING: 0, APPROVED: 0, REJECTED: 0, DISMISSED: 0 };
-    recStatsRaw.forEach((r) => {
-      if (r.status in recStats) {
-        recStats[r.status as keyof typeof recStats] = r._count.id;
-      }
-    });
+    if (!user) {
+      return Response.json({ error: "User not found" }, { status: 404 });
+    }
 
-    const totalReviewed = recStats.APPROVED + recStats.REJECTED + recStats.DISMISSED;
-    const adoptionRate = totalReviewed > 0
-      ? Math.round((recStats.APPROVED / totalReviewed) * 100)
-      : 0;
+    // 2. 格式化模型使用分布
+    const modelDistribution = modelStatsRaw.map((item) => ({
+      model: item.model,
+      provider: item.provider,
+      tokens: item._sum.totalTokens || 0,
+      cost: item._sum.cost || 0,
+      count: item._count.id || 0,
+    })).sort((a, b) => b.tokens - a.tokens);
 
-    // 4. 格式化生命周期漏斗分布
-    const stageDistribution = { LEAD: 0, TRIAL: 0, OPPORTUNITY: 0, CUSTOMER: 0, CHURNED: 0 };
-    stagesRaw.forEach((s) => {
-      if (s.stage in stageDistribution) {
-        stageDistribution[s.stage as keyof typeof stageDistribution] = s._count.id;
-      }
-    });
-
-    // 5. 格式化风险排行榜
-    const signalStats = signalStatsRaw
-      .map((s) => ({
-        type: s.type,
-        count: s._count.id,
-      }))
-      .sort((a, b) => b.count - a.count);
-
-    // 6. 填充 14 天内缺失日期 (防图表折线跳水和时区断开)
-    const dailyMap = new Map<string, { value: number; hours: number }>();
-    for (const row of dailyRoiRaw) {
-      const dateStr = row.createdAt.toISOString().split("T")[0];
-      const existing = dailyMap.get(dateStr) || { value: 0, hours: 0 };
-      existing.value += row.savedValue || 0;
-      existing.hours += row.savedHours || 0;
+    // 3. 构建 14 天时间序列数据，填充无用量日期的零值，防止折线图断裂
+    const dailyMap = new Map<string, { tokens: number; cost: number; messages: number }>();
+    for (const log of usageLogsTrendRaw) {
+      const dateStr = log.createdAt.toISOString().split("T")[0];
+      const existing = dailyMap.get(dateStr) || { tokens: 0, cost: 0, messages: 0 };
+      existing.tokens += log.totalTokens || 0;
+      existing.cost += log.cost || 0;
+      existing.messages += 1; // 一次 log 计为一次对话消息
       dailyMap.set(dateStr, existing);
     }
 
-    const dailyRoiTrend: Array<{ date: string; value: number; hours: number }> = [];
+    const dailyRoiTrend: Array<{ date: string; tokens: number; cost: number; messages: number; value: number; hours: number }> = [];
     for (let i = 13; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split("T")[0];
       const existing = dailyMap.get(dateStr);
-      dailyRoiTrend.push(existing
-        ? { date: dateStr, ...existing }
-        : { date: dateStr, value: 0, hours: 0 }
-      );
+      
+      dailyRoiTrend.push({
+        date: dateStr,
+        tokens: existing ? existing.tokens : 0,
+        cost: existing ? parseFloat(existing.cost.toFixed(4)) : 0,
+        messages: existing ? existing.messages : 0,
+        // 向后兼容旧字段 (CRI 看板折线图渲染，防止意外崩溃)
+        value: existing ? existing.tokens : 0,
+        hours: existing ? parseFloat(existing.cost.toFixed(4)) : 0,
+      });
     }
 
-    // 7. 输出整理好且向后兼容的 JSON
+    // 4. 组装最终的大盘统计报包
     return Response.json({
-      totalSavedValue: outcomeAgg._sum.savedValue || 0,
-      totalSavedHours: outcomeAgg._sum.savedHours || 0,
-      activeSignalsCount,
-      adoptionRate,
-      recStats,
-      stageDistribution,
-      signalStats,
-      dailyRoiTrend,
-      outcomesLedger: outcomesLedger.map((o) => ({
-        id: o.id,
-        customerId: o.customerId,
-        customerName: o.customer.name,
-        contactName: o.customer.contactName,
-        stage: o.stage,
-        savedValue: o.savedValue || 0,
-        savedHours: o.savedHours || 0,
-        feedback: o.feedback,
-        createdAt: o.createdAt.toISOString(),
-      })),
-      // 向后兼容支持
+      // 核心大盘计数
+      user: {
+        name: user.name,
+        email: user.email,
+        tokenQuota: user.tokenQuota,
+        tokenUsed: user.tokenUsed,
+      },
       overview: {
         totalConversations,
         totalMessages,
         totalAgents,
         totalKnowledgeBases,
         totalMemories,
-      }
+      },
+      // 聚合用量指标
+      totalTokens: usageStatsAgg._sum.totalTokens || 0,
+      totalCost: usageStatsAgg._sum.cost || 0,
+      
+      // 折线趋势图 (14天)
+      dailyRoiTrend, // 在前端中用作 14天 Token/Cost 趋势图
+
+      // 饼图/环形图用
+      modelDistribution,
+
+      // 最近审计流水
+      recentActivity: recentUsageLogs.map((log) => ({
+        id: log.id,
+        model: log.model,
+        provider: log.provider,
+        promptTokens: log.promptTokens,
+        completionTokens: log.completionTokens,
+        totalTokens: log.totalTokens,
+        cost: log.cost,
+        createdAt: log.createdAt.toISOString(),
+      })),
+
+      // ----------------------------------------------------
+      // 向后兼容旧 B2B CRM 大盘参数，防止路由切换时未刷新的界面报错
+      // ----------------------------------------------------
+      totalSavedValue: usageStatsAgg._sum.totalTokens || 0, // 映射到 tokens
+      totalSavedHours: usageStatsAgg._sum.cost || 0,       // 映射到 cost
+      activeSignalsCount: 0,
+      adoptionRate: 100,
+      recStats: { PENDING: 0, APPROVED: 0, REJECTED: 0, DISMISSED: 0 },
+      stageDistribution: { LEAD: 0, TRIAL: 0, OPPORTUNITY: 0, CUSTOMER: 0, CHURNED: 0 },
+      signalStats: [],
+      outcomesLedger: [],
     });
 
   } catch (error: any) {
-    console.error("[CRI Stats API] 统计聚合失败:", error);
+    console.error("[Stats API Redesign] 聚合大盘用量失败:", error);
     return Response.json(
-      { error: "获取统计数据失败: " + (error.message || "未知原因") },
+      { error: "获取大盘用量数据失败: " + (error.message || "未知原因") },
       { status: 500 }
     );
   }
