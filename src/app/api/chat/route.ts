@@ -14,7 +14,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/server/db";
 import { classifyDatabaseError } from "@/server/db/errors";
 import { decrypt, isEncryptionConfigError } from "@/lib/crypto";
-import { createModel, getProviderForModel, calculateCost, type ApiFormat } from "@/lib/llm";
+import { createModel, getProviderForModel, calculateCost, type ApiFormat, type ModelInfo } from "@/lib/llm";
 import { createAgentStream } from "@/lib/agent";
 import {
   searchRelevantMemories,
@@ -49,7 +49,12 @@ export async function POST(req: Request) {
 
     console.error("[Chat API] Request failed:", error);
     return Response.json(
-      { error: "Chat request failed", code: "CHAT_REQUEST_FAILED" },
+      { 
+        error: "Chat request failed", 
+        code: "CHAT_REQUEST_FAILED",
+        details: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined
+      },
       { status: 500 }
     );
   }
@@ -131,22 +136,49 @@ async function handleChatRequest(req: Request) {
   //   getProviderForModel 返回 null → 这里会 fallback 到 "openai"
   //   然后第二轮查 "custom" Key → 用户只要配了 custom Key 就能用任意模型名
   //
-  const providerId = getProviderForModel(modelId) || "openai";
+  const staticProviderId = getProviderForModel(modelId);
+  let providerId = staticProviderId || "openai";
   let apiKey: string | null = null;
   let baseUrl: string | undefined;
   let keyFormat: string | undefined;   // ★ 用户 Key 上存的 API 格式
 
-  // 第一轮：精确匹配 provider
-  let userKey = await db.apiKey.findFirst({
-    where: { userId, provider: providerId, isActive: true },
-  });
+  let userKey: any = null;
 
-  // 第二轮：如果精确没匹配上，尝试 "custom"
-  // （很多用户会把代理平台/第三方 API 都配成 custom）
-  if (!userKey && providerId !== "custom") {
+  // 如果是自定义模型，反向扫描用户的所有激活 ApiKey 记录，看该模型挂载在哪个 Key 下
+  if (!staticProviderId) {
+    try {
+      const activeKeys = await db.apiKey.findMany({
+        where: { userId, isActive: true },
+      });
+      
+      const matchedKey = activeKeys.find((k) => {
+        const models = (k.models as unknown as ModelInfo[]) || [];
+        return models.some((m) => m.id === modelId);
+      });
+
+      if (matchedKey) {
+        userKey = matchedKey;
+        providerId = matchedKey.provider; // 动态修正为所属的 providerId 关联
+      }
+    } catch (err) {
+      console.error("[Chat API] Custom model provider scan failed:", err);
+    }
+  }
+
+  // 如果动态没有匹配上，则退回到原有的静态双轮匹配
+  if (!userKey) {
+    // 第一轮：精确匹配 provider
     userKey = await db.apiKey.findFirst({
-      where: { userId, provider: "custom", isActive: true },
+      where: { userId, provider: providerId, isActive: true },
     });
+
+    // 第二轮：如果精确没匹配上，尝试 "custom"
+    // （很多用户会把代理平台/第三方 API 都配成 custom）
+    if (!userKey && providerId !== "custom") {
+      userKey = await db.apiKey.findFirst({
+        where: { userId, provider: "custom", isActive: true },
+      });
+    }
   }
 
   if (userKey) {
