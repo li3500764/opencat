@@ -10,3 +10,6 @@ export type { SubAgentInfo } from "./call-agent";
 export { memorySaveTool, memorySearchTool } from "./memory";
 export { propertyMatchTool } from "./property-match";
 export { appointmentTool } from "./appointment";
+export { stockQueryTool } from "./stock-query";
+export { marketNewsSearchTool } from "./market-news";
+
