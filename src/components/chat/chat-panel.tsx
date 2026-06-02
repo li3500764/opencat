@@ -70,8 +70,15 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
   const [agentId, setAgentId] = useState<string | null>(initialAgentId ?? null);
   const agentIdRef = useRef(agentId);
 
-  const { fetchConversations, setActiveConversationId } = useChatStore();
+  const { fetchConversations, setActiveConversationId, activeConversationId } = useChatStore();
   const { t } = useTranslation();
+
+  // 同步 Zustand 里的 activeConversationId 到本地状态，触发新开对话自动重定向路由
+  useEffect(() => {
+    if (activeConversationId && !conversationId) {
+      setConversationId(activeConversationId);
+    }
+  }, [activeConversationId, conversationId]);
 
   // ---- 智能初始化大模型选择逻辑（大模型动态记忆与自适应首选） ----
   useEffect(() => {
@@ -252,7 +259,7 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
         startWorker(conversationId || "new-chat", {
           modelId,
           agentId,
-          initialMessages: updatedMessages,
+          initialMessages: staticMessages,
           textToSubmit: text,
         });
       }
