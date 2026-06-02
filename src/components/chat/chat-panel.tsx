@@ -249,7 +249,17 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
         // 若当前有活跃 Worker，直接交由其发送后续消息
         await activeWorker.sendMessage({ text });
       } else {
-        // 若当前是静态已存档对话，先将用户消息推入前台，然后触发并挂载影子工作线程
+        let targetConvId = conversationId;
+        
+        // ★ 如果是新建会话（conversationId 为空），在前台生成一个唯一的主键会话 ID
+        // 这样可以提前进行路由跳转并用该 ID 注册影子线程，完全消除切换路由和 migrate 带来的组件销毁与菊花图闪变
+        if (!targetConvId) {
+          // 生成一个高强度随机 ID
+          targetConvId = "conv_" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+          // 在发信一瞬间，当场、零延迟将路由替换为新会话路由！
+          router.replace(`/chat/${targetConvId}`);
+        }
+
         const newUserMsg: UIMessage = {
           id: Date.now().toString(),
           role: "user",
@@ -258,7 +268,7 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
         const updatedMessages = [...staticMessages, newUserMsg];
         setStaticMessages(updatedMessages);
 
-        startWorker(conversationId || "new-chat", {
+        startWorker(targetConvId, {
           modelId,
           agentId,
           initialMessages: staticMessages,
@@ -266,7 +276,7 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
         });
       }
     },
-    [conversationId, modelId, agentId, activeWorker, staticMessages, startWorker, isActive]
+    [conversationId, modelId, agentId, activeWorker, staticMessages, startWorker, isActive, router]
   );
 
   return (

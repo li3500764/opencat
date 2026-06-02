@@ -205,8 +205,20 @@ async function handleChatRequest(req: Request) {
 
   // ---- 5. 获取或创建对话 ----
   let conversationId = existingConvId;
+  let isNewConversation = false;
 
-  if (!conversationId) {
+  if (conversationId) {
+    const conv = await db.conversation.findUnique({
+      where: { id: conversationId },
+    });
+    if (!conv) {
+      isNewConversation = true;
+    }
+  } else {
+    isNewConversation = true;
+  }
+
+  if (isNewConversation) {
     let defaultProject = await db.project.findFirst({
       where: { userId, name: "Default" },
     });
@@ -222,6 +234,7 @@ async function handleChatRequest(req: Request) {
 
     const conversation = await db.conversation.create({
       data: {
+        id: conversationId || undefined, // ★ 允许直接指定前端生成的唯一主键 ID
         projectId: defaultProject.id,
         title,
         agentId: agentId || undefined,
