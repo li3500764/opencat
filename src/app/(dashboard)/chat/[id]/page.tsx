@@ -10,6 +10,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { ChatPanel } from "@/components/chat/chat-panel";
+import { useChatStore } from "@/stores/chat";
 import { Cat, Loader2 } from "lucide-react";
 import type { UIMessage } from "ai";
 
@@ -34,9 +35,28 @@ export default function ConversationPage() {
   const params = useParams();
   const id = params.id as string;
 
-  const [messages, setMessages] = useState<UIMessage[] | null>(null);
-  const [agentId, setAgentId] = useState<string | null>(null);
-  const [lastModel, setLastModel] = useState<string | null>(null);
+  // 1. 读取全局活跃影子 Worker
+  const activeWorker = useChatStore((state) => state.activeWorkers[id]);
+
+  // 2. 如果存在活跃影子线程（刚刚创建会话并迁移过来的），静默初始化状态，避免菊花图闪烁
+  const [messages, setMessages] = useState<UIMessage[] | null>(() => {
+    if (activeWorker) {
+      return activeWorker.messages;
+    }
+    return null;
+  });
+  const [agentId, setAgentId] = useState<string | null>(() => {
+    if (activeWorker) {
+      return activeWorker.agentId;
+    }
+    return null;
+  });
+  const [lastModel, setLastModel] = useState<string | null>(() => {
+    if (activeWorker) {
+      return activeWorker.modelId;
+    }
+    return null;
+  });
   const [metadata, setMetadata] = useState<any>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +65,10 @@ export default function ConversationPage() {
       try {
         const res = await fetch(`/api/conversations/${id}/messages`);
         if (!res.ok) {
-          setError(res.status === 404 ? "Conversation not found" : "Failed to load");
+          // 如果有活跃影子线程，API 偶尔加载失败也不抛错崩溃，由活跃线程自愈
+          if (!activeWorker) {
+            setError(res.status === 404 ? "Conversation not found" : "Failed to load");
+          }
           return;
         }
         const data = await res.json();
@@ -55,11 +78,13 @@ export default function ConversationPage() {
         setLastModel(data.lastModel || null);
         setMetadata(data.metadata || {});
       } catch {
-        setError("Failed to load conversation");
+        if (!activeWorker) {
+          setError("Failed to load conversation");
+        }
       }
     }
     loadMessages();
-  }, [id]);
+  }, [id, activeWorker]);
 
   if (error) {
     return (
@@ -75,7 +100,9 @@ export default function ConversationPage() {
   if (!messages) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-muted" />
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="h-5 w-5 animate-spin text-muted" />
+        </div>
       </div>
     );
   }
@@ -89,5 +116,4 @@ export default function ConversationPage() {
       initialMetadata={metadata}
     />
   );
-
 }
