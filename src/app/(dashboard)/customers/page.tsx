@@ -78,6 +78,10 @@ const BUILTIN_TOOLS = [
   { name: "calculator", label: "计算器" },
   { name: "datetime", label: "日期时间" },
   { name: "http_request", label: "HTTP 请求" },
+  { name: "make_pdf", label: "制作 PDF" },
+  { name: "make_word", label: "制作 Word" },
+  { name: "make_excel", label: "制作 Excel" },
+  { name: "make_ppt", label: "制作 PPT" },
 ];
 
 const DEFAULT_AGENT_FORM = {

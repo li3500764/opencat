@@ -212,11 +212,13 @@ export function MessageItem({
   userAvatar,
   aiAvatar,
   onAvatarClick,
+  onConfirmProposal,
 }: {
   message: UIMessage;
   userAvatar: string;
   aiAvatar: string;
   onAvatarClick: (type: "user" | "ai") => void;
+  onConfirmProposal?: (solution: string) => void;
 }) {
   const isUser = message.role === "user";
   const { t } = useTranslation();
@@ -274,7 +276,7 @@ export function MessageItem({
             )}
 
             {/* 文本内容 */}
-            {fullText && <Markdown content={fullText} />}
+            {fullText && <Markdown content={fullText} messageId={message.id} onConfirmProposal={onConfirmProposal} />}
           </div>
         )}
       </div>

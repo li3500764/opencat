@@ -317,6 +317,7 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
             userAvatar={metadata?.userAvatar || "🧑‍💻"}
             aiAvatar={metadata?.aiAvatar || "🤖"}
             onAvatarClick={(type) => setAvatarModalOpen(type)}
+            onConfirmProposal={handleSend}
           />
         )}
 

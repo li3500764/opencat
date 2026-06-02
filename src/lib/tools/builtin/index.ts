@@ -12,4 +12,8 @@ export { propertyMatchTool } from "./property-match";
 export { appointmentTool } from "./appointment";
 export { stockQueryTool } from "./stock-query";
 export { marketNewsSearchTool } from "./market-news";
+export { makePdfTool } from "./make-pdf";
+export { makeWordTool } from "./make-word";
+export { makeExcelTool } from "./make-excel";
+export { makePptTool } from "./make-ppt";
 

@@ -14,9 +14,10 @@ interface MessageListProps {
   userAvatar: string;
   aiAvatar: string;
   onAvatarClick: (type: "user" | "ai") => void;
+  onConfirmProposal?: (solution: string) => void;
 }
 
-export function MessageList({ messages, isStreaming, userAvatar, aiAvatar, onAvatarClick }: MessageListProps) {
+export function MessageList({ messages, isStreaming, userAvatar, aiAvatar, onAvatarClick, onConfirmProposal }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -33,6 +34,7 @@ export function MessageList({ messages, isStreaming, userAvatar, aiAvatar, onAva
             userAvatar={userAvatar}
             aiAvatar={aiAvatar}
             onAvatarClick={onAvatarClick}
+            onConfirmProposal={onConfirmProposal}
           />
         ))}
 
