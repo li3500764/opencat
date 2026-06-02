@@ -10,10 +10,9 @@
 
 "use client";
 
-import { useChat } from "@ai-sdk/react";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import type { UIMessage } from "ai";
 import { MessageList } from "./message-list";
 import { ChatInput } from "./chat-input";
 import { ModelSelector } from "./model-selector";
@@ -161,81 +160,49 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
   useEffect(() => { modelIdRef.current = modelId; }, [modelId]);
   useEffect(() => { agentIdRef.current = agentId; }, [agentId]);
 
-  // ---- Transport 配置 ----
-  // DefaultChatTransport 负责把消息发送到 /api/chat
-  // body 函数会在每次发消息时调用，返回额外的请求参数
-  const [transport] = useState(
-    () =>
-      new DefaultChatTransport({
-        api: "/api/chat",
-        body: () => ({
-          conversationId: conversationIdRef.current,
-          modelId: modelIdRef.current,
-          // ★ Day 5 新增：传入 agentId
-          // 如果不为 null，后端会加载 Agent 的配置来处理消息
-          agentId: agentIdRef.current,
-        }),
-        // 自定义 fetch：从响应头中获取新创建的 conversationId
-        fetch: async (url, options) => {
-          const response = await fetch(url as string, options as RequestInit);
-          const newConvId = response.headers.get("X-Conversation-Id");
-          if (newConvId && newConvId !== conversationIdRef.current) {
-            setConversationId(newConvId);
-            setActiveConversationId(newConvId);
-            fetchConversations();
-            
-            // ★ 新建对话发送成功后，瞬间将刚才临时的模型记忆转移到新生成的 ConversationId 下！
-            const lastNewChatModel = localStorage.getItem("last_selected_model_new_chat");
-            if (lastNewChatModel) {
-              localStorage.setItem("chat_model_" + newConvId, lastNewChatModel);
-            }
+  // ---- 全局影子 Worker 线程状态接管机制 ----
+  const activeWorker = useChatStore((state) => state.activeWorkers[conversationId || "new-chat"]);
+  const startWorker = useChatStore((state) => state.startWorker);
 
-            // ★ 瞬间将新建会话时提前修改的 Emoji 头像 metadata 提交 PATCH 持久化保存至后端！
-            if (metadataRef.current && (metadataRef.current.userAvatar || metadataRef.current.aiAvatar)) {
-              try {
-                await fetch("/api/conversations", {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    conversationId: newConvId,
-                    metadata: metadataRef.current,
-                  }),
-                });
-              } catch (e) {
-                console.error("新建会话延时持久化头像失败:", e);
-              }
-            }
-          }
-          return response;
-        },
-      })
-  );
+  // 当没有活跃影子 Worker 时，使用本地 state 渲染已存档/静态对话消息
+  const [staticMessages, setStaticMessages] = useState<UIMessage[]>(initialMessages || []);
 
-
-  // ---- useChat Hook ----
-  const { messages, sendMessage, status, stop, setMessages } = useChat({
-    transport,
-    messages: initialMessages,
-    onFinish: () => { fetchConversations(); },
-  });
-
-  const isActive = status === "streaming" || status === "submitted";
-
+  // 当外部历史消息切换加载时，重置静态消息内容
   useEffect(() => {
-    if (conversationId) setActiveConversationId(conversationId);
-  }, [conversationId, setActiveConversationId]);
+    if (initialMessages) {
+      setStaticMessages(initialMessages);
+    } else {
+      setStaticMessages([]);
+    }
+  }, [initialMessages]);
 
-  // 当在新对话发送消息生成 conversationId 时，自动将路由更新为当前对话的详细路由
-  // 从而使得侧边栏的“新开 chat”按钮（即跳转到 /chat）能够正常触发页面重载与状态重置
+  // 当新建会话且无活跃 Worker 时，清空静态消息
+  useEffect(() => {
+    if (!conversationId && !activeWorker) {
+      setStaticMessages([]);
+    }
+  }, [conversationId, activeWorker]);
+
+  // 当新生成的 conversationId 从无变有时，如果在 /chat 页面，自动同步路由为具体会话
+  // 这同时也支持前台路由与后台 Worker 自主迁移后的完美匹配
   useEffect(() => {
     if (conversationId && pathname === "/chat") {
       router.replace(`/chat/${conversationId}`);
     }
   }, [conversationId, pathname, router]);
 
+  // 消息源自动合流选择与流控状态映射
+  const currentMessages = activeWorker ? activeWorker.messages : staticMessages;
+  const currentStatus = activeWorker ? activeWorker.status : "idle";
+  const isActive = currentStatus === "streaming" || currentStatus === "submitted";
+
+  useEffect(() => {
+    if (conversationId) setActiveConversationId(conversationId);
+  }, [conversationId, setActiveConversationId]);
+
   // 监听并拦截 AI SDK 流式返回的工具调用结果包 (扫描自定义 parts 数组)
   useEffect(() => {
-    const lastMessage = messages[messages.length - 1] as any;
+    const lastMessage = currentMessages[currentMessages.length - 1] as any;
     if (lastMessage && lastMessage.parts) {
       lastMessage.parts.forEach((part: any) => {
         // 判断是否是 memory_save 工具调用，且已经执行完毕
@@ -263,14 +230,34 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
         }
       });
     }
-  }, [messages, memoryOpen]);
+  }, [currentMessages, memoryOpen]);
 
   const handleSend = useCallback(
     async (text: string) => {
       if (!text.trim() || isActive) return;
-      await sendMessage({ text });
+
+      if (activeWorker) {
+        // 若当前有活跃 Worker，直接交由其发送后续消息
+        await activeWorker.sendMessage({ text });
+      } else {
+        // 若当前是静态已存档对话，先将用户消息推入前台，然后触发并挂载影子工作线程
+        const newUserMsg: UIMessage = {
+          id: Date.now().toString(),
+          role: "user",
+          parts: [{ type: "text", text }],
+        };
+        const updatedMessages = [...staticMessages, newUserMsg];
+        setStaticMessages(updatedMessages);
+
+        startWorker(conversationId || "new-chat", {
+          modelId,
+          agentId,
+          initialMessages: updatedMessages,
+          textToSubmit: text,
+        });
+      }
     },
-    [sendMessage, isActive]
+    [conversationId, modelId, agentId, activeWorker, staticMessages, startWorker, isActive]
   );
 
   return (
@@ -307,7 +294,7 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
           </button>
         </div>
 
-        {messages.length === 0 ? (
+        {currentMessages.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-foreground/[0.04]">
               <Cat className="h-6 w-6 text-muted" />
@@ -316,7 +303,7 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
           </div>
         ) : (
           <MessageList
-            messages={messages}
+            messages={currentMessages}
             isStreaming={isActive}
             userAvatar={metadata?.userAvatar || "🧑‍💻"}
             aiAvatar={metadata?.aiAvatar || "🤖"}
@@ -324,7 +311,11 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
           />
         )}
 
-        <ChatInput isLoading={isActive} onSend={handleSend} onStop={stop} />
+        <ChatInput 
+          isLoading={isActive} 
+          onSend={handleSend} 
+          onStop={() => activeWorker?.stop()} 
+        />
 
         {/* 极富 Premium 磨砂美感的 Emoji 头像修改悬浮模态弹窗 */}
         {avatarModalOpen && (

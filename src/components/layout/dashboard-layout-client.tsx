@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Sidebar } from "./sidebar";
+import { ChatWorkerManager } from "../chat/worker-manager";
 
 interface DashboardLayoutClientProps {
   user: {
@@ -92,6 +93,9 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
           {children}
         </main>
       </div>
+
+      {/* 4. 后台常驻影子工作线程池 */}
+      <ChatWorkerManager />
     </div>
   );
 }
