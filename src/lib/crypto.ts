@@ -54,20 +54,27 @@ export function encrypt(plaintext: string): {
 }
 
 export function decrypt(encrypted: string, iv: string): string {
-  const key = getEncryptionKey();
-  const [ciphertext, authTagHex] = encrypted.split(":");
+  try {
+    const key = getEncryptionKey();
+    const [ciphertext, authTagHex] = encrypted.split(":");
 
-  const decipher = crypto.createDecipheriv(
-    ALGORITHM,
-    key,
-    Buffer.from(iv, "hex")
-  );
-  decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
+    const decipher = crypto.createDecipheriv(
+      ALGORITHM,
+      key,
+      Buffer.from(iv, "hex")
+    );
+    decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
 
-  let decrypted = decipher.update(ciphertext, "hex", "utf8");
-  decrypted += decipher.final("utf8");
+    let decrypted = decipher.update(ciphertext, "hex", "utf8");
+    decrypted += decipher.final("utf8");
 
-  return decrypted;
+    return decrypted;
+  } catch (err) {
+    console.error("[Crypto] Decryption failed:", err);
+    throw new Error(
+      "API Key 解密失败，这通常是由于服务器重启后环境变量 ENCRYPTION_KEY 发生变更导致的。请您前往『设置 (Settings) -> API Keys』重新输入并保存您的 API 密钥（重新生成加密），随后即可恢复全部正常聊天！"
+    );
+  }
 }
 
 // 只显示 API Key 的最后 4 位，其余用 * 遮盖
