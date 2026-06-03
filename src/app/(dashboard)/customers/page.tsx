@@ -100,36 +100,6 @@ export default function SmartWorkspacePage() {
 
   // ----------------- 3. 异步任务状态与逻辑 -----------------
   const [showLogModal, setShowLogModal] = useState<BackgroundTask | null>(null);
-  const [mockTasks, setMockTasks] = useState<BackgroundTask[]>([
-    {
-      id: "task-1",
-      name: isEn ? "Autonomous Tech-News Scraping & Summary" : "AI 行业智能情报周报抓取与总结",
-      type: "Web Scraper Agent",
-      status: "running",
-      progress: 88,
-      savedTime: "1.5 hours",
-      details: isEn ? "Crawling HackerNews & TechCrunch to generate deep insight summary..." : "正在抓取 HackerNews 与 TechCrunch 今日科技资讯，并分析前沿趋势...",
-      logs: [
-        "[19:20:01] [SYSTEM] 启动自主 Agent 定时抓取任务...",
-        "[19:20:03] [THOUGHT] 需要获取最新科技进展。执行 web_search / http_request 工具...",
-        "[19:20:06] [CALL] 执行 http_request API: 请求 https://news.ycombinator.com ...",
-        "[19:20:09] [RESPONSE] 获取网页成功，大小 42KB。开始解析文本元数据...",
-        "[19:20:12] [THOUGHT] 过滤当前热门关键词: deepseek, quantum_computing, nextjs15 ...",
-        "[19:20:15] [CALL] 执行 http_request API: 请求 https://techcrunch.com ...",
-        "[19:20:19] [RESPONSE] 抓取成功。提取热门文章标题与核心摘要...",
-        "[19:20:25] [THOUGHT] 抓取完成。现在注入 LLM 对上下文进行结构化提炼...",
-        "[19:20:28] [SYSTEM] AI 智能周报报告大纲生成中（进度 88%）..."
-      ]
-    },
-    {
-      id: "task-2",
-      name: isEn ? "Knowledge Base Chunk Vectorization" : "OpenCat 知识库文档语义切片向量化",
-      type: "RAG Ingestion Pipeline",
-      status: "completed",
-      progress: 100,
-      savedTime: "0.8 hours",
-      details: isEn ? "Segmented document into 45 chunks and stored in pgvector successfully." : "对新上传的 pdf / md 手册进行解析，切分为 45 个文本块并存入向量空间。",
-      logs: [
   const [tasks, setTasks] = useState<BackgroundTask[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
 
