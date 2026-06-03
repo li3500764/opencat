@@ -301,12 +301,16 @@ export function Markdown({ content, messageId, onConfirmProposal }: MarkdownProp
         // 仅对生成的 HTML 格式（如 PPT / PDF）应用免跳转预览弹窗
         if (isHtml) {
           return (
-            <button
-              onClick={() => setPreviewUrl(resolvedHref)}
+            <a
+              href={resolvedHref}
+              onClick={(e) => {
+                e.preventDefault(); // 拦截默认的浏览器跳转行为
+                setPreviewUrl(resolvedHref); // 激活毛玻璃全屏预览弹窗
+              }}
               className="text-accent underline underline-offset-2 hover:text-accent-hover font-medium cursor-pointer inline-flex items-center gap-0.5"
             >
               🔍 {children}
-            </button>
+            </a>
           );
         }
 

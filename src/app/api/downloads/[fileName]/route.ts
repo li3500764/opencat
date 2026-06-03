@@ -18,8 +18,14 @@ export async function GET(
     // 定位本地公共 downloads 文件夹的文件路径
     const filePath = path.join(process.cwd(), "public", "downloads", fileName);
 
+    // 添加控制台调试日志，方便使用 docker logs 跟踪定位路径问题
+    console.log(`[API Download Log] 收到文档读取请求: fileName=${fileName}`);
+    console.log(`[API Download Log] 计算目标物理路径: ${filePath}`);
+    const exists = fs.existsSync(filePath);
+    console.log(`[API Download Log] 该文档物理文件是否存在: ${exists}`);
+
     // 校验文件是否存在
-    if (!fs.existsSync(filePath)) {
+    if (!exists) {
       return new NextResponse("抱歉，您访问的文件未找到或已被系统清理", { status: 404 });
     }
 
