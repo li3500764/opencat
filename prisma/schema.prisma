@@ -132,6 +132,7 @@ model Project {
   conversations Conversation[]
   tools         Tool[]
   knowledgeBases KnowledgeBase[]
+  backgroundTasks BackgroundTask[]
 
   @@index([userId])
 }
@@ -155,6 +156,7 @@ model Agent {
 
   project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   conversations Conversation[]
+  backgroundTasks BackgroundTask[]
 
   @@index([projectId])
 }
@@ -174,6 +176,7 @@ model Conversation {
   agent    Agent?   @relation(fields: [agentId], references: [id])
   messages Message[]
   memories Memory[]
+  backgroundTasks BackgroundTask[]
 
   @@index([projectId])
 }
