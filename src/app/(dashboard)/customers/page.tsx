@@ -586,10 +586,20 @@ export default function SmartWorkspacePage() {
                           onChange={(e) => setAgentForm({ ...agentForm, model: e.target.value })}
                           className="w-full rounded-lg border border-border bg-background px-2 py-2 text-xs outline-none focus:border-accent/50 text-foreground"
                         >
-                          <option value="gpt-4o">gpt-4o</option>
-                          <option value="gpt-4o-mini">gpt-4o-mini</option>
-                          <option value="deepseek-chat">deepseek-chat</option>
-                          <option value="deepseek-reasoner">deepseek-reasoner</option>
+                          {(() => {
+                            const fallbackModels = [
+                              { id: "gpt-4o", name: "GPT-4o", provider: "内置推荐" },
+                              { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "内置推荐" },
+                              { id: "deepseek-chat", name: "DeepSeek V3", provider: "内置推荐" },
+                              { id: "deepseek-reasoner", name: "DeepSeek R1", provider: "内置推荐" }
+                            ];
+                            const activeModelsList = modelsList.length > 0 ? modelsList : fallbackModels;
+                            return activeModelsList.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.provider} — {m.name}
+                              </option>
+                            ));
+                          })()}
                         </select>
                       </div>
                       
