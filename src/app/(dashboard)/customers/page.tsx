@@ -687,7 +687,7 @@ export default function SmartWorkspacePage() {
                 <div className="flex flex-col gap-3 pt-3 border-t border-border/80">
                   {modelsList.length === 0 && (
                     <div className="rounded-lg bg-danger/5 border border-danger/10 p-3 text-xs text-danger animate-fadeIn">
-                      ⚠️ <strong>保存受阻</strong>：系统检测到您的平台目前尚未录入或激活任何有效的 API 密钥 (API Key)。为了能成功调试和保存智能体，请先前往 <strong>『设置 (Settings) -> API Keys』</strong> 录入并激活至少一个大模型通道。
+                      ⚠️ <strong>保存受阻</strong>：系统检测到您的平台目前尚未录入或激活任何有效的 API 密钥 (API Key)。为了能成功调试和保存智能体，请先前往 <strong>『设置 (Settings) {"->"} API Keys』</strong> 录入并激活至少一个大模型通道。
                     </div>
                   )}
                   <div className="flex gap-2">
