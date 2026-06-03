@@ -278,9 +278,41 @@ interface MarkdownProps {
 }
 
 export function Markdown({ content, messageId, onConfirmProposal }: MarkdownProps) {
-  // 动态创建带有闭包引用的 components 映射，专门用于截获并替换 ```proposal 代码块
+  // 定义本地预览 URL 状态，用于控制在线预览 Modal 的呈现
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // 动态创建带有闭包引用的 components 映射，拦截 ```proposal 语法块以及 downloads 静态路径
   const dynamicComponents: Components = {
     ...staticComponents,
+    // 拦截 PPT / PDF 的 HTML 下载链接，重写为弹窗预览行为
+    a({ href, children }) {
+      const isDownloadLink = href?.includes("/downloads/") || href?.includes("/api/downloads/");
+      const isHtml = href?.endsWith(".html");
+
+      // 仅对生成的 HTML 格式（如 PPT / PDF）应用免跳转预览弹窗
+      if (isDownloadLink && isHtml) {
+        return (
+          <button
+            onClick={() => setPreviewUrl(href)}
+            className="text-accent underline underline-offset-2 hover:text-accent-hover font-medium cursor-pointer inline-flex items-center gap-0.5"
+          >
+            🔍 {children}
+          </button>
+        );
+      }
+
+      // 其他常规链接或 Word / Excel 文件（.doc, .xls）保持默认浏览器跳转/下载行为
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-accent underline underline-offset-2 hover:text-accent-hover"
+        >
+          {children}
+        </a>
+      );
+    },
     code({ className, children, ...props }) {
       const isBlock = className?.includes("language-");
       
@@ -325,6 +357,51 @@ export function Markdown({ content, messageId, onConfirmProposal }: MarkdownProp
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={dynamicComponents}>
         {content}
       </ReactMarkdown>
+
+      {/* 极富 Premium 动效的毛玻璃全屏 PPT/PDF 在线预览弹窗 */}
+      {previewUrl && (
+        <div 
+          onClick={() => setPreviewUrl(null)} 
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200"
+        >
+          <div 
+            className="relative flex flex-col w-[92vw] h-[90vh] max-w-6xl rounded-2xl border border-border/80 bg-background/80 backdrop-blur-xl shadow-2xl overflow-hidden animate-in scale-in duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 顶栏控制面板 */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-foreground/[0.02]">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold tracking-tight text-foreground flex items-center gap-1.5">
+                  ✨ 智能文档在线预览
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <a
+                  href={previewUrl}
+                  download
+                  className="flex items-center gap-1 rounded-xl bg-foreground text-background px-4 py-1.5 text-xs font-semibold shadow hover:opacity-90 active:scale-95 transition-all select-none"
+                >
+                  📥 下载文件
+                </a>
+                <button
+                  onClick={() => setPreviewUrl(null)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground/5 text-xs font-bold text-muted hover:bg-foreground/10 hover:text-foreground active:scale-95 transition-all cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            {/* 内容预览框 */}
+            <div className="flex-1 bg-background-secondary/40 relative">
+              <iframe
+                src={previewUrl}
+                className="w-full h-full border-none bg-background"
+                title="OpenCat Document Preview"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

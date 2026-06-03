@@ -67,7 +67,7 @@ export const makeWordTool: ToolDefinition<MakeWordInput> = {
         data: {
           title: input.title,
           fileName,
-          downloadUrl: `/downloads/${fileName}`,
+          downloadUrl: `/api/downloads/${fileName}`,
           message: "Microsoft Word (.doc) 格式电子书信文档制作成功！您可以点击下方链接下载，双击即可直接在 Office 中编辑。",
         },
       };

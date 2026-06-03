@@ -141,7 +141,7 @@ export const makeExcelTool: ToolDefinition<MakeExcelInput> = {
         data: {
           title: input.title,
           fileName,
-          downloadUrl: `/downloads/${fileName}`,
+          downloadUrl: `/api/downloads/${fileName}`,
           message: `Microsoft Excel 表格「${input.title}」制作成功！共生成了 ${input.sheets.length} 个标签页。您可以点击下方链接下载，双击即可在 Office/WPS 中以完整网格线与高保真样式开启编辑。`,
         },
       };

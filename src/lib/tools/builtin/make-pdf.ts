@@ -84,7 +84,7 @@ export const makePdfTool: ToolDefinition<MakePdfInput> = {
         data: {
           title: input.title,
           fileName,
-          downloadUrl: `/downloads/${fileName}`,
+          downloadUrl: `/api/downloads/${fileName}`,
           message: "PDF 电子文档已生成。您可以点击下载链接访问，并在页面右上角一键『打印为 PDF』保存到本地。",
         },
       };

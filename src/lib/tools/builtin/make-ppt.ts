@@ -333,7 +333,7 @@ export const makePptTool: ToolDefinition<MakePptInput> = {
         data: {
           title: input.title,
           fileName,
-          downloadUrl: `/downloads/${fileName}`,
+          downloadUrl: `/api/downloads/${fileName}`,
           message: `幻灯片「${input.title}」高保真渲染成功！采用「${input.theme}」主题配色。您可以点击下方链接查看在线交互 PPT（支持左右按键切页、网页一键投屏），或通过右上角打印按钮一键存为完美的横版 A4 PDF 演示文稿！`,
         },
       };
