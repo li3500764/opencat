@@ -286,22 +286,44 @@ export function Markdown({ content, messageId, onConfirmProposal }: MarkdownProp
     ...staticComponents,
     // 拦截 PPT / PDF 的 HTML 下载链接，重写为弹窗预览行为
     a({ href, children }) {
-      const isDownloadLink = href?.includes("/downloads/") || href?.includes("/api/downloads/");
-      const isHtml = href?.endsWith(".html");
+      if (!href) return null;
 
-      // 仅对生成的 HTML 格式（如 PPT / PDF）应用免跳转预览弹窗
-      if (isDownloadLink && isHtml) {
+      const isDownloadLink = href.includes("/downloads/") || href.includes("/api/downloads/");
+      const isHtml = href.endsWith(".html");
+
+      // 无论如何，都将链接转换为当前应用域名下的相对路径
+      // 例如从 "https://open-ppt.ai/api/downloads/ppt-xxx.html" 提取出 "/api/downloads/ppt-xxx.html"
+      // 或者是从 "/downloads/ppt-xxx.html" 转换为 "/api/downloads/ppt-xxx.html"
+      if (isDownloadLink) {
+        const match = href.match(/\/(api\/)?downloads\/(.+)$/);
+        const resolvedHref = match ? `/api/downloads/${match[2]}` : href;
+
+        // 仅对生成的 HTML 格式（如 PPT / PDF）应用免跳转预览弹窗
+        if (isHtml) {
+          return (
+            <button
+              onClick={() => setPreviewUrl(resolvedHref)}
+              className="text-accent underline underline-offset-2 hover:text-accent-hover font-medium cursor-pointer inline-flex items-center gap-0.5"
+            >
+              🔍 {children}
+            </button>
+          );
+        }
+
+        // 如果是二进制文件（Word / Excel），也使用转化后的 resolvedHref，确保下载路径正确
         return (
-          <button
-            onClick={() => setPreviewUrl(href)}
-            className="text-accent underline underline-offset-2 hover:text-accent-hover font-medium cursor-pointer inline-flex items-center gap-0.5"
+          <a
+            href={resolvedHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent underline underline-offset-2 hover:text-accent-hover"
           >
-            🔍 {children}
-          </button>
+            {children}
+          </a>
         );
       }
 
-      // 其他常规链接或 Word / Excel 文件（.doc, .xls）保持默认浏览器跳转/下载行为
+      // 其他常规链接保持默认浏览器跳转行为
       return (
         <a
           href={href}
