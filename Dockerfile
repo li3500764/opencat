@@ -38,7 +38,8 @@ RUN addgroup --system --gid 1001 opencat && \
     adduser --system --uid 1001 opencat
 
 # 复制构建产物
-COPY --from=builder /app/public ./public
+# 将 public 文件夹所有权赋予 opencat 用户，以解决 tools 生成文件时的写入权限问题
+COPY --from=builder --chown=opencat:opencat /app/public ./public
 COPY --from=builder --chown=opencat:opencat /app/.next/standalone ./
 COPY --from=builder --chown=opencat:opencat /app/.next/static ./.next/static
 COPY --from=builder /app/prisma ./prisma
