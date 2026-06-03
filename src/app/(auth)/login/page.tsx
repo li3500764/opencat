@@ -70,8 +70,8 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="mb-8 text-center">
-          <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-foreground/5">
-            <Cat className="h-6 w-6 text-foreground" />
+          <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-foreground/5 overflow-hidden">
+            <img src="/logo.png" alt="OpenCat Logo" className="h-8 w-8 object-contain" />
           </div>
           <h1 className="text-xl font-semibold tracking-tight">{t('auth.signInTitle')}</h1>
           <p className="mt-1 text-sm text-muted">{t('auth.signInSubtitle')}</p>

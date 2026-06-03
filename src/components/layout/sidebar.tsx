@@ -84,6 +84,7 @@ export function Sidebar({ user }: SidebarProps) {
       {/* Logo + 新建对话 */}
       <div className="flex h-14 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-2">
+          <img src="/logo.png" alt="OpenCat Logo" className="h-5 w-5 rounded-md object-contain" />
           <span className="text-sm font-semibold tracking-tight">OpenCat</span>
           <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
             {t("sidebar.beta")}
