@@ -442,21 +442,23 @@ export default function AgentsPage() {
                 onChange={(e) => setForm((f) => ({ ...f, model: e.target.value }))}
                 className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/50 animate-fadeIn"
               >
-                {(() => {
-                  const fallbackModels = [
-                    { id: "gpt-4o", name: "GPT-4o", provider: "内置推荐" },
-                    { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "内置推荐" },
-                    { id: "deepseek-chat", name: "DeepSeek V3", provider: "内置推荐" },
-                    { id: "deepseek-reasoner", name: "DeepSeek R1", provider: "内置推荐" }
-                  ];
-                  const activeModelsList = modelsList.length > 0 ? modelsList : fallbackModels;
-                  return activeModelsList.map((m) => (
+                {modelsList.length > 0 ? (
+                  modelsList.map((m) => (
                     <option key={m.id} value={m.id}>
                       {m.provider} — {m.name} ({m.id})
                     </option>
-                  ));
-                })()}
+                  ))
+                ) : (
+                  <option value="" disabled>
+                    ⚠️ 请先在 API 密钥中进行配置
+                  </option>
+                )}
               </select>
+              {modelsList.length === 0 && (
+                <p className="text-[10px] text-danger font-medium mt-1 animate-fadeIn">
+                  检测到未配置 API Key。请先前往 API 密钥中进行配置。
+                </p>
+              )}
             </div>
 
 
@@ -533,25 +535,32 @@ export default function AgentsPage() {
             </label>
 
             {/* 操作按钮 */}
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={handleSave}
-                disabled={!form.name.trim() || !form.systemPrompt.trim() || saving}
-                className="flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-80 disabled:opacity-50"
-              >
-                {saving ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Plus className="h-3.5 w-3.5" />
-                )}
-                {editingId ? t('agents.saveChanges') : t('common.create')}
-              </button>
-              <button
-                onClick={() => { setShowForm(false); setEditingId(null); }}
-                className="rounded-lg px-4 py-2 text-sm text-muted hover:text-foreground"
-              >
-                {t('common.cancel')}
-              </button>
+            <div className="flex flex-col gap-3 pt-2">
+              {modelsList.length === 0 && (
+                <div className="rounded-lg bg-danger/5 border border-danger/10 p-3 text-xs text-danger animate-fadeIn">
+                  ⚠️ <strong>保存受阻</strong>：系统检测到您的平台目前尚未录入或激活任何有效的 API 密钥 (API Key)。请先前往 <strong>『API 密钥』</strong> 选项卡录入并激活至少一个大模型通道，否则无法保存智能体。
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSave}
+                  disabled={!form.name.trim() || !form.systemPrompt.trim() || saving || modelsList.length === 0}
+                  className="flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-80 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {saving ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="h-3.5 w-3.5" />
+                  )}
+                  {editingId ? t('agents.saveChanges') : t('common.create')}
+                </button>
+                <button
+                  onClick={() => { setShowForm(false); setEditingId(null); }}
+                  className="rounded-lg px-4 py-2 text-sm text-muted hover:text-foreground"
+                >
+                  {t('common.cancel')}
+                </button>
+              </div>
             </div>
           </div>
         )}

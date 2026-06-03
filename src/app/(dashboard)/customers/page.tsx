@@ -586,21 +586,23 @@ export default function SmartWorkspacePage() {
                           onChange={(e) => setAgentForm({ ...agentForm, model: e.target.value })}
                           className="w-full rounded-lg border border-border bg-background px-2 py-2 text-xs outline-none focus:border-accent/50 text-foreground"
                         >
-                          {(() => {
-                            const fallbackModels = [
-                              { id: "gpt-4o", name: "GPT-4o", provider: "内置推荐" },
-                              { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "内置推荐" },
-                              { id: "deepseek-chat", name: "DeepSeek V3", provider: "内置推荐" },
-                              { id: "deepseek-reasoner", name: "DeepSeek R1", provider: "内置推荐" }
-                            ];
-                            const activeModelsList = modelsList.length > 0 ? modelsList : fallbackModels;
-                            return activeModelsList.map((m) => (
+                          {modelsList.length > 0 ? (
+                            modelsList.map((m) => (
                               <option key={m.id} value={m.id}>
                                 {m.provider} — {m.name}
                               </option>
-                            ));
-                          })()}
+                            ))
+                          ) : (
+                            <option value="" disabled>
+                              ⚠️ 请先去设置中配置 API Key
+                            </option>
+                          )}
                         </select>
+                        {modelsList.length === 0 && (
+                          <p className="text-[10px] text-danger font-medium mt-1 animate-fadeIn">
+                            检测到未配置 API Key。请先前往设置添加激活密钥。
+                          </p>
+                        )}
                       </div>
                       
                       <div>
@@ -682,22 +684,29 @@ export default function SmartWorkspacePage() {
                 </div>
 
                 {/* 操作 */}
-                <div className="flex gap-2 pt-2 border-t border-border/80">
-                  <button
-                    type="submit"
-                    disabled={agentSaving || !agentForm.name.trim()}
-                    className="inline-flex items-center gap-1 rounded-lg bg-foreground px-4 py-2 text-xs font-semibold text-background hover:opacity-85 disabled:opacity-50 transition-all"
-                  >
-                    {agentSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {t("common.save")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAgentForm(false)}
-                    className="rounded-lg px-4 py-2 text-xs text-muted hover:text-foreground transition-all"
-                  >
-                    {t("common.cancel")}
-                  </button>
+                <div className="flex flex-col gap-3 pt-3 border-t border-border/80">
+                  {modelsList.length === 0 && (
+                    <div className="rounded-lg bg-danger/5 border border-danger/10 p-3 text-xs text-danger animate-fadeIn">
+                      ⚠️ <strong>保存受阻</strong>：系统检测到您的平台目前尚未录入或激活任何有效的 API 密钥 (API Key)。为了能成功调试和保存智能体，请先前往 <strong>『设置 (Settings) -> API Keys』</strong> 录入并激活至少一个大模型通道。
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      disabled={agentSaving || !agentForm.name.trim() || modelsList.length === 0}
+                      className="inline-flex items-center gap-1 rounded-lg bg-foreground px-4 py-2 text-xs font-semibold text-background hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    >
+                      {agentSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      {t("common.save")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAgentForm(false)}
+                      className="rounded-lg px-4 py-2 text-xs text-muted hover:text-foreground transition-all"
+                    >
+                      {t("common.cancel")}
+                    </button>
+                  </div>
                 </div>
               </form>
             ) : agentsLoading ? (
