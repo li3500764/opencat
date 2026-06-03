@@ -501,3 +501,28 @@ model Outcome {
 
   @@index([customerId])
 }
+
+// ==================== 异步任务监控 ====================
+
+model BackgroundTask {
+  id             String   @id @default(cuid())
+  projectId      String
+  agentId        String?
+  conversationId String?   // 关联引发这个长任务的对话，以便用户跳回
+  name           String
+  type           String
+  status         String   // running / completed / failed
+  progress       Int      @default(0)
+  details        String?  @db.Text
+  logs           Json     @default("[]") // 存储执行日志
+  savedTime      String?  // 比如 "1.5 hours"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agent          Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([conversationId])
+}

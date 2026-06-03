@@ -74,26 +74,7 @@ interface BackgroundTask {
   logs: string[];
 }
 
-const BUILTIN_TOOLS = [
-  { name: "calculator", label: "计算器" },
-  { name: "datetime", label: "日期时间" },
-  { name: "http_request", label: "HTTP 请求" },
-  { name: "make_pdf", label: "制作 PDF" },
-  { name: "make_word", label: "制作 Word" },
-  { name: "make_excel", label: "制作 Excel" },
-  { name: "make_ppt", label: "制作 PPT" },
-];
 
-const DEFAULT_AGENT_FORM = {
-  name: "",
-  description: "",
-  systemPrompt: "你是一个有帮助的 AI 助手。请用中文回复用户。",
-  model: "gpt-4o-mini",
-  temperature: 0.7,
-  maxSteps: 10,
-  tools: [] as string[],
-  isOrchestrator: false,
-};
 
 export default function SmartWorkspacePage() {
   const { t, locale } = useTranslation();
@@ -109,20 +90,10 @@ export default function SmartWorkspacePage() {
   // ----------------- 1. Agent 状态与逻辑 -----------------
   const [agents, setAgents] = useState<AgentItem[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(true);
-  const [showAgentForm, setShowAgentForm] = useState(false);
-  const [editingAgentId, setEditingAgentId] = useState<string | null>(null);
-  const [agentForm, setAgentForm] = useState(DEFAULT_AGENT_FORM);
-  const [agentSaving, setAgentSaving] = useState(false);
-  const [generatingPrompt, setGeneratingPrompt] = useState(false);
-  const [promptError, setPromptError] = useState<string | null>(null);
-  const [modelsList, setModelsList] = useState<{ id: string; name: string; provider: string }[]>([]);
 
   // ----------------- 2. 知识库状态与逻辑 -----------------
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseItem[]>([]);
   const [kbLoading, setKbLoading] = useState(true);
-  const [showCreateKbForm, setShowCreateKbForm] = useState(false);
-  const [newKbName, setNewKbName] = useState("");
-  const [kbCreating, setKbCreating] = useState(false);
   const [expandedKbId, setExpandedKbId] = useState<string | null>(null);
   const [uploadingKbId, setUploadingKbId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -159,35 +130,8 @@ export default function SmartWorkspacePage() {
       savedTime: "0.8 hours",
       details: isEn ? "Segmented document into 45 chunks and stored in pgvector successfully." : "对新上传的 pdf / md 手册进行解析，切分为 45 个文本块并存入向量空间。",
       logs: [
-        "[16:05:00] [SYSTEM] 检测到新文档「OpenCat_API_v3.md」上传...",
-        "[16:05:01] [SYSTEM] 启动 markdown 解析分块逻辑 (chunkSize: 1000, overlap: 200)...",
-        "[16:05:03] [SYSTEM] 成功提取 45 个文本切片。准备调用 text-embedding-3-small 向量引擎...",
-        "[16:05:05] [CALL] 批量调用 OpenAI Embedding 接口 (45 chunks)...",
-        "[16:05:08] [RESPONSE] 向量化转换完毕。获得 1536 维实数向量数组。",
-        "[16:05:10] [SYSTEM] 写入 pgvector 扩展数据表中...",
-        "[16:05:12] [SYSTEM] HNSW 索引更新完成！检索通路已就绪。任务执行完毕！"
-      ]
-    },
-    {
-      id: "task-3",
-      name: isEn ? "Automatic Prompt Engineering Optimisation" : "大语言模型提示词自动工程迭代",
-      type: "Prompt Refinement Loop",
-      status: "completed",
-      progress: 100,
-      savedTime: "4.5 hours",
-      details: isEn ? "Completed 5 loops of automated testing, tweaked system prompts." : "通过对用户对话反馈的自动采样测试，完成 5 轮对抗评估，成功对系统提示词做微调。",
-      logs: [
-        "[10:00:00] [SYSTEM] 开始提示词工程自动评估优化流...",
-        "[10:00:02] [THOUGHT] 评估基线版本: 「v1.2 默认客服助手」在负面情绪检测下的准确度度量...",
-        "[10:00:05] [CALL] 批量加载 100 个模拟对抗性测试集...",
-        "[10:00:15] [SYSTEM] 测试第 1 轮完成，平均得分 82.5。检测到提示词对否定句响应较慢...",
-        "[10:00:17] [THOUGHT] 修改系统提示词，补充「对于用户任何否定、反问句需保持高优先级应答」条款...",
-        "[10:00:20] [SYSTEM] 测试第 2 轮完成，平均得分 88.0。表现有明显提升...",
-        "[10:00:30] [SYSTEM] 持续进行 5 轮对抗后，平均得分最终收敛至 94.2 分！",
-        "[10:00:32] [SYSTEM] 新系统提示词参数已合并至默认模版中，优化闭环结束。"
-      ]
-    }
-  ]);
+  const [tasks, setTasks] = useState<BackgroundTask[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(true);
 
   // ----------------- API 数据交互 -----------------
 
@@ -215,23 +159,6 @@ export default function SmartWorkspacePage() {
     }
   }, []);
 
-  const fetchModels = useCallback(async () => {
-    try {
-      const res = await fetch("/api/models");
-      if (res.ok) {
-        const data = await res.json();
-        const list = data.map((m: any) => ({
-          id: m.id,
-          name: m.name,
-          provider: m.providerLabel || "自定义",
-        }));
-        setModelsList(list);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  }, []);
-
   const fetchKnowledgeBases = useCallback(async () => {
     setKbLoading(true);
     try {
@@ -244,98 +171,26 @@ export default function SmartWorkspacePage() {
     }
   }, []);
 
+  const fetchTasks = useCallback(async () => {
+    setTasksLoading(true);
+    try {
+      const res = await fetch("/api/tasks");
+      if (res.ok) setTasks(await res.json());
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTasksLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchDefaultProject();
     fetchAgents();
-    fetchModels();
     fetchKnowledgeBases();
-  }, [fetchDefaultProject, fetchAgents, fetchModels, fetchKnowledgeBases]);
+    fetchTasks();
+  }, [fetchDefaultProject, fetchAgents, fetchKnowledgeBases, fetchTasks]);
 
   // ----------------- Agent 业务逻辑 -----------------
-
-  const handleNewAgent = () => {
-    setAgentForm(DEFAULT_AGENT_FORM);
-    setEditingAgentId(null);
-    setShowAgentForm(true);
-    setPromptError(null);
-  };
-
-  const handleEditAgent = (agent: AgentItem) => {
-    setAgentForm({
-      name: agent.name,
-      description: agent.description || "",
-      systemPrompt: agent.systemPrompt,
-      model: agent.model,
-      temperature: agent.temperature,
-      maxSteps: agent.maxSteps,
-      tools: agent.tools as string[],
-      isOrchestrator: agent.isOrchestrator,
-    });
-    setEditingAgentId(agent.id);
-    setShowAgentForm(true);
-    setPromptError(null);
-  };
-
-  const handleGeneratePrompt = async () => {
-    if (!agentForm.name.trim()) return;
-    setGeneratingPrompt(true);
-    setPromptError(null);
-    try {
-      const res = await fetch("/api/agents/generate-prompt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: agentForm.name, description: agentForm.description }),
-      });
-      const data = await res.json();
-      if (res.ok && data.systemPrompt) {
-        setAgentForm((f) => ({ ...f, systemPrompt: data.systemPrompt }));
-      } else {
-        setPromptError(data.error || "生成提示词失败");
-      }
-    } catch (err) {
-      setPromptError("生成提示词失败");
-    } finally {
-      setGeneratingPrompt(false);
-    }
-  };
-
-  const handleSaveAgent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!agentForm.name.trim() || !agentForm.systemPrompt.trim()) return;
-    setAgentSaving(true);
-
-    try {
-      if (editingAgentId) {
-        const res = await fetch(`/api/agents/${editingAgentId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(agentForm),
-        });
-        if (res.ok) {
-          setShowAgentForm(false);
-          fetchAgents();
-        }
-      } else {
-        if (!defaultProjectId) {
-          setAgentSaving(false);
-          return;
-        }
-        const res = await fetch("/api/agents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...agentForm, projectId: defaultProjectId }),
-        });
-        if (res.ok) {
-          setShowAgentForm(false);
-          fetchAgents();
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setAgentSaving(false);
-    }
-  };
 
   const handleDeleteAgent = async (id: string) => {
     if (!confirm(isEn ? "Are you sure to delete this Agent?" : "确定要删除该智能体吗？")) return;
@@ -347,41 +202,11 @@ export default function SmartWorkspacePage() {
     }
   };
 
-  const toggleAgentTool = (toolName: string) => {
-    setAgentForm((f) => ({
-      ...f,
-      tools: f.tools.includes(toolName)
-        ? f.tools.filter((t) => t !== toolName)
-        : [...f.tools, toolName],
-    }));
-  };
-
   const launchAgentChat = (agentId: string) => {
     router.push(`/chat?agentId=${agentId}`);
   };
 
   // ----------------- 知识库业务逻辑 -----------------
-
-  const handleCreateKb = async () => {
-    if (!newKbName.trim()) return;
-    setKbCreating(true);
-    try {
-      const res = await fetch("/api/knowledge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newKbName.trim() }),
-      });
-      if (res.ok) {
-        setNewKbName("");
-        setShowCreateKbForm(false);
-        fetchKnowledgeBases();
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setKbCreating(false);
-    }
-  };
 
   const handleDeleteKb = async (id: string) => {
     if (!confirm(isEn ? "Are you sure to delete this KB?" : "确定要删除该知识库吗？")) return;
@@ -438,6 +263,35 @@ export default function SmartWorkspacePage() {
     }
   };
 
+  // ----------------- 异步任务业务逻辑 -----------------
+
+  const handleDeleteTask = async (id: string) => {
+    if (!confirm(isEn ? "Are you sure you want to delete this task?" : "确定要删除该后台任务吗？")) return;
+    
+    // 1. 如果是 Mock 任务，直接在前端内存中进行过滤
+    if (id.startsWith("task-mock")) {
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: "DELETE",
+      });
+      
+      if (res.ok) {
+        setTasks((prev) => prev.filter((t) => t.id !== id));
+      } else {
+        // 2. 即使 API 报错，也强制在前端先过滤，不卡用户界面
+        console.warn("API 删除任务失败，已在前端执行强制过滤");
+        setTasks((prev) => prev.filter((t) => t.id !== id));
+      }
+    } catch (err) {
+      console.error("删除任务失败:", err);
+      setTasks((prev) => prev.filter((t) => t.id !== id));
+    }
+  };
+
   // ----------------- 界面辅助渲染 -----------------
 
   const formatFileSize = (bytes: number): string => {
@@ -468,7 +322,7 @@ export default function SmartWorkspacePage() {
           <div className="flex items-center gap-2">
             {activeTab === "agents" && (
               <button
-                onClick={handleNewAgent}
+                onClick={() => router.push("/settings/agents")}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-foreground px-4 py-2.5 text-xs font-semibold text-background hover:opacity-85 shadow transition-all"
               >
                 <Plus className="h-4 w-4" />
@@ -477,7 +331,7 @@ export default function SmartWorkspacePage() {
             )}
             {activeTab === "knowledge" && (
               <button
-                onClick={() => setShowCreateKbForm(true)}
+                onClick={() => router.push("/settings/knowledge")}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-foreground px-4 py-2.5 text-xs font-semibold text-background hover:opacity-85 shadow transition-all"
               >
                 <Plus className="h-4 w-4" />
@@ -499,7 +353,7 @@ export default function SmartWorkspacePage() {
         {/* ---- 导航 Tabs (Agents, Knowledge, Async Tasks) ---- */}
         <div className="flex border-b border-border space-x-1">
           <button
-            onClick={() => { setActiveTab("agents"); setShowAgentForm(false); }}
+            onClick={() => { setActiveTab("agents"); }}
             className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-all ${
               activeTab === "agents"
                 ? "border-accent text-accent"
@@ -514,7 +368,7 @@ export default function SmartWorkspacePage() {
           </button>
           
           <button
-            onClick={() => { setActiveTab("knowledge"); setShowCreateKbForm(false); }}
+            onClick={() => { setActiveTab("knowledge"); }}
             className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-all ${
               activeTab === "knowledge"
                 ? "border-accent text-accent"
@@ -539,7 +393,7 @@ export default function SmartWorkspacePage() {
             <Terminal className="h-4 w-4" />
             {isEn ? "Async AI Tasks" : "后台长任务监控"}
             <span className="ml-1 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold text-amber-600 animate-pulse">
-              1
+              {tasks.filter(t => t.status === "running").length}
             </span>
           </button>
         </div>
@@ -547,169 +401,7 @@ export default function SmartWorkspacePage() {
         {/* ================= TAB A: 智能体控制台 ================= */}
         {activeTab === "agents" && (
           <div className="space-y-4">
-            {showAgentForm ? (
-              // ---------------- 新建/编辑 Agent 表单界面 ----------------
-              <form onSubmit={handleSaveAgent} className="rounded-2xl border border-border bg-card p-5 space-y-4 shadow-sm animate-fadeIn">
-                <h3 className="text-sm font-bold text-foreground">
-                  {editingAgentId ? t("agents.editAgent") : t("agents.createAgent")}
-                </h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* 左侧基本属性 */}
-                  <div className="space-y-4">
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-muted uppercase tracking-wider">{t("agents.nameLabel")}</label>
-                      <input
-                        required
-                        value={agentForm.name}
-                        onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })}
-                        placeholder="如: 代码分析师, 数据分析官"
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none focus:border-accent/50 text-foreground"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-muted uppercase tracking-wider">{t("agents.descLabel")}</label>
-                      <input
-                        value={agentForm.description}
-                        onChange={(e) => setAgentForm({ ...agentForm, description: e.target.value })}
-                        placeholder="帮助你分析和重构系统架构..."
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none focus:border-accent/50 text-foreground"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted uppercase tracking-wider">{t("agents.modelLabel")}</label>
-                        <select
-                          value={agentForm.model}
-                          onChange={(e) => setAgentForm({ ...agentForm, model: e.target.value })}
-                          className="w-full rounded-lg border border-border bg-background px-2 py-2 text-xs outline-none focus:border-accent/50 text-foreground"
-                        >
-                          {modelsList.length > 0 ? (
-                            modelsList.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.provider} — {m.name}
-                              </option>
-                            ))
-                          ) : (
-                            <option value="" disabled>
-                              ⚠️ 请先去设置中配置 API Key
-                            </option>
-                          )}
-                        </select>
-                        {modelsList.length === 0 && (
-                          <p className="text-[10px] text-danger font-medium mt-1 animate-fadeIn">
-                            检测到未配置 API Key。请先前往设置添加激活密钥。
-                          </p>
-                        )}
-                      </div>
-                      
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold text-muted uppercase tracking-wider">{t("agents.maxSteps")}</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={50}
-                          value={agentForm.maxSteps}
-                          onChange={(e) => setAgentForm({ ...agentForm, maxSteps: parseInt(e.target.value) || 10 })}
-                          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none focus:border-accent/50 text-foreground"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="mb-1 block text-xs font-semibold text-muted uppercase tracking-wider">
-                        温度 ({agentForm.temperature})
-                      </label>
-                      <input
-                        type="range"
-                        min={0}
-                        max={2}
-                        step={0.1}
-                        value={agentForm.temperature}
-                        onChange={(e) => setAgentForm({ ...agentForm, temperature: parseFloat(e.target.value) })}
-                        className="w-full accent-accent bg-[var(--sidebar-hover)] h-1.5 rounded-full"
-                      />
-                    </div>
-                  </div>
-
-                  {/* 右侧系统提示词 & 工具 */}
-                  <div className="space-y-4">
-                    <div>
-                      <div className="mb-1.5 flex items-center justify-between">
-                        <label className="text-xs font-semibold text-muted uppercase tracking-wider">{t("agents.systemPromptLabel")}</label>
-                        <button
-                          type="button"
-                          onClick={handleGeneratePrompt}
-                          disabled={generatingPrompt || !agentForm.name.trim()}
-                          className="inline-flex items-center gap-1 rounded bg-accent/10 px-2 py-0.5 text-[10px] font-bold text-accent transition-all hover:bg-accent/20 disabled:opacity-40"
-                        >
-                          {generatingPrompt ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
-                          AI 生成提示词
-                        </button>
-                      </div>
-                      <textarea
-                        required
-                        rows={5}
-                        value={agentForm.systemPrompt}
-                        onChange={(e) => setAgentForm({ ...agentForm, systemPrompt: e.target.value })}
-                        placeholder="你是一个资深软件架构师，精通微服务、pgvector 向量检索..."
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none focus:border-accent/50 text-foreground resize-none"
-                      />
-                      {promptError && <p className="text-[10px] text-danger mt-1">{promptError}</p>}
-                    </div>
-
-                    <div>
-                      <label className="mb-1.5 block text-xs font-semibold text-muted uppercase tracking-wider">{t("agents.toolsLabel")}</label>
-                      <div className="flex flex-wrap gap-2">
-                        {BUILTIN_TOOLS.map((tool) => (
-                          <button
-                            key={tool.name}
-                            type="button"
-                            onClick={() => toggleAgentTool(tool.name)}
-                            className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold transition-all ${
-                              agentForm.tools.includes(tool.name)
-                                ? "border-accent/30 bg-accent/10 text-accent"
-                                : "border-border text-muted hover:border-foreground/20 hover:text-foreground"
-                            }`}
-                          >
-                            <Wrench className="h-3 w-3" />
-                            {tool.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 操作 */}
-                <div className="flex flex-col gap-3 pt-3 border-t border-border/80">
-                  {modelsList.length === 0 && (
-                    <div className="rounded-lg bg-danger/5 border border-danger/10 p-3 text-xs text-danger animate-fadeIn">
-                      ⚠️ <strong>保存受阻</strong>：系统检测到您的平台目前尚未录入或激活任何有效的 API 密钥 (API Key)。为了能成功调试和保存智能体，请先前往 <strong>『设置 (Settings) {"->"} API Keys』</strong> 录入并激活至少一个大模型通道。
-                    </div>
-                  )}
-                  <div className="flex gap-2">
-                    <button
-                      type="submit"
-                      disabled={agentSaving || !agentForm.name.trim() || modelsList.length === 0}
-                      className="inline-flex items-center gap-1 rounded-lg bg-foreground px-4 py-2 text-xs font-semibold text-background hover:opacity-85 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                    >
-                      {agentSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                      {t("common.save")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowAgentForm(false)}
-                      className="rounded-lg px-4 py-2 text-xs text-muted hover:text-foreground transition-all"
-                    >
-                      {t("common.cancel")}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            ) : agentsLoading ? (
+            {agentsLoading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-6 w-6 animate-spin text-muted" />
               </div>
@@ -721,7 +413,7 @@ export default function SmartWorkspacePage() {
                   <p className="text-xs text-muted max-w-sm mx-auto">{t("agents.noAgentsDesc")}</p>
                 </div>
                 <button
-                  onClick={handleNewAgent}
+                  onClick={() => router.push("/settings/agents")}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-xs font-semibold text-background hover:opacity-85 shadow"
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -758,7 +450,7 @@ export default function SmartWorkspacePage() {
                       {/* 编辑 / 删除按钮 */}
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => handleEditAgent(agent)}
+                          onClick={() => router.push("/settings/agents")}
                           className="rounded p-1 text-muted hover:bg-[var(--sidebar-hover)] hover:text-foreground"
                           title="修改配置"
                         >
@@ -812,37 +504,6 @@ export default function SmartWorkspacePage() {
         {activeTab === "knowledge" && (
           <div className="space-y-4">
             
-            {showCreateKbForm && (
-              // ---------------- 创建知识库表单 ----------------
-              <div className="rounded-2xl border border-border bg-card p-4 space-y-3 shadow-sm animate-fadeIn">
-                <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">{t("knowledge.createKb")}</h3>
-                <div className="flex gap-2">
-                  <input
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    placeholder="如: 产品服务条款、竞品技术参数"
-                    className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-xs outline-none focus:border-accent/50 text-foreground"
-                    onKeyDown={(e) => { if (e.key === "Enter") handleCreateKb(); }}
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleCreateKb}
-                    disabled={kbCreating || !newName.trim()}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-xs font-semibold text-background hover:opacity-85 transition-all disabled:opacity-50"
-                  >
-                    {kbCreating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                    {t("common.create")}
-                  </button>
-                  <button
-                    onClick={() => { setShowCreateKbForm(false); setNewName(""); }}
-                    className="rounded-lg px-3 py-2 text-xs text-muted hover:text-foreground"
-                  >
-                    {t("common.cancel")}
-                  </button>
-                </div>
-              </div>
-            )}
-
             {kbLoading ? (
               <div className="flex justify-center py-16">
                 <Loader2 className="h-6 w-6 animate-spin text-muted" />
@@ -855,7 +516,7 @@ export default function SmartWorkspacePage() {
                   <p className="text-xs text-muted max-w-sm mx-auto">{t("knowledge.noKbDesc")}</p>
                 </div>
                 <button
-                  onClick={() => setShowCreateKbForm(true)}
+                  onClick={() => router.push("/settings/knowledge")}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-xs font-semibold text-background hover:opacity-85 shadow"
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -967,12 +628,24 @@ export default function SmartWorkspacePage() {
               </div>
               <span className="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-600 flex items-center gap-1 animate-pulse">
                 <Clock className="h-3 w-3 animate-spin" />
-                {isEn ? "1 Task Running" : "1 个任务执行中"}
+                {isEn ? `${tasks.filter(t => t.status === "running").length} Task(s) Running` : `${tasks.filter(t => t.status === "running").length} 个任务执行中`}
               </span>
             </div>
 
             <div className="grid grid-cols-1 gap-4">
-              {mockTasks.map((task) => (
+              {tasksLoading ? (
+                <div className="flex justify-center py-16">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted" />
+                </div>
+              ) : tasks.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center space-y-3">
+                  <Terminal className="mx-auto h-10 w-10 text-muted/30" />
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground">{isEn ? "No Tasks" : "暂无任务"}</h3>
+                    <p className="text-xs text-muted max-w-sm mx-auto">{isEn ? "There are no background tasks running currently." : "当前没有任何在后台执行的长时任务。"}</p>
+                  </div>
+                </div>
+              ) : tasks.map((task) => (
                 <div
                   key={task.id}
                   className="rounded-2xl border border-border bg-card p-4 space-y-3.5 shadow-sm hover:border-accent/15 transition-colors group"
@@ -988,13 +661,23 @@ export default function SmartWorkspacePage() {
                       <p className="text-[10px] text-muted leading-relaxed truncate">{task.details}</p>
                     </div>
 
-                    <span className={`rounded-xl px-2 py-0.5 text-[10px] font-bold shrink-0 ${
-                      task.status === "running"
-                        ? "bg-amber-500/10 text-amber-600 animate-pulse border border-amber-500/20"
-                        : "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
-                    }`}>
-                      {task.status === "running" ? (isEn ? "Running" : "运行中") : (isEn ? "Completed" : "已完成")}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`rounded-xl px-2 py-0.5 text-[10px] font-bold ${
+                        task.status === "running"
+                          ? "bg-amber-500/10 text-amber-600 animate-pulse border border-amber-500/20"
+                          : "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+                      }`}>
+                        {task.status === "running" ? (isEn ? "Running" : "运行中") : (isEn ? "Completed" : "已完成")}
+                      </span>
+                      
+                      <button
+                        onClick={() => handleDeleteTask(task.id)}
+                        className="rounded p-1 text-muted hover:bg-[var(--sidebar-hover)] hover:text-danger transition-colors animate-fadeIn"
+                        title={isEn ? "Delete Task" : "删除任务"}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* 进度条与指标 */}
@@ -1019,16 +702,27 @@ export default function SmartWorkspacePage() {
                   <div className="flex items-center justify-between pt-3 border-t border-border/80 text-[10px] text-muted">
                     <span>
                       {isEn ? "Est. Time Saved: " : "累计自动省时: "}
-                      <span className="font-bold text-foreground">{task.savedTime}</span>
+                      <span className="font-bold text-foreground">{task.savedTime || "N/A"}</span>
                     </span>
                     
-                    <button
-                      onClick={() => setShowLogModal(task)}
-                      className="inline-flex items-center gap-1 rounded bg-[var(--sidebar-hover)] px-2.5 py-1 text-[10px] font-bold text-muted transition-colors hover:text-foreground"
-                    >
-                      <Terminal className="h-3 w-3" />
-                      {isEn ? "View Agent Execution Logs" : "查看 Agent 决策轨迹日志"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {task.conversationId && (
+                        <button
+                          onClick={() => router.push(`/chat/${task.conversationId}`)}
+                          className="inline-flex items-center gap-1 rounded bg-accent/10 px-2.5 py-1 text-[10px] font-bold text-accent transition-colors hover:bg-accent hover:text-background shadow-sm"
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                          {isEn ? "View in Chat" : "前往对话现场"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setShowLogModal(task)}
+                        className="inline-flex items-center gap-1 rounded bg-[var(--sidebar-hover)] px-2.5 py-1 text-[10px] font-bold text-muted transition-colors hover:text-foreground"
+                      >
+                        <Terminal className="h-3 w-3" />
+                        {isEn ? "View Logs" : "查看轨迹"}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
