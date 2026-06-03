@@ -392,9 +392,12 @@ export function Markdown({ content, messageId, onConfirmProposal }: MarkdownProp
           >
             {/* 顶栏控制面板 */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 bg-foreground/[0.02]">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col">
                 <span className="text-sm font-bold tracking-tight text-foreground flex items-center gap-1.5">
                   ✨ 智能文档在线预览
+                </span>
+                <span className="text-[10px] text-muted-foreground mt-0.5">
+                  💡 提示：如需存为 PDF，请点击预览区右上角的「🖨️ PDF」按钮，并在系统打印窗口选择「另存为 PDF」即可。
                 </span>
               </div>
               <div className="flex items-center gap-3">
@@ -403,7 +406,7 @@ export function Markdown({ content, messageId, onConfirmProposal }: MarkdownProp
                   download
                   className="flex items-center gap-1 rounded-xl bg-foreground text-background px-4 py-1.5 text-xs font-semibold shadow hover:opacity-90 active:scale-95 transition-all select-none"
                 >
-                  📥 下载文件
+                  📥 下载 HTML 网页
                 </a>
                 <button
                   onClick={() => setPreviewUrl(null)}

@@ -54,7 +54,11 @@ export const makePdfTool: ToolDefinition<MakePdfInput> = {
   <style>
     @media print {
       .no-print { display: none !important; }
-      body { background: white !important; color: black !important; }
+      body {
+        /* 强制高保真打印出背景配色与样式图层 */
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
     }
   </style>
 </head>

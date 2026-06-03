@@ -164,8 +164,9 @@ export const makePptTool: ToolDefinition<MakePptInput> = {
     @media print {
       body {
         overflow: visible !important;
-        background: white !important;
-        color: black !important;
+        /* 强制在打印时渲染所有背景与颜色（高保真保留深色主题） */
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
       .no-print {
         display: none !important;
@@ -181,6 +182,8 @@ export const makePptTool: ToolDefinition<MakePptInput> = {
         margin: 0 !important;
         padding: 0 !important;
         overflow: visible !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
       .glass-card {
         aspect-ratio: auto !important;
@@ -201,7 +204,10 @@ export const makePptTool: ToolDefinition<MakePptInput> = {
         height: 100vh !important;
         box-sizing: border-box !important;
         padding: 3rem !important;
-        border-bottom: 1px dashed #e2e8f0;
+        /* 去除虚线分割线以实现精美 PDF 排版 */
+        border-bottom: none !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
       }
     }
 
