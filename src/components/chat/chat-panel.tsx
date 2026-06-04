@@ -242,12 +242,20 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
   }, [currentMessages, memoryOpen]);
 
   const handleSend = useCallback(
-    async (text: string) => {
-      if (!text.trim() || isActive) return;
+    async (text: string, images?: { base64: string; type: string }[]) => {
+      if ((!text.trim() && (!images || images.length === 0)) || isActive) return;
+
+      const textPart = { type: "text" as const, text };
+      const imageParts = (images || []).map((img) => ({
+        type: "file" as const,
+        url: img.base64,
+        mediaType: img.type,
+      }));
+      const parts = [textPart, ...imageParts];
 
       if (activeWorker) {
         // 若当前有活跃 Worker，直接交由其发送后续消息
-        await activeWorker.sendMessage({ text });
+        await activeWorker.sendMessage({ parts });
       } else {
         let targetConvId = conversationId;
         
@@ -263,7 +271,7 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
         const newUserMsg = {
           id: Date.now().toString(),
           role: "user",
-          parts: [{ type: "text", text }],
+          parts,
           createdAt: new Date(),
         } as unknown as UIMessage;
         const updatedMessages = [...staticMessages, newUserMsg];
@@ -273,7 +281,7 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
           modelId,
           agentId,
           initialMessages: staticMessages,
-          textToSubmit: text,
+          partsToSubmit: parts,
         });
       }
     },

@@ -312,25 +312,24 @@ export function MessageItem({
           <div className="flex flex-col items-end gap-2">
             {/* 渲染图片预览 */}
             {(() => {
-              const anyParts = parts as unknown as { type: string; image?: string }[];
-              if (anyParts.some((p) => p && p.type === "image")) {
+              const anyParts = parts as unknown as { type: string; url?: string; mediaType?: string }[];
+              const imageParts = anyParts.filter((p) => p && p.type === "file" && p.mediaType?.startsWith("image/"));
+              if (imageParts.length > 0) {
                 return (
                   <div className="flex flex-wrap gap-2 justify-end max-w-full">
-                    {anyParts
-                      .filter((p) => p && p.type === "image")
-                      .map((part, idx) => (
-                        <div
-                          key={idx}
-                          className="relative rounded-xl overflow-hidden border border-border/40 shadow-sm max-w-[200px] max-h-[150px] bg-foreground/[0.02]"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={part.image}
-                            alt="Uploaded media"
-                            className="w-full h-full object-cover max-w-[200px] max-h-[150px]"
-                          />
-                        </div>
-                      ))}
+                    {imageParts.map((part, idx) => (
+                      <div
+                        key={idx}
+                        className="relative rounded-xl overflow-hidden border border-border/40 shadow-sm max-w-[200px] max-h-[150px] bg-foreground/[0.02]"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={part.url}
+                          alt="Uploaded media"
+                          className="w-full h-full object-cover max-w-[200px] max-h-[150px]"
+                        />
+                      </div>
+                    ))}
                   </div>
                 );
               }

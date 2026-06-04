@@ -248,8 +248,8 @@ async function handleChatRequest(req: Request) {
   const userText = lastUserMessage ? extractTextFromParts(lastUserMessage.parts) : "";
 
   if (lastUserMessage) {
-    const anyParts = (lastUserMessage.parts || []) as unknown as { type: string }[];
-    const hasImage = anyParts.some((p) => p && p.type === "image");
+    const anyParts = (lastUserMessage.parts || []) as unknown as { type: string; mediaType?: string }[];
+    const hasImage = anyParts.some((p) => p && p.type === "file" && p.mediaType?.startsWith("image/"));
     let contentToStore = userText;
     if (hasImage) {
       contentToStore = JSON.stringify({

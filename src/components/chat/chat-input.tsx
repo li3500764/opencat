@@ -39,11 +39,23 @@ export function ChatInput({ isLoading, onSend, onStop }: ChatInputProps) {
     const files = e.target.files;
     if (!files) return;
 
-    Array.from(files).forEach((file) => {
+    const currentCount = images.length;
+    const incomingFiles = Array.from(files).filter((file) => {
       if (!file.type.startsWith("image/")) {
-        alert("只能上传图片文件进行多模态识别！");
-        return;
+        alert(`文件 "${file.name}" 不是图片，只能上传图片进行识别！`);
+        return false;
       }
+      return true;
+    });
+
+    if (currentCount + incomingFiles.length > 5) {
+      alert("最多同时发送 5 张图片！超出上限的部分已被忽略。");
+    }
+
+    const availableSlots = 5 - currentCount;
+    const filesToAdd = incomingFiles.slice(0, availableSlots);
+
+    filesToAdd.forEach((file) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         setImages((prev) => [
