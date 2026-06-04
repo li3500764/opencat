@@ -369,7 +369,7 @@ export function Markdown({ content, messageId, onConfirmProposal }: MarkdownProp
       }
       return (
         <code
-          className="rounded bg-foreground/5 px-1.5 py-0.5 text-[13px] font-mono text-accent"
+          className="rounded bg-foreground/5 px-1.5 py-0.5 text-[13px] font-mono text-accent break-all whitespace-pre-wrap"
           {...props}
         >
           {children}
@@ -379,7 +379,7 @@ export function Markdown({ content, messageId, onConfirmProposal }: MarkdownProp
   };
 
   return (
-    <div className="text-sm">
+    <div className="text-sm break-words">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={dynamicComponents}>
         {content}
       </ReactMarkdown>

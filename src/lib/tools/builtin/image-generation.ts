@@ -25,9 +25,9 @@ const imageGenerationSchema = z.object({
 
   // 选择生图模型
   model: z
-    .enum(["dall-e-2", "dall-e-3"])
+    .string()
     .default("dall-e-3")
-    .describe("用于生成图片的 DALL-E 模型，默认 dall-e-3"),
+    .describe("用于生成图片的模型。支持官方的 dall-e-3、dall-e-2，或自定义第三方代理生图模型名称（如 gpt-image-2 等）"),
 
   // 图片分辨率
   size: z
@@ -66,6 +66,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
       const { userId } = context;
       let apiKey: string | null = null;
       let baseUrl: string | undefined;
+      let apiKeyModels: unknown = null;
 
       // 1. 根据 userId 查找数据库中配置的 API 密钥
       if (userId) {
@@ -84,6 +85,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
         if (userKey) {
           apiKey = decrypt(userKey.encryptedKey, userKey.iv);
           baseUrl = userKey.baseUrl || undefined;
+          apiKeyModels = userKey.models;
         }
       }
 
@@ -112,6 +114,39 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
         }
       }
 
+      let requestModel = input.model || "dall-e-3";
+
+      // 3.1 自动适配第三方中转代理已配置的模型（无硬编码，由配置数据驱动）
+      if (apiKeyModels) {
+        try {
+          const customModels = (apiKeyModels as unknown as { id: string }[]) || [];
+          if (customModels.length > 0) {
+            // 检查请求的模型是否在用户配置的 models 列表中（忽略大小写）
+            const hasRequestedModel = customModels.some(
+              (m) => m.id.toLowerCase() === requestModel.toLowerCase()
+            );
+
+            // 如果配置列表里没有当前请求的模型（比如不支持 dall-e-3），则启动智能重映射
+            if (!hasRequestedModel) {
+              // 1. 优先寻找名称中带有生图特征的模型（如包含 image, dall, midjourney, mj, flux, sd 等关键字）
+              const imageKeywords = ["image", "dall", "midjourney", "mj", "flux", "sd"];
+              const matchedModel = customModels.find((m) =>
+                imageKeywords.some((kw) => m.id.toLowerCase().includes(kw))
+              );
+
+              if (matchedModel) {
+                requestModel = matchedModel.id;
+              } else {
+                // 2. 如果没找到含生图关键字的模型，直接回退使用该 Key 下配置的第一个模型（在专门用于生图的 API Key 中，列表里通常只包含该生图模型）
+                requestModel = customModels[0].id;
+              }
+            }
+          }
+        } catch (e) {
+          console.error("解析 API Key 模型列表失败，跳过重映射:", e);
+        }
+      }
+
       // 3. 调用 OpenAI 图片生成 API
       const response = await fetch(`${apiBase}/images/generations`, {
         method: "POST",
@@ -121,7 +156,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
         },
         body: JSON.stringify({
           prompt: input.prompt,
-          model: input.model,
+          model: requestModel,
           n: 1, // DALL-E 3 仅支持 n=1，此处统一默认为 1
           size: input.size,
           quality: input.quality,
