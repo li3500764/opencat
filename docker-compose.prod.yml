@@ -20,7 +20,7 @@ services:
     container_name: opencat-db-prod
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-opencat}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opencat_prod_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB:-opencat}
     volumes:
       - pgdata_prod:/var/lib/postgresql/data
@@ -60,7 +60,7 @@ services:
       - .env.production
     environment:
       # 覆盖数据库连接为容器内部网络地址
-      DATABASE_URL: postgresql://${POSTGRES_USER:-opencat}:${POSTGRES_PASSWORD:-opencat_prod_secret}@postgres:5432/${POSTGRES_DB:-opencat}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opencat}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-opencat}
       REDIS_URL: redis://redis:6379
     depends_on:
       postgres:
@@ -83,7 +83,7 @@ services:
       - .env.production
     environment:
       # 覆盖数据库和 Redis 连接串为容器内部地址
-      DATABASE_URL: postgresql://${POSTGRES_USER:-opencat}:${POSTGRES_PASSWORD:-opencat_prod_secret}@postgres:5432/${POSTGRES_DB:-opencat}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opencat}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-opencat}
       REDIS_URL: redis://redis:6379
       WORKER_CONCURRENCY: 20
       WORKER_TASK_TIMEOUT: 1800

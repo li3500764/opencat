@@ -21,7 +21,8 @@ func LoadConfig() *Config {
 	taskTimeout := getEnvAsInt("WORKER_TASK_TIMEOUT", 1800) // 默认30分钟
 
 	return &Config{
-		DatabaseURL:    getEnv("DATABASE_URL", "postgresql://opencat:opencat@localhost:5433/opencat?schema=public"),
+		// 本地开发时，如果需要密码或使用特定配置，请在非 Git 追踪的本地环境变量中配置 DATABASE_URL
+		DatabaseURL:    getEnv("DATABASE_URL", "postgresql://localhost:5433/opencat?schema=public"),
 		RedisURL:       getEnv("REDIS_URL", "redis://localhost:6379"),
 		EncryptionKey:  getEnv("ENCRYPTION_KEY", ""),
 		Concurrency:    concurrency,
