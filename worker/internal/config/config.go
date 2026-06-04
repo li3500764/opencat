@@ -13,12 +13,25 @@ type Config struct {
 	Concurrency       int    // 任务执行最大并发数
 	TaskTimeoutSec    int    // 单个任务的超时时间（秒）
 	LogLevel          string // 日志级别: debug / info / warn / error
+	DownloadsDir      string // 定时清理的下载文件目录
 }
 
 // LoadConfig 从环境变量中加载配置，并设置默认值
 func LoadConfig() *Config {
 	concurrency := getEnvAsInt("WORKER_CONCURRENCY", 20)
 	taskTimeout := getEnvAsInt("WORKER_TASK_TIMEOUT", 1800) // 默认30分钟
+
+	downloadsDir := getEnv("DOWNLOADS_DIR", "")
+	if downloadsDir == "" {
+		// 自动探测本地目录：优先使用 ../public/downloads（假设在 worker 目录启动），其次使用 ./public/downloads
+		if _, err := os.Stat("../public/downloads"); err == nil {
+			downloadsDir = "../public/downloads"
+		} else if _, err := os.Stat("./public/downloads"); err == nil {
+			downloadsDir = "./public/downloads"
+		} else {
+			downloadsDir = "../public/downloads" // 最终回退默认值
+		}
+	}
 
 	return &Config{
 		// 本地开发时，如果需要密码或使用特定配置，请在非 Git 追踪的本地环境变量中配置 DATABASE_URL
@@ -28,6 +41,7 @@ func LoadConfig() *Config {
 		Concurrency:    concurrency,
 		TaskTimeoutSec: taskTimeout,
 		LogLevel:       getEnv("LOG_LEVEL", "info"),
+		DownloadsDir:   downloadsDir,
 	}
 }
 

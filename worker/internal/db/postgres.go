@@ -166,3 +166,63 @@ func (db *DB) FailTask(ctx context.Context, id string, errMsg string) error {
 	}
 	return nil
 }
+
+// GetAllProjects 获取系统中所有项目的 ID
+func (db *DB) GetAllProjects(ctx context.Context) ([]string, error) {
+	query := `SELECT id FROM "Project"`
+	rows, err := db.Pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("查询项目列表失败: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	return ids, nil
+}
+
+// CreateCleanupTask 创建一条全局的清理任务记录，返回任务 ID
+func (db *DB) CreateCleanupTask(ctx context.Context, projectID string, name string, taskType string) (string, error) {
+	id := fmt.Sprintf("clean-%d-%s", time.Now().UnixNano(), projectID[:4])
+
+	query := `INSERT INTO "BackgroundTask" (id, "projectId", name, type, status, progress, details, logs, "createdAt", "updatedAt")
+	          VALUES ($1, $2, $3, $4, 'running', 0, '', '[]'::json, $5, $6)`
+	
+	_, err := db.Pool.Exec(ctx, query, id, projectID, name, taskType, time.Now(), time.Now())
+	if err != nil {
+		return "", fmt.Errorf("创建 BackgroundTask 记录失败: %w", err)
+	}
+	return id, nil
+}
+
+// CompleteCleanupTask 完成清理任务并写入详细信息与日志
+func (db *DB) CompleteCleanupTask(ctx context.Context, id string, details string, savedTime string, newLog string) error {
+	task, err := db.GetTask(ctx, id)
+	if err != nil {
+		return fmt.Errorf("完成清理任务时读取记录失败: %w", err)
+	}
+
+	var logs []string
+	if len(task.Logs) > 0 {
+		_ = json.Unmarshal(task.Logs, &logs)
+	}
+	if newLog != "" {
+		logs = append(logs, fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), newLog))
+	}
+	updatedLogs, _ := json.Marshal(logs)
+
+	query := `UPDATE "BackgroundTask" 
+	          SET status = 'completed', progress = 100, details = $1, "savedTime" = $2, logs = $3, "updatedAt" = $4 
+	          WHERE id = $5`
+	
+	_, err = db.Pool.Exec(ctx, query, details, savedTime, updatedLogs, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("标记清理任务完成失败: %w", err)
+	}
+	return nil
+}

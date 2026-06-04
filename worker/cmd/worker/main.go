@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"opencat-worker/internal/cleaner"
 	"opencat-worker/internal/config"
 	"opencat-worker/internal/db"
 	"opencat-worker/internal/dispatcher"
@@ -62,6 +63,9 @@ func main() {
 		}
 		close(dispatcherErrChan)
 	}()
+
+	// 6.1 启动过期生成文件清理器（有效期 7 天，每 12 小时扫描并执行一次清理）
+	cleaner.StartFileCleaner(ctx, dbConn, cfg.DownloadsDir, 7*24*time.Hour, 12*time.Hour)
 
 	// 7. 优雅关机 (Graceful Shutdown) 机制
 	sigChan := make(chan os.Signal, 1)
