@@ -4,6 +4,9 @@ FROM golang:1.22-alpine AS builder
 # 安装证书，以便支持 Go Worker 向大模型 API 发起 HTTPS 请求
 RUN apk add --no-cache git ca-certificates
 
+# 配置 Go 国内代理，避免 Docker 构建时下载模块超时
+ENV GOPROXY=https://goproxy.cn,direct
+
 WORKDIR /build
 
 # 复制 go.mod（go.sum 随后在 go mod tidy 后生成）
