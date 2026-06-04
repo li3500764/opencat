@@ -324,7 +324,7 @@ async function handleChatRequest(req: Request) {
   const modelMessages = await convertToModelMessages(messages);
 
   // ---- 9. 使用 Agent Engine 创建流式响应 ----
-  const defaultTools = ["memory_save", "memory_search"];
+  const defaultTools = ["memory_save", "memory_search", "image_generation"];
   const finalToolNames = enableTools
     ? (agentConfig?.toolNames ?? toolNames ?? defaultTools)
     : [];
