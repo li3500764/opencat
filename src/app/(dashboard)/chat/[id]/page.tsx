@@ -19,6 +19,7 @@ interface DbMessage {
   id: string;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
+  createdAt: string;
 }
 
 function toUIMessages(dbMessages: DbMessage[]): UIMessage[] {
@@ -28,7 +29,8 @@ function toUIMessages(dbMessages: DbMessage[]): UIMessage[] {
       id: m.id,
       role: m.role as "user" | "assistant",
       parts: [{ type: "text" as const, text: m.content }],
-    }));
+      createdAt: new Date(m.createdAt),
+    } as unknown as UIMessage));
 }
 
 export default function ConversationPage() {
@@ -57,7 +59,7 @@ export default function ConversationPage() {
     }
     return null;
   });
-  const [metadata, setMetadata] = useState<any>({});
+  const [metadata, setMetadata] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

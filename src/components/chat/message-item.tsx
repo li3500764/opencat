@@ -207,6 +207,30 @@ function ToolCallCard({ part }: { part: MessagePart }) {
 // ============================================================
 // MessageItem — 单条消息主组件
 // ============================================================
+// 格式化时间戳为 UTC+8 格式 (中国标准时间)，精确到秒
+function formatTimeUTC8(dateInput: Date | string | number | undefined): string {
+  if (!dateInput) return "";
+  const date = typeof dateInput === "string" || typeof dateInput === "number" ? new Date(dateInput) : dateInput;
+  if (isNaN(date.getTime())) return "";
+
+  try {
+    const formatter = new Intl.DateTimeFormat("zh-CN", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    });
+    return formatter.format(date).replace(/\//g, "-");
+  } catch (e) {
+    // 兜底使用本地格式化
+    return date.toLocaleString("zh-CN", { hour12: false });
+  }
+}
+
 export function MessageItem({
   message,
   userAvatar,
@@ -226,13 +250,30 @@ export function MessageItem({
   // ---- 分离 parts：文本 vs 工具调用 (全面安全容错处理) ----
   // message.parts 是一个数组，可能混合了文本和工具调用
   // 例如：[text, tool-calculator, text, tool-datetime, text]
-  const parts = message.parts || [{ type: "text" as const, text: message.content || "" }];
+  const parts = message.parts || [{ type: "text" as const, text: (message as unknown as { content: string }).content || "" }];
   
   const textParts = parts.filter(
     (p): p is { type: "text"; text: string } => p && p.type === "text"
   );
   const toolParts = parts.filter((p) => p && isToolPart(p));
   const fullText = textParts.map((p) => p.text).join("");
+
+  // 获取消息创建时间，优先使用 message.createdAt (通过类型转换避开 TS 限制)，其次尝试解析 message.id (时间戳字符串)，最后兜底用当前时间
+  const getMessageTime = () => {
+    const msg = message as unknown as { createdAt?: Date | string };
+    if (msg.createdAt) {
+      return new Date(msg.createdAt);
+    }
+    if (message.id) {
+      const timestamp = parseInt(message.id, 10);
+      if (!isNaN(timestamp) && timestamp > 1000000000000) {
+        return new Date(timestamp);
+      }
+    }
+    return new Date();
+  };
+
+  const formattedTime = formatTimeUTC8(getMessageTime());
 
   // 如果没有任何内容（既没文本也没工具调用），不渲染
   if (!fullText && toolParts.length === 0) return null;
@@ -251,10 +292,20 @@ export function MessageItem({
 
       {/* 消息内容 */}
       <div className={`max-w-[75%] ${isUser ? "text-right" : ""}`}>
-        {/* 角色标签 */}
-        <p className="mb-1 text-[11px] font-medium text-muted">
-          {isUser ? t('chat.you') : t('chat.assistant')}
-        </p>
+        {/* 角色标签与时间戳 */}
+        <div className={`mb-1 text-[11px] font-medium text-muted flex items-center gap-1.5 ${isUser ? "justify-end" : "justify-start"}`}>
+          {isUser ? (
+            <>
+              <span className="text-[10px] opacity-60 font-mono">{formattedTime}</span>
+              <span>{t('chat.you')}</span>
+            </>
+          ) : (
+            <>
+              <span>{t('chat.assistant')}</span>
+              <span className="text-[10px] opacity-60 font-mono">{formattedTime}</span>
+            </>
+          )}
+        </div>
 
         {/* 消息体 */}
         {isUser ? (

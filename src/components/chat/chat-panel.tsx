@@ -260,11 +260,12 @@ export function ChatPanel({ conversationId: initialConvId, initialMessages, init
           router.replace(`/chat/${targetConvId}`);
         }
 
-        const newUserMsg: UIMessage = {
+        const newUserMsg = {
           id: Date.now().toString(),
           role: "user",
           parts: [{ type: "text", text }],
-        };
+          createdAt: new Date(),
+        } as unknown as UIMessage;
         const updatedMessages = [...staticMessages, newUserMsg];
         setStaticMessages(updatedMessages);
 
