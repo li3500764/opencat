@@ -309,9 +309,39 @@ export function MessageItem({
 
         {/* 消息体 */}
         {isUser ? (
-          // 用户消息：灰色气泡
-          <div className="inline-block rounded-2xl rounded-tr-md bg-message-user-bg px-4 py-2.5 text-message-user-text">
-            <p className="text-sm leading-relaxed whitespace-pre-wrap">{fullText}</p>
+          <div className="flex flex-col items-end gap-2">
+            {/* 渲染图片预览 */}
+            {(() => {
+              const anyParts = parts as unknown as { type: string; image?: string }[];
+              if (anyParts.some((p) => p && p.type === "image")) {
+                return (
+                  <div className="flex flex-wrap gap-2 justify-end max-w-full">
+                    {anyParts
+                      .filter((p) => p && p.type === "image")
+                      .map((part, idx) => (
+                        <div
+                          key={idx}
+                          className="relative rounded-xl overflow-hidden border border-border/40 shadow-sm max-w-[200px] max-h-[150px] bg-foreground/[0.02]"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={part.image}
+                            alt="Uploaded media"
+                            className="w-full h-full object-cover max-w-[200px] max-h-[150px]"
+                          />
+                        </div>
+                      ))}
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            {/* 用户文本消息：灰色气泡 */}
+            {fullText && (
+              <div className="inline-block rounded-2xl rounded-tr-md bg-message-user-bg px-4 py-2.5 text-message-user-text">
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{fullText}</p>
+              </div>
+            )}
           </div>
         ) : (
           // AI 消息：按 parts 顺序渲染

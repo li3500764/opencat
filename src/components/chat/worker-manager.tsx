@@ -117,7 +117,7 @@ function ChatWorker({ workerId }: ChatWorkerProps) {
 
   // ---- 3. 初始化与首次挂载时的消息提交指令 ----
   useEffect(() => {
-    if (pendingWorker && pendingWorker.textToSubmit) {
+    if (pendingWorker && (pendingWorker.textToSubmit || pendingWorker.partsToSubmit)) {
       const text = pendingWorker.textToSubmit;
       
       // 清空 pending 状态，标志此影子线程已成功挂载入编
@@ -130,12 +130,16 @@ function ChatWorker({ workerId }: ChatWorkerProps) {
         status: "submitted",
         modelId,
         agentId,
-        sendMessage,
+        sendMessage: sendMessage as unknown as ChatWorkerState["sendMessage"],
         stop,
       });
 
       // 触发 AI SDK 消息流式接收
-      sendMessage({ text });
+      if (pendingWorker.partsToSubmit) {
+        sendMessage({ parts: pendingWorker.partsToSubmit } as unknown as Parameters<typeof sendMessage>[0]);
+      } else if (text) {
+        sendMessage({ text });
+      }
     } else if (!activeWorker) {
       // 如果属于刷新、重新挂载或者从历史记录恢复的空闲 Worker，也需要进行注册
       registerWorker(workerId, {
@@ -144,7 +148,7 @@ function ChatWorker({ workerId }: ChatWorkerProps) {
         status,
         modelId,
         agentId,
-        sendMessage,
+        sendMessage: sendMessage as unknown as ChatWorkerState["sendMessage"],
         stop,
       });
     }

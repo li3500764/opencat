@@ -25,8 +25,8 @@ export interface ChatWorkerState {
   status: "idle" | "streaming" | "submitted";
   modelId: string;
   agentId: string | null;
-  // 全局控制句柄
-  sendMessage: (text: string) => Promise<void>;
+  // 全局控制句柄，支持对象格式以传输 parts
+  sendMessage: (args: { text?: string; parts?: unknown[] }) => Promise<void>;
   stop: () => void;
 }
 
@@ -36,7 +36,8 @@ export interface PendingWorkerConfig {
   modelId: string;
   agentId: string | null;
   initialMessages: UIMessage[];
-  textToSubmit: string;
+  textToSubmit?: string;
+  partsToSubmit?: unknown[]; // 新增支持 parts 提交
 }
 
 interface ChatState {

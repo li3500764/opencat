@@ -25,12 +25,25 @@ interface DbMessage {
 function toUIMessages(dbMessages: DbMessage[]): UIMessage[] {
   return dbMessages
     .filter((m) => m.role === "user" || m.role === "assistant")
-    .map((m) => ({
-      id: m.id,
-      role: m.role as "user" | "assistant",
-      parts: [{ type: "text" as const, text: m.content }],
-      createdAt: new Date(m.createdAt),
-    } as unknown as UIMessage));
+    .map((m) => {
+      let parts: unknown[] = [{ type: "text" as const, text: m.content }];
+      if (m.content.startsWith('{"__isMultimodal":true')) {
+        try {
+          const parsed = JSON.parse(m.content) as { __isMultimodal?: boolean; parts?: unknown[] };
+          if (parsed.__isMultimodal && Array.isArray(parsed.parts)) {
+            parts = parsed.parts;
+          }
+        } catch (e) {
+          // 容错降级
+        }
+      }
+      return {
+        id: m.id,
+        role: m.role as "user" | "assistant",
+        parts,
+        createdAt: new Date(m.createdAt),
+      } as unknown as UIMessage;
+    });
 }
 
 export default function ConversationPage() {

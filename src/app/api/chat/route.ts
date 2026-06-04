@@ -248,8 +248,18 @@ async function handleChatRequest(req: Request) {
   const userText = lastUserMessage ? extractTextFromParts(lastUserMessage.parts) : "";
 
   if (lastUserMessage) {
+    const anyParts = (lastUserMessage.parts || []) as unknown as { type: string }[];
+    const hasImage = anyParts.some((p) => p && p.type === "image");
+    let contentToStore = userText;
+    if (hasImage) {
+      contentToStore = JSON.stringify({
+        __isMultimodal: true,
+        parts: lastUserMessage.parts,
+      });
+    }
+
     await db.message.create({
-      data: { conversationId, role: "user", content: userText },
+      data: { conversationId, role: "user", content: contentToStore },
     });
   }
 
