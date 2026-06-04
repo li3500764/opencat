@@ -160,6 +160,79 @@ export default function SmartWorkspacePage() {
     fetchTasks();
   }, [fetchDefaultProject, fetchAgents, fetchKnowledgeBases, fetchTasks]);
 
+  // ----------------- 实时任务 SSE 监听 -----------------
+  useEffect(() => {
+    // 仅当切换到 "tasks" 面板时才建立连接，避免不必要的连接开销
+    if (activeTab !== "tasks") return;
+
+    const eventSource = new EventSource("/api/tasks/stream");
+
+    eventSource.addEventListener("task-progress", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        // data 格式: { taskId, userId, status, progress, log, timestamp }
+
+        setTasks((prev) => {
+          // 如果列表里还没有这个任务（比如刚新建派发的），我们先重新 fetch 整个列表以拉取最新内容
+          const exists = prev.some((t) => t.id === data.taskId);
+          if (!exists) {
+            fetchTasks();
+            return prev;
+          }
+
+          return prev.map((t) => {
+            if (t.id === data.taskId) {
+              const logs = [...t.logs];
+              if (data.log && !logs.includes(data.log)) {
+                logs.push(data.log);
+              }
+              return {
+                ...t,
+                status: data.status as any,
+                progress: data.progress,
+                logs,
+              };
+            }
+            return t;
+          });
+        });
+
+        // 同步更新当前正在查看的日志 Modal
+        setShowLogModal((prev) => {
+          if (prev && prev.id === data.taskId) {
+            const logs = [...prev.logs];
+            if (data.log && !logs.includes(data.log)) {
+              logs.push(data.log);
+            }
+            return {
+              ...prev,
+              status: data.status as any,
+              progress: data.progress,
+              logs,
+            };
+          }
+          return prev;
+        });
+
+        // 如果任务状态有变，随时重新获取知识库列表，更新 RAG 文档处理状态图标
+        if (data.status === "completed" || data.status === "failed") {
+          fetchKnowledgeBases();
+        }
+
+      } catch (err) {
+        console.error("解析任务实时数据失败:", err);
+      }
+    });
+
+    eventSource.onerror = (err) => {
+      console.warn("实时任务监控连接发生中断，EventSource 自动重连...");
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [activeTab, fetchTasks, fetchKnowledgeBases]);
+
   // ----------------- Agent 业务逻辑 -----------------
 
   const handleDeleteAgent = async (id: string) => {

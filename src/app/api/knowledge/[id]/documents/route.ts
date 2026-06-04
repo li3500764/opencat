@@ -11,7 +11,7 @@
 
 import { auth } from "@/lib/auth";
 import { db } from "@/server/db";
-import { processDocument } from "@/lib/memory";
+import { redis } from "@/lib/redis";
 
 export async function POST(
   req: Request,
@@ -24,17 +24,16 @@ export async function POST(
 
   const { id: knowledgeBaseId } = await params;
 
-  // 校验知识库归属
+  // 校验知识库归属并获取项目 ID
   const kb = await db.knowledgeBase.findFirst({
     where: { id: knowledgeBaseId, project: { userId: session.user.id } },
+    select: { id: true, projectId: true },
   });
   if (!kb) {
     return Response.json({ error: "Knowledge base not found" }, { status: 404 });
   }
 
   // 读取请求体
-  // 前端可以发 JSON { fileName, fileType, content }
-  // 或者 FormData（文件上传）
   const contentType = req.headers.get("content-type") || "";
 
   let fileName: string;
@@ -42,13 +41,11 @@ export async function POST(
   let content: string;
 
   if (contentType.includes("application/json")) {
-    // JSON 方式上传（纯文本）
     const body = await req.json();
     fileName = body.fileName || "untitled.txt";
     fileType = body.fileType || "txt";
     content = body.content || "";
   } else if (contentType.includes("multipart/form-data")) {
-    // FormData 文件上传
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     if (!file) {
@@ -66,19 +63,51 @@ export async function POST(
   }
 
   try {
-    // 调用 RAG 处理流程：分块 → 向量化 → 存储
-    const result = await processDocument(
-      knowledgeBaseId,
-      fileName,
-      fileType,
-      content,
-      session.user.id
+    // 1. 创建 Document 记录，状态设为 pending
+    const document = await db.document.create({
+      data: {
+        knowledgeBaseId,
+        fileName,
+        fileType,
+        fileSize: Buffer.byteLength(content, "utf-8"),
+        status: "pending",
+      },
+    });
+
+    // 2. 创建异步 BackgroundTask
+    const task = await db.backgroundTask.create({
+      data: {
+        projectId: kb.projectId,
+        name: `知识库 RAG 文档语义向量化: ${fileName}`,
+        type: "rag-ingest",
+        status: "pending",
+        progress: 0,
+        details: JSON.stringify({
+          documentId: document.id,
+          content: content,
+          userId: session.user.id,
+          knowledgeBaseId,
+          fileName,
+          fileType,
+        }),
+        logs: ["[SYSTEM] 异步文档 RAG 向量任务已创建，准备分派给后台执行器..."],
+      },
+    });
+
+    // 3. 推入 Redis Stream 派发给 Go Worker 消费
+    await redis.xadd(
+      "opencat:tasks",
+      "*",
+      "taskId", task.id,
+      "type", task.type,
+      "userId", session.user.id,
+      "payload", task.details!
     );
 
-    return Response.json(result, { status: 201 });
+    return Response.json({ documentId: document.id, taskId: task.id }, { status: 201 });
   } catch (err) {
     return Response.json(
-      { error: `Document processing failed: ${err instanceof Error ? err.message : "Unknown error"}` },
+      { error: `Document processing queue failed: ${err instanceof Error ? err.message : "Unknown error"}` },
       { status: 500 }
     );
   }

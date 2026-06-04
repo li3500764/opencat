@@ -73,6 +73,30 @@ services:
       - internal
     restart: unless-stopped
 
+  # ---- Go Worker 后台长任务服务 ----
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: opencat-worker
+    env_file:
+      - .env.production
+    environment:
+      # 覆盖数据库和 Redis 连接串为容器内部地址
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opencat}:${POSTGRES_PASSWORD:-opencat_prod_secret}@postgres:5432/${POSTGRES_DB:-opencat}
+      REDIS_URL: redis://redis:6379
+      WORKER_CONCURRENCY: 20
+      WORKER_TASK_TIMEOUT: 1800
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - internal
+    restart: unless-stopped
+
 volumes:
   pgdata_prod:
   redisdata_prod:

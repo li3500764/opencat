@@ -1,0 +1,168 @@
+package db
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"opencat-worker/pkg/models"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// DB 封装 PostgreSQL 连接池
+type DB struct {
+	Pool *pgxpool.Pool
+}
+
+// Connect 初始化 pgx 连接池
+func Connect(ctx context.Context, databaseURL string) (*DB, error) {
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("解析数据库连接串失败: %w", err)
+	}
+
+	// 设置连接池最大连接数等配置
+	config.MaxConns = 10
+	config.MinConns = 2
+	config.MaxConnIdleTime = 30 * time.Minute
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		return nil, fmt.Errorf("创建数据库连接池失败: %w", err)
+	}
+
+	// 测试连接
+	if err := pool.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("连接数据库测试失败: %w", err)
+	}
+
+	return &DB{Pool: pool}, nil
+}
+
+// Close 关闭数据库连接池
+func (db *DB) Close() {
+	if db.Pool != nil {
+		db.Pool.Close()
+	}
+}
+
+// GetTask 获取特定的后台任务记录
+func (db *DB) GetTask(ctx context.Context, id string) (*models.BackgroundTask, error) {
+	task := &models.BackgroundTask{}
+	query := `SELECT id, "projectId", "agentId", "conversationId", name, type, status, progress, details, logs, "savedTime", "createdAt", "updatedAt" 
+	          FROM "BackgroundTask" WHERE id = $1`
+	
+	err := db.Pool.QueryRow(ctx, query, id).Scan(
+		&task.ID,
+		&task.ProjectID,
+		&task.AgentID,
+		&task.ConversationID,
+		&task.Name,
+		&task.Type,
+		&task.Status,
+		&task.Progress,
+		&task.Details,
+		&task.Logs,
+		&task.SavedTime,
+		&task.CreatedAt,
+		&task.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return task, nil
+}
+
+// UpdateTaskProgress 更新任务状态、进度并追加一条日志
+func (db *DB) UpdateTaskProgress(ctx context.Context, id string, status string, progress int, newLog string) error {
+	// 1. 获取现有任务以读取当前的 logs 数组
+	task, err := db.GetTask(ctx, id)
+	if err != nil {
+		return fmt.Errorf("更新进度时读取任务失败: %w", err)
+	}
+
+	var logs []string
+	if len(task.Logs) > 0 {
+		if err := json.Unmarshal(task.Logs, &logs); err != nil {
+			// 如果解析失败，则重置为空数组
+			logs = []string{}
+		}
+	}
+
+	// 2. 追加新日志
+	if newLog != "" {
+		logs = append(logs, fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), newLog))
+	}
+
+	// 3. 重新序列化为 JSON
+	updatedLogs, err := json.Marshal(logs)
+	if err != nil {
+		return fmt.Errorf("序列化日志失败: %w", err)
+	}
+
+	// 4. 更新到数据库 (Prisma 需要遵循 updatedAt 规则)
+	query := `UPDATE "BackgroundTask" 
+	          SET status = $1, progress = $2, logs = $3, "updatedAt" = $4 
+	          WHERE id = $5`
+	
+	_, err = db.Pool.Exec(ctx, query, status, progress, updatedLogs, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("更新数据库任务记录失败: %w", err)
+	}
+
+	return nil
+}
+
+// CompleteTask 标记任务完成
+func (db *DB) CompleteTask(ctx context.Context, id string, savedTime string, newLog string) error {
+	task, err := db.GetTask(ctx, id)
+	if err != nil {
+		return fmt.Errorf("完成任务时读取记录失败: %w", err)
+	}
+
+	var logs []string
+	if len(task.Logs) > 0 {
+		_ = json.Unmarshal(task.Logs, &logs)
+	}
+	if newLog != "" {
+		logs = append(logs, fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), newLog))
+	}
+	updatedLogs, _ := json.Marshal(logs)
+
+	query := `UPDATE "BackgroundTask" 
+	          SET status = 'completed', progress = 100, "savedTime" = $1, logs = $2, "updatedAt" = $3 
+	          WHERE id = $4`
+	
+	_, err = db.Pool.Exec(ctx, query, savedTime, updatedLogs, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("标记任务完成失败: %w", err)
+	}
+	return nil
+}
+
+// FailTask 标记任务失败，记录错误日志
+func (db *DB) FailTask(ctx context.Context, id string, errMsg string) error {
+	task, err := db.GetTask(ctx, id)
+	if err != nil {
+		return fmt.Errorf("失败任务时读取记录失败: %w", err)
+	}
+
+	var logs []string
+	if len(task.Logs) > 0 {
+		_ = json.Unmarshal(task.Logs, &logs)
+	}
+	logs = append(logs, fmt.Sprintf("[%s] [ERROR] 任务执行失败: %s", time.Now().Format("15:04:05"), errMsg))
+	updatedLogs, _ := json.Marshal(logs)
+
+	query := `UPDATE "BackgroundTask" 
+	          SET status = 'failed', details = $1, logs = $2, "updatedAt" = $3 
+	          WHERE id = $4`
+	
+	_, err = db.Pool.Exec(ctx, query, errMsg, updatedLogs, time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("标记任务失败记录错误时失败: %w", err)
+	}
+	return nil
+}
