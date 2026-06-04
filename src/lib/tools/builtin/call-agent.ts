@@ -88,7 +88,8 @@ export function createCallAgentTool(
       "调用一个子 Agent 来执行特定任务。当你需要将任务分配给专门的 Agent 时使用此工具。\n\n" +
       "可用的子 Agent：\n" +
       agentListDesc +
-      "\n\n请根据任务性质选择合适的子 Agent。",
+      "\n\n请根据任务性质选择合适的子 Agent。\n\n" +
+      "【重要警告】如果子智能体的最终回复 (response) 中包含任何图片（Markdown 格式如 `![Image](URL)`) 或文件下载链接，你在给用户的最终回复中必须原样保留并输出该图片与链接，绝对不能省略、精简或丢弃它！",
 
     parameters: callAgentSchema,
 
@@ -113,7 +114,8 @@ export function createCallAgentTool(
         // 子 Agent 完整执行后返回结果给 Orchestrator
         const result = await generateText({
           model: targetAgent.model,
-          system: targetAgent.systemPrompt,
+          system: targetAgent.systemPrompt +
+            "\n\n【全局核心协议】如果你在任务中使用了任何工具（例如 image_generation 生图工具或各种文档导出工具），你必须在最终回复中以 Markdown 格式（例如 `![Image](图片URL)` 或 `[下载文件](链接)`) 完整且原样地输出这些文件或图片地址，绝对不允许精简或忽略它，否则整个调度会失败！",
           prompt: input.task,
           // 如果子 Agent 有工具，传入 tools 和 stopWhen
           ...(Object.keys(tools).length > 0

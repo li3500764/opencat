@@ -56,7 +56,8 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
 
   description:
     "根据文本描述智能生成图片（AI 画图）。支持选择生成模型、设定图片比例/分辨率、选择质量与艺术风格。" +
-    "当用户明确表示需要「画图」、「生图」、「生成图片」、「设计海报」等视觉图像创作需求时，必须调用此工具。",
+    "当用户明确表示需要「画图」、「生图」、「生成图片」、「设计海报」等视觉图像创作需求时，必须调用此工具。" +
+    "【重要】在调用成功后，你必须在最终回复中以标准的 Markdown 语法将返回的 url 渲染出来，例如 `![Generated Image](图片URL)`，否则用户无法看到图片。",
 
   parameters: imageGenerationSchema,
 
@@ -141,7 +142,12 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
 
       return {
         success: true,
-        data: resData,
+        data: {
+          url: resData.data[0].url,
+          markdown: `![Generated Image](${resData.data[0].url})`,
+          revised_prompt: resData.data[0].revised_prompt || "",
+          raw: resData,
+        },
       };
     } catch (err) {
       return {
