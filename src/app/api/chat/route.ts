@@ -16,6 +16,7 @@ import { classifyDatabaseError } from "@/server/db/errors";
 import { decrypt, isEncryptionConfigError } from "@/lib/crypto";
 import { createModel, getProviderForModel, calculateCost, type ApiFormat, type ModelInfo } from "@/lib/llm";
 import { createAgentStream } from "@/lib/agent";
+import type { SubAgentInfo } from "@/lib/tools";
 import {
   searchRelevantMemories,
   formatMemoriesForPrompt,
@@ -101,19 +102,23 @@ async function handleChatRequest(req: Request) {
     toolNames: string[];
     maxSteps: number;
     temperature: number;
+    isOrchestrator: boolean;
   } | null = null;
+  let currentAgent: any = null;
 
   if (agentId) {
     const agent = await db.agent.findFirst({
       where: { id: agentId, project: { userId } },
     });
     if (agent) {
+      currentAgent = agent;
       agentConfig = {
         systemPrompt: agent.systemPrompt,
         model: agent.model,
         toolNames: agent.tools as string[],
         maxSteps: agent.maxSteps,
         temperature: agent.temperature,
+        isOrchestrator: agent.isOrchestrator,
       };
     }
   }
@@ -329,6 +334,37 @@ async function handleChatRequest(req: Request) {
     ? (agentConfig?.toolNames ?? toolNames ?? defaultTools)
     : [];
 
+  // ---- 9.1 加载子智能体列表（若为编排器模式） ----
+  const subAgents: SubAgentInfo[] = [];
+  if (agentConfig?.isOrchestrator && currentAgent) {
+    try {
+      const dbSubAgents = await db.agent.findMany({
+        where: {
+          projectId: currentAgent.projectId,
+          id: { not: currentAgent.id },
+        },
+      });
+
+      for (const sub of dbSubAgents) {
+        try {
+          const subModel = await getModelInstanceForUser(userId, sub.model);
+          subAgents.push({
+            name: sub.name,
+            description: sub.description || "",
+            systemPrompt: sub.systemPrompt,
+            model: subModel,
+            toolNames: sub.tools as string[],
+            maxSteps: sub.maxSteps,
+          });
+        } catch (err) {
+          console.error(`[Chat API] Failed to initialize sub-agent ${sub.name}:`, err);
+        }
+      }
+    } catch (err) {
+      console.error("[Chat API] Failed to query sub-agents:", err);
+    }
+  }
+
   const result = createAgentStream(
     {
       model,
@@ -340,7 +376,8 @@ async function handleChatRequest(req: Request) {
         userId,
         conversationId,
       },
-      // ★ Day 6: 传入 memory/RAG suffix 供 engine 追加到系统提示词
+      subAgents: subAgents.length > 0 ? subAgents : undefined,
+      // ★ Day 6: 传入 memory/RAG suffix 供 engine追加到系统提示词
       _systemPromptSuffix: systemPromptSuffix || undefined,
     },
     {
@@ -409,4 +446,69 @@ function extractTextFromParts(parts: UIMessage["parts"]): string {
     .filter((p): p is { type: "text"; text: string } => p.type === "text")
     .map((p) => p.text)
     .join("");
+}
+
+async function getModelInstanceForUser(userId: string, modelId: string) {
+  const staticProviderId = getProviderForModel(modelId);
+  let providerId = staticProviderId || "openai";
+  let apiKey: string | null = null;
+  let baseUrl: string | undefined;
+  let keyFormat: string | undefined;
+
+  let userKey: any = null;
+
+  if (!staticProviderId) {
+    try {
+      const activeKeys = await db.apiKey.findMany({
+        where: { userId, isActive: true },
+      });
+      const matchedKey = activeKeys.find((k) => {
+        const models = (k.models as unknown as ModelInfo[]) || [];
+        return models.some((m) => m.id === modelId);
+      });
+
+      if (matchedKey) {
+        userKey = matchedKey;
+        providerId = matchedKey.provider;
+      }
+    } catch (err) {
+      console.error("[SubAgent Key scan fail]:", err);
+    }
+  }
+
+  if (!userKey) {
+    userKey = await db.apiKey.findFirst({
+      where: { userId, provider: providerId, isActive: true },
+    });
+
+    if (!userKey && providerId !== "custom") {
+      userKey = await db.apiKey.findFirst({
+        where: { userId, provider: "custom", isActive: true },
+      });
+    }
+  }
+
+  if (userKey) {
+    apiKey = decrypt(userKey.encryptedKey, userKey.iv);
+    baseUrl = userKey.baseUrl || undefined;
+    keyFormat = userKey.format || undefined;
+  } else {
+    const envKeyMap: Record<string, string | undefined> = {
+      openai: process.env.OPENAI_API_KEY,
+      anthropic: process.env.ANTHROPIC_API_KEY,
+      deepseek: process.env.DEEPSEEK_API_KEY,
+      google: process.env.GOOGLE_API_KEY,
+    };
+    apiKey = envKeyMap[providerId] || null;
+  }
+
+  if (!apiKey) {
+    throw new Error(`No API key found for model "${modelId}".`);
+  }
+
+  return createModel(modelId, apiKey, {
+    baseUrl,
+    providerId,
+    format: keyFormat as ApiFormat | undefined,
+  });
 }

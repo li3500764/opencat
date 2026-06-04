@@ -55,6 +55,7 @@ const BUILTIN_TOOLS = [
   { name: "make_word", label: "制作 Word" },
   { name: "make_excel", label: "制作 Excel" },
   { name: "make_ppt", label: "制作 PPT" },
+  { name: "image_generation", label: "生成图片" },
 ];
 
 // ---------- 表单默认值 ----------
