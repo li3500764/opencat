@@ -101,8 +101,16 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
         };
       }
 
-      // 规范化接口基准地址
-      const apiBase = baseUrl ? baseUrl.replace(/\/$/, "") : "https://api.openai.com/v1";
+      // 规范化接口基准地址（支持自动补齐 /v1 后缀，以防中转接口因缺失 /v1 导致生图请求 404）
+      let apiBase = "https://api.openai.com/v1";
+      if (baseUrl) {
+        const cleanUrl = baseUrl.replace(/\/$/, "");
+        if (!cleanUrl.endsWith("/v1") && !cleanUrl.includes("/v1/")) {
+          apiBase = `${cleanUrl}/v1`;
+        } else {
+          apiBase = cleanUrl;
+        }
+      }
 
       // 3. 调用 OpenAI 图片生成 API
       const response = await fetch(`${apiBase}/images/generations`, {
