@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { db } from "@/server/db";
 import { decrypt } from "@/lib/crypto";
@@ -13,16 +13,24 @@ type CreateImageTaskInput = {
   size: "1024x1024" | "2048x2048" | "4096x4096" | "1024x1792" | "1792x1024";
   quality?: string;
   style?: string;
+  mode?: "text-to-image" | "image-to-image";
+  sourceImageUrl?: string;
+  sourceImageName?: string;
+  sourceImageMimeType?: string;
 };
 
 type ImageTaskDetails = {
   kind: "image-generation";
+  mode: "text-to-image" | "image-to-image";
   apiKeyId: string;
   model: string;
   prompt: string;
   size: string;
   quality?: string;
   style?: string;
+  sourceImageUrl?: string;
+  sourceImageName?: string;
+  sourceImageMimeType?: string;
   imageUrl?: string;
   remoteImageUrl?: string;
   revisedPrompt?: string;
@@ -55,6 +63,14 @@ function parseDetails(details: string | null | undefined): ImageTaskDetails | nu
   } catch {
     return null;
   }
+}
+
+function getPersistentImagesDir() {
+  return path.join(process.cwd(), "public", "downloads", "images");
+}
+
+function getPublicImageUrl(fileName: string) {
+  return `/downloads/images/${fileName}`;
 }
 
 async function updateTask(
@@ -126,7 +142,7 @@ async function ensureDefaultProject(userId: string) {
 }
 
 async function persistImageAsset(taskId: string, imageUrl: string) {
-  const taskDir = path.join(process.cwd(), "public", "generated-images");
+  const taskDir = getPersistentImagesDir();
   await mkdir(taskDir, { recursive: true });
 
   let bytes: Uint8Array;
@@ -158,34 +174,91 @@ async function persistImageAsset(taskId: string, imageUrl: string) {
     if (contentType.includes("webp")) extension = "webp";
   }
 
-  const fileName = `${taskId}.${extension}`;
+  const fileName = `result-${taskId}.${extension}`;
   const filePath = path.join(taskDir, fileName);
   await writeFile(filePath, bytes);
 
-  return `/generated-images/${fileName}`;
+  return getPublicImageUrl(fileName);
+}
+
+export async function persistReferenceImageAsset(taskId: string, file: File) {
+  const taskDir = getPersistentImagesDir();
+  await mkdir(taskDir, { recursive: true });
+
+  const fileExtension = file.name.includes(".")
+    ? file.name.split(".").pop()?.toLowerCase() || "png"
+    : file.type === "image/jpeg"
+      ? "jpg"
+      : file.type === "image/webp"
+        ? "webp"
+        : "png";
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const fileName = `source-${taskId}.${fileExtension}`;
+  const filePath = path.join(taskDir, fileName);
+  await writeFile(filePath, bytes);
+
+  return getPublicImageUrl(fileName);
 }
 
 export async function createImageGenerationTask(input: CreateImageTaskInput) {
   const project = await ensureDefaultProject(input.userId);
   const details: ImageTaskDetails = {
     kind: "image-generation",
+    mode: input.mode || "text-to-image",
     apiKeyId: input.apiKeyId,
     model: input.model,
     prompt: input.prompt,
     size: input.size,
     quality: input.quality,
     style: input.style,
+    sourceImageUrl: input.sourceImageUrl,
+    sourceImageName: input.sourceImageName,
+    sourceImageMimeType: input.sourceImageMimeType,
   };
 
   return backgroundTaskDb.backgroundTask.create({
     data: {
       projectId: project.id,
-      name: `Image generation: ${input.model}`,
+      name: `${details.mode === "image-to-image" ? "Image edit" : "Image generation"}: ${input.model}`,
       type: "image-generation",
       status: "pending",
       progress: 0,
       details: JSON.stringify(details),
       logs: ["[SYSTEM] Image generation task created."],
+    },
+  });
+}
+
+export async function updateImageGenerationTaskDetails(
+  taskId: string,
+  detailsPatch: Partial<ImageTaskDetails>
+) {
+  const current = (await backgroundTaskDb.backgroundTask.findUnique({
+    where: { id: taskId },
+    select: { details: true },
+  })) as Pick<BackgroundTaskRecord, "details"> | null;
+
+  if (!current) {
+    throw new Error("Image generation task not found");
+  }
+
+  const nextDetails = {
+    ...(parseDetails(current.details) || {
+      kind: "image-generation" as const,
+      mode: "text-to-image" as const,
+      apiKeyId: "",
+      model: "",
+      prompt: "",
+      size: "",
+    }),
+    ...detailsPatch,
+  };
+
+  await backgroundTaskDb.backgroundTask.update({
+    where: { id: taskId },
+    data: {
+      details: JSON.stringify(nextDetails),
     },
   });
 }
@@ -206,7 +279,15 @@ export async function runImageGenerationTask(taskId: string, userId: string) {
       status: "failed",
       progress: 100,
       log: "[ERROR] Task payload is invalid.",
-      details: { kind: "image-generation", apiKeyId: "", model: "", prompt: "", size: "", error: "Task payload is invalid." },
+      details: {
+        kind: "image-generation",
+        mode: "text-to-image",
+        apiKeyId: "",
+        model: "",
+        prompt: "",
+        size: "",
+        error: "Task payload is invalid.",
+      },
     });
     return;
   }
@@ -238,30 +319,69 @@ export async function runImageGenerationTask(taskId: string, userId: string) {
         ? cleanBaseUrl
         : `${cleanBaseUrl}/v1`;
 
-    const requestBody: Record<string, string | number> = {
-      model: details.model,
-      prompt: details.prompt,
-      size: details.size,
-      n: 1,
-    };
-
-    if (details.quality) requestBody.quality = details.quality;
-    if (details.style) requestBody.style = details.style;
+    let response: Response;
 
     await updateTask(taskId, {
       progress: 30,
-      log: "[SYSTEM] Image provider request sent.",
+      log:
+        details.mode === "image-to-image"
+          ? "[SYSTEM] Image edit request sent."
+          : "[SYSTEM] Image provider request sent.",
       details,
     });
 
-    const response = await fetch(`${apiBase}/images/generations`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    if (details.mode === "image-to-image") {
+      if (!details.sourceImageUrl) {
+        throw new Error("Reference image is missing");
+      }
+
+      const sourceFilePath = path.join(
+        getPersistentImagesDir(),
+        path.basename(details.sourceImageUrl)
+      );
+      const sourceBytes = await readFile(sourceFilePath);
+      const sourceFile = new File(
+        [sourceBytes],
+        details.sourceImageName || path.basename(sourceFilePath),
+        { type: details.sourceImageMimeType || "image/png" }
+      );
+
+      const formData = new FormData();
+      formData.append("model", details.model);
+      formData.append("prompt", details.prompt);
+      formData.append("size", details.size);
+      formData.append("n", "1");
+      formData.append("image", sourceFile);
+      if (details.quality) formData.append("quality", details.quality);
+      if (details.style) formData.append("style", details.style);
+
+      response = await fetch(`${apiBase}/images/edits`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: formData,
+      });
+    } else {
+      const requestBody: Record<string, string | number> = {
+        model: details.model,
+        prompt: details.prompt,
+        size: details.size,
+        n: 1,
+      };
+
+      if (details.quality) requestBody.quality = details.quality;
+      if (details.style) requestBody.style = details.style;
+
+      response = await fetch(`${apiBase}/images/generations`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(requestBody),
+      });
+    }
 
     const responseData = await response.json().catch(() => ({}));
     if (!response.ok) {

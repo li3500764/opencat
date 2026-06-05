@@ -9,12 +9,16 @@ export interface ImageGenerationTaskSummary {
   logs: string[];
   details: {
     kind?: string;
+    mode?: "text-to-image" | "image-to-image";
     apiKeyId?: string;
     model?: string;
     prompt?: string;
     size?: string;
     quality?: string;
     style?: string;
+    sourceImageUrl?: string;
+    sourceImageName?: string;
+    sourceImageMimeType?: string;
     imageUrl?: string;
     remoteImageUrl?: string;
     revisedPrompt?: string;

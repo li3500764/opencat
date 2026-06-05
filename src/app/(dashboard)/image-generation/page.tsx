@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Clock3,
   Download,
+  ImagePlus,
   Image as ImageIcon,
   Loader2,
   RefreshCw,
@@ -31,12 +32,15 @@ interface ImageGenerationTask {
   updatedAt: string;
   logs: string[];
   details: {
+    mode?: "text-to-image" | "image-to-image";
     apiKeyId?: string;
     model?: string;
     prompt?: string;
     size?: string;
     quality?: string;
     style?: string;
+    sourceImageUrl?: string;
+    sourceImageName?: string;
     imageUrl?: string;
     revisedPrompt?: string;
     error?: string;
@@ -85,10 +89,13 @@ export default function ImageGenerationPage() {
   const [selectedKeyId, setSelectedKeyId] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [mode, setMode] = useState<"text-to-image" | "image-to-image">("text-to-image");
   const [size, setSize] = useState<(typeof SIZES)[number]["value"]>("1024x1024");
   const [prompt, setPrompt] = useState(defaultPrompt);
   const [quality, setQuality] = useState("");
   const [style, setStyle] = useState("");
+  const [referenceImage, setReferenceImage] = useState<File | null>(null);
+  const [referencePreviewUrl, setReferencePreviewUrl] = useState<string | null>(null);
   const [isLoadingKeys, setIsLoadingKeys] = useState(true);
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
@@ -188,6 +195,17 @@ export default function ImageGenerationPage() {
   }, [defaultPrompt]);
 
   useEffect(() => {
+    if (!referenceImage) {
+      setReferencePreviewUrl(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(referenceImage);
+    setReferencePreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [referenceImage]);
+
+  useEffect(() => {
     if (!selectedKey) return;
     const modelStillExists = selectedKey.models.some((model) => model.id === selectedModel);
     if (modelStillExists) return;
@@ -219,22 +237,28 @@ export default function ImageGenerationPage() {
 
   const handleGenerate = async () => {
     if (!selectedKeyId || !selectedModel || !prompt.trim()) return;
+    if (mode === "image-to-image" && !referenceImage) {
+      setError(t("imageGeneration.sourceImageRequired"));
+      return;
+    }
 
     setIsCreatingTask(true);
     setError(null);
 
     try {
+      const formData = new FormData();
+      formData.append("apiKeyId", selectedKeyId);
+      formData.append("model", selectedModel);
+      formData.append("prompt", prompt);
+      formData.append("mode", mode);
+      formData.append("size", size);
+      if (quality.trim()) formData.append("quality", quality.trim());
+      if (style.trim()) formData.append("style", style.trim());
+      if (referenceImage) formData.append("referenceImage", referenceImage);
+
       const res = await fetch("/api/images/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKeyId: selectedKeyId,
-          model: selectedModel,
-          prompt,
-          size,
-          quality: quality.trim() || undefined,
-          style: style.trim() || undefined,
-        }),
+        body: formData,
       });
 
       const data = await res.json();
@@ -254,7 +278,13 @@ export default function ImageGenerationPage() {
     }
   };
 
-  const canGenerate = Boolean(selectedKeyId && selectedModel && prompt.trim() && !isCreatingTask);
+  const canGenerate = Boolean(
+    selectedKeyId &&
+      selectedModel &&
+      prompt.trim() &&
+      !isCreatingTask &&
+      (mode === "text-to-image" || referenceImage)
+  );
 
   return (
     <div className="flex h-full overflow-y-auto bg-background">
@@ -291,6 +321,34 @@ export default function ImageGenerationPage() {
             </div>
 
             <div className="space-y-4">
+              <div className="space-y-2">
+                <span className="text-xs font-medium text-muted">{t("imageGeneration.modeLabel")}</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMode("text-to-image")}
+                    className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                      mode === "text-to-image"
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-border bg-background text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {t("imageGeneration.modeTextToImage")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode("image-to-image")}
+                    className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                      mode === "image-to-image"
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-border bg-background text-muted hover:text-foreground"
+                    }`}
+                  >
+                    {t("imageGeneration.modeImageToImage")}
+                  </button>
+                </div>
+              </div>
+
               <label className="block space-y-1.5">
                 <span className="text-xs font-medium text-muted">{t("imageGeneration.keyLabel")}</span>
                 <select
@@ -354,6 +412,66 @@ export default function ImageGenerationPage() {
                   placeholder={t("imageGeneration.promptPlaceholder")}
                 />
               </label>
+
+              {mode === "image-to-image" && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <span className="text-xs font-medium text-muted">
+                        {t("imageGeneration.referenceImageLabel")}
+                      </span>
+                      <p className="mt-1 text-xs leading-5 text-muted">
+                        {t("imageGeneration.referenceImageHint")}
+                      </p>
+                    </div>
+                    {referenceImage && (
+                      <button
+                        type="button"
+                        onClick={() => setReferenceImage(null)}
+                        className="text-xs text-muted hover:text-foreground"
+                      >
+                        {t("imageGeneration.clearReferenceImage")}
+                      </button>
+                    )}
+                  </div>
+
+                  <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-background px-4 py-5 text-center transition-colors hover:border-accent/40">
+                    {referencePreviewUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={referencePreviewUrl}
+                        alt={t("imageGeneration.referenceImageLabel")}
+                        className="h-36 w-full rounded-lg object-contain"
+                      />
+                    ) : (
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+                        <ImagePlus className="h-7 w-7" />
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-foreground">
+                        {referenceImage
+                          ? referenceImage.name
+                          : t("imageGeneration.referenceImagePlaceholder")}
+                      </p>
+                      <p className="text-xs text-muted">
+                        {referenceImage
+                          ? t("imageGeneration.replaceReferenceImage")
+                          : t("imageGeneration.referenceImageHint")}
+                      </p>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0] || null;
+                        setReferenceImage(file);
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="block space-y-1.5">
@@ -469,6 +587,20 @@ export default function ImageGenerationPage() {
 
             {selectedTask && (
               <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                {selectedTask.details?.sourceImageUrl && (
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <p className="mb-2 text-xs font-semibold text-muted">
+                      {t("imageGeneration.sourceImage")}
+                    </p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={selectedTask.details.sourceImageUrl}
+                      alt={t("imageGeneration.sourceImage")}
+                      className="h-40 w-full rounded-lg object-contain"
+                    />
+                  </div>
+                )}
+
                 <div className="rounded-lg border border-border bg-card p-3">
                   <p className="mb-2 text-xs font-semibold text-muted">
                     {t("imageGeneration.originalPrompt")}
@@ -535,6 +667,10 @@ export default function ImageGenerationPage() {
                             {task.details?.model || task.name}
                           </p>
                           <p className="mt-1 text-[11px] text-muted">
+                            {task.details?.mode === "image-to-image"
+                              ? t("imageGeneration.modeImageToImage")
+                              : t("imageGeneration.modeTextToImage")}
+                            {" · "}
                             {task.details?.size || "-"} · {new Date(task.createdAt).toLocaleString()}
                           </p>
                         </div>

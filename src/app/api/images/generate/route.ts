@@ -14,7 +14,9 @@ import { isEncryptionConfigError } from "@/lib/crypto";
 import { classifyDatabaseError } from "@/server/db/errors";
 import {
   createImageGenerationTask,
+  persistReferenceImageAsset,
   runImageGenerationTask,
+  updateImageGenerationTaskDetails,
 } from "@/lib/images/task-runner";
 import { serializeImageGenerationTask } from "@/lib/images/task-serialization";
 
@@ -30,6 +32,7 @@ const generateImageSchema = z.object({
   apiKeyId: z.string().trim().min(1),
   model: z.string().trim().min(1),
   prompt: z.string().trim().min(1).max(8000),
+  mode: z.enum(["text-to-image", "image-to-image"]).default("text-to-image"),
   size: z
     .enum(["1024x1024", "2048x2048", "4096x4096", "1024x1792", "1792x1024"])
     .default("1024x1024"),
@@ -44,7 +47,25 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = await req.json();
+    const contentType = req.headers.get("content-type") || "";
+    let body: Record<string, unknown>;
+
+    if (contentType.includes("multipart/form-data")) {
+      const formData = await req.formData();
+      body = {
+        apiKeyId: formData.get("apiKeyId"),
+        model: formData.get("model"),
+        prompt: formData.get("prompt"),
+        mode: formData.get("mode") || "text-to-image",
+        size: formData.get("size") || "1024x1024",
+        quality: formData.get("quality") || undefined,
+        style: formData.get("style") || undefined,
+        referenceImage: formData.get("referenceImage"),
+      };
+    } else {
+      body = await req.json();
+    }
+
     const parsed = generateImageSchema.safeParse(body);
     if (!parsed.success) {
       return Response.json(
@@ -53,7 +74,17 @@ export async function POST(req: Request) {
       );
     }
 
-    const { apiKeyId, model, prompt, size, quality, style } = parsed.data;
+    const { apiKeyId, model, prompt, mode, size, quality, style } = parsed.data;
+    const referenceImage =
+      body.referenceImage instanceof File ? body.referenceImage : null;
+
+    if (mode === "image-to-image" && !referenceImage) {
+      return Response.json(
+        { error: "Reference image is required for image-to-image mode" },
+        { status: 400 }
+      );
+    }
+
     const key = await db.apiKey.findFirst({
       where: { id: apiKeyId, userId: session.user.id, isActive: true },
       select: { id: true },
@@ -68,10 +99,21 @@ export async function POST(req: Request) {
       apiKeyId,
       model,
       prompt,
+      mode,
       size,
       quality,
       style,
     })) as SerializableImageTask;
+
+    if (mode === "image-to-image" && referenceImage) {
+      const sourceImageUrl = await persistReferenceImageAsset(task.id, referenceImage);
+      await updateImageGenerationTaskDetails(task.id, {
+        mode,
+        sourceImageUrl,
+        sourceImageName: referenceImage.name,
+        sourceImageMimeType: referenceImage.type || "image/png",
+      });
+    }
 
     void runImageGenerationTask(task.id, session.user.id);
 

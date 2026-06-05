@@ -175,6 +175,9 @@ const en = {
       "Choose the dedicated key, model, and size explicitly. Each generation runs as a persistent background task and stays available after refresh.",
     formTitle: "Generation Settings",
     formSubtitle: "No guessing. You choose the exact key and model.",
+    modeLabel: "Mode",
+    modeTextToImage: "Text to Image",
+    modeImageToImage: "Image to Image",
     refreshKeys: "Refresh keys",
     keyLabel: "API Key",
     keyPlaceholder: "Select an API key",
@@ -189,6 +192,11 @@ const en = {
     qualityPlaceholder: "standard / hd",
     styleLabel: "Style",
     stylePlaceholder: "vivid / natural",
+    referenceImageLabel: "Reference Image",
+    referenceImageHint: "Upload one image, then rewrite its style, material, or composition with your prompt.",
+    referenceImagePlaceholder: "Choose an image",
+    replaceReferenceImage: "Replace image",
+    clearReferenceImage: "Clear image",
     createTask: "Start Generation",
     creatingTask: "Creating Task...",
     queueTip:
@@ -206,6 +214,7 @@ const en = {
     failed: "Failed",
     revisedPrompt: "Revised Prompt",
     originalPrompt: "Original Prompt",
+    sourceImage: "Source Image",
     download: "Download",
     logs: "Logs",
     noTasks: "No generation tasks yet",
@@ -215,6 +224,7 @@ const en = {
     latestResult: "Latest Result",
     resultSaved: "Saved locally",
     progressLabel: "Progress",
+    sourceImageRequired: "Please upload a reference image first",
   },
 
   // ---- Auth ----
