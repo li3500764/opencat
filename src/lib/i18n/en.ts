@@ -208,6 +208,8 @@ const en = {
     emptyTitle: "No images yet",
     emptyDesc: "Pick a dedicated image key and model, then start your first generation task.",
     generating: "Generating image...",
+    imageUnavailable: "Image file unavailable",
+    imageUnavailableHint: "This historical file is missing on the server. Generate again to recreate it.",
     pending: "Queued",
     running: "Generating",
     completed: "Completed",

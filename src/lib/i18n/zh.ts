@@ -209,6 +209,8 @@ const zh: TranslationKeys = {
     emptyTitle: "还没有图片",
     emptyDesc: "选择专用生图密钥和模型，然后启动第一条生成任务。",
     generating: "正在生成图片...",
+    imageUnavailable: "图片文件不可用",
+    imageUnavailableHint: "这条历史图片文件已不在服务器上，请重新生成。",
     pending: "排队中",
     running: "生成中",
     completed: "已完成",

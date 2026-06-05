@@ -99,6 +99,7 @@ export default function ImageGenerationPage() {
   const [isLoadingKeys, setIsLoadingKeys] = useState(true);
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [brokenImageUrls, setBrokenImageUrls] = useState<Record<string, true>>({});
   const [error, setError] = useState<string | null>(null);
 
   const selectedKey = useMemo(
@@ -113,8 +114,9 @@ export default function ImageGenerationPage() {
 
   const selectedTaskImageUrl = useMemo(() => {
     if (!selectedTask?.details?.imageUrl) return null;
+    if (brokenImageUrls[selectedTask.details.imageUrl]) return null;
     return selectedTask.details.imageUrl;
-  }, [selectedTask]);
+  }, [brokenImageUrls, selectedTask]);
 
   const models = selectedKey?.models || [];
   const hasActiveTask = tasks.some((task) => task.status === "pending" || task.status === "running");
@@ -172,6 +174,22 @@ export default function ImageGenerationPage() {
       if (!res.ok) throw new Error(failedToLoadTasksText);
       const data = (await res.json()) as ImageGenerationTask[];
       setTasks(data);
+      setBrokenImageUrls((current) => {
+        const next = { ...current };
+        const activeImageUrls = new Set(
+          data
+            .map((task) => task.details?.imageUrl)
+            .filter((imageUrl): imageUrl is string => Boolean(imageUrl))
+        );
+
+        for (const imageUrl of Object.keys(next)) {
+          if (!activeImageUrls.has(imageUrl)) {
+            delete next[imageUrl];
+          }
+        }
+
+        return next;
+      });
       setSelectedTaskId((current) => {
         if (current && data.some((task) => task.id === current)) {
           return current;
@@ -226,7 +244,7 @@ export default function ImageGenerationPage() {
 
     const timer = window.setInterval(() => {
       void fetchTasks({ silent: true });
-    }, 2500);
+    }, 5000);
 
     return () => window.clearInterval(timer);
   }, [fetchTasks, hasActiveTask]);
@@ -559,7 +577,10 @@ export default function ImageGenerationPage() {
                   alt={t("imageGeneration.latestResult")}
                   className="max-h-full max-w-full rounded-xl object-contain shadow-sm"
                   onError={(event) => {
-                    event.currentTarget.style.display = "none";
+                    const failedUrl = event.currentTarget.currentSrc || selectedTask.details?.imageUrl;
+                    if (failedUrl) {
+                      setBrokenImageUrls((current) => ({ ...current, [failedUrl]: true }));
+                    }
                   }}
                 />
               ) : selectedTask ? (
@@ -573,10 +594,14 @@ export default function ImageGenerationPage() {
                     <p className="text-sm font-medium text-foreground">
                       {selectedTask.status === "failed"
                         ? t("imageGeneration.failed")
+                        : selectedTask.details?.imageUrl
+                          ? t("imageGeneration.imageUnavailable")
                         : t("imageGeneration.generating")}
                     </p>
                     <p className="mt-1 text-xs leading-5">
-                      {t("imageGeneration.progressLabel")}: {selectedTask.progress}%
+                      {selectedTask.details?.imageUrl && selectedTask.status === "completed"
+                        ? t("imageGeneration.imageUnavailableHint")
+                        : `${t("imageGeneration.progressLabel")}: ${selectedTask.progress}%`}
                     </p>
                   </div>
                 </div>
@@ -605,6 +630,9 @@ export default function ImageGenerationPage() {
                       src={selectedTask.details.sourceImageUrl}
                       alt={t("imageGeneration.sourceImage")}
                       className="h-40 w-full rounded-lg object-contain"
+                      onError={(event) => {
+                        event.currentTarget.style.visibility = "hidden";
+                      }}
                     />
                   </div>
                 )}
@@ -657,7 +685,9 @@ export default function ImageGenerationPage() {
               ) : (
                 tasks.map((task) => {
                   const isSelected = task.id === selectedTask?.id;
-                  const hasImage = Boolean(task.details?.imageUrl);
+                  const hasImage = Boolean(
+                    task.details?.imageUrl && !brokenImageUrls[task.details.imageUrl]
+                  );
                   return (
                     <button
                       key={task.id}
