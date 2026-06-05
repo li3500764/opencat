@@ -31,6 +31,12 @@
   <img src="https://img.shields.io/badge/License-MIT-green" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/li3500764/opencat/stargazers">GitHub Stars</a> &nbsp;&bull;&nbsp;
+  <a href="https://github.com/li3500764/opencat/network/members">Forks</a> &nbsp;&bull;&nbsp;
+  <a href="https://github.com/li3500764/opencat/issues">Issues</a>
+</p>
+
 ---
 
 ## 这是什么？
@@ -226,6 +232,21 @@ src/
 - **拒绝 AI 渐变风** — 干净的暖灰 + 琥珀色调，灵感来自 Linear 和 Raycast
 - **安全优先** — AES-256-GCM 密钥加密、JWT 会话、bcrypt 密码哈希
 - **生产级模式** — 连接池、单例客户端、流式响应、用量追踪
+
+---
+
+## Star History
+
+<p align="center">
+  <a href="https://www.star-history.com/#li3500764/opencat&Date">
+    <img
+      alt="Star History Chart"
+      src="https://api.star-history.com/svg?repos=li3500764/opencat&type=Date"
+    />
+  </a>
+</p>
+
+这张图会直接渲染在仓库的 `README` 里，所以别人打开 GitHub 项目页往下滚动时，就能看到这个仓库的 Star 增长曲线。
 
 ---
 

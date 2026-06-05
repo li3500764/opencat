@@ -31,6 +31,12 @@
   <img src="https://img.shields.io/badge/License-MIT-green" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/li3500764/opencat/stargazers">GitHub Stars</a> &nbsp;&bull;&nbsp;
+  <a href="https://github.com/li3500764/opencat/network/members">Forks</a> &nbsp;&bull;&nbsp;
+  <a href="https://github.com/li3500764/opencat/issues">Issues</a>
+</p>
+
 ---
 
 ## What is OpenCat?
@@ -226,6 +232,21 @@ src/
 - **No AI-gradient UI** — Clean warm-gray + amber palette inspired by Linear and Raycast
 - **Security first** — AES-256-GCM encrypted key storage, JWT sessions, bcrypt password hashing
 - **Production patterns** — Connection pooling, singleton clients, streaming responses, usage tracking
+
+---
+
+## Star History
+
+<p align="center">
+  <a href="https://www.star-history.com/#li3500764/opencat&Date">
+    <img
+      alt="Star History Chart"
+      src="https://api.star-history.com/svg?repos=li3500764/opencat&type=Date"
+    />
+  </a>
+</p>
+
+This chart is rendered directly in the repository `README`, so when someone scrolls down on the GitHub project page they can see how the repo's star growth changes over time.
 
 ---
 
