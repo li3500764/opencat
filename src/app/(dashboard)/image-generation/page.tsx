@@ -73,9 +73,13 @@ function formatTaskStatus(task: ImageGenerationTask, t: ReturnType<typeof useTra
 }
 
 export default function ImageGenerationPage() {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const defaultPrompt = t("imageGeneration.defaultPrompt");
+  const failedToLoadKeysText = t("imageGeneration.failedToLoadKeys");
+  const failedToLoadTasksText = t("imageGeneration.failedToLoadTasks");
+  const createFailedText = t("imageGeneration.createFailed");
   const previousDefaultPromptRef = useRef(defaultPrompt);
+  const selectedKeyIdRef = useRef("");
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
   const [tasks, setTasks] = useState<ImageGenerationTask[]>([]);
   const [selectedKeyId, setSelectedKeyId] = useState("");
@@ -103,34 +107,48 @@ export default function ImageGenerationPage() {
   const models = selectedKey?.models || [];
   const hasActiveTask = tasks.some((task) => task.status === "pending" || task.status === "running");
 
+  useEffect(() => {
+    selectedKeyIdRef.current = selectedKeyId;
+  }, [selectedKeyId]);
+
   const fetchKeys = useCallback(async () => {
     setIsLoadingKeys(true);
     setError(null);
     try {
       const res = await fetch("/api/keys");
-      if (!res.ok) throw new Error(t("imageGeneration.failedToLoadKeys"));
+      if (!res.ok) throw new Error(failedToLoadKeysText);
       const data = (await res.json()) as ApiKeyItem[];
       setKeys(data);
-
-      const currentKeyStillExists = data.some((key) => key.id === selectedKeyId);
-      if (currentKeyStillExists) {
-        return;
-      }
-
-      const initialKey = pickInitialKey(data);
-      if (initialKey) {
-        setSelectedKeyId(initialKey.id);
-        const initialModel =
-          initialKey.models.find((model) => isImageModel(model.id)) ||
-          initialKey.models[0];
-        setSelectedModel(initialModel?.id || "");
-      }
+      const nextSelectedKeyId =
+        (selectedKeyIdRef.current &&
+        data.some((key) => key.id === selectedKeyIdRef.current)
+          ? selectedKeyIdRef.current
+          : pickInitialKey(data)?.id) || "";
+      setSelectedKeyId((currentKeyId) => {
+        if (currentKeyId && data.some((key) => key.id === currentKeyId)) {
+          return currentKeyId;
+        }
+        return nextSelectedKeyId;
+      });
+      setSelectedModel((currentModelId) => {
+        const currentKey =
+          data.find((key) => key.id === nextSelectedKeyId) || null;
+        if (!currentKey) return "";
+        if (currentModelId && currentKey.models.some((model) => model.id === currentModelId)) {
+          return currentModelId;
+        }
+        return (
+          currentKey.models.find((model) => isImageModel(model.id))?.id ||
+          currentKey.models[0]?.id ||
+          ""
+        );
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("imageGeneration.failedToLoadKeys"));
+      setError(err instanceof Error ? err.message : failedToLoadKeysText);
     } finally {
       setIsLoadingKeys(false);
     }
-  }, [selectedKeyId, t]);
+  }, [failedToLoadKeysText]);
 
   const fetchTasks = useCallback(async (options?: { silent?: boolean }) => {
     if (!options?.silent) {
@@ -139,7 +157,7 @@ export default function ImageGenerationPage() {
 
     try {
       const res = await fetch("/api/images/generate", { cache: "no-store" });
-      if (!res.ok) throw new Error(t("imageGeneration.failedToLoadTasks"));
+      if (!res.ok) throw new Error(failedToLoadTasksText);
       const data = (await res.json()) as ImageGenerationTask[];
       setTasks(data);
       setSelectedTaskId((current) => {
@@ -149,18 +167,18 @@ export default function ImageGenerationPage() {
         return data[0]?.id ?? null;
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("imageGeneration.failedToLoadTasks"));
+      setError(err instanceof Error ? err.message : failedToLoadTasksText);
     } finally {
       if (!options?.silent) {
         setIsLoadingTasks(false);
       }
     }
-  }, [t]);
+  }, [failedToLoadTasksText]);
 
   useEffect(() => {
     void fetchKeys();
     void fetchTasks();
-  }, [fetchKeys, fetchTasks]);
+  }, [fetchKeys, fetchTasks, locale]);
 
   useEffect(() => {
     setPrompt((current) =>
@@ -221,7 +239,7 @@ export default function ImageGenerationPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || t("imageGeneration.createFailed"));
+        throw new Error(data.error || createFailedText);
       }
 
       const createdTask = data.task as ImageGenerationTask | undefined;
@@ -230,7 +248,7 @@ export default function ImageGenerationPage() {
       }
       await fetchTasks({ silent: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("imageGeneration.createFailed"));
+      setError(err instanceof Error ? err.message : createFailedText);
     } finally {
       setIsCreatingTask(false);
     }
