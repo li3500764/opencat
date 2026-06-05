@@ -6,7 +6,7 @@
 //
 // 运作流程：
 // 1. 获取调用此工具用户的 API 密钥（优先从数据库加载匹配该模型的密钥，其次是 openai/custom，最后是环境变量）
-// 2. 构造符合 OpenAI /images/generations 规范的请求体
+// 2. 构造符合 OpenAI /images/generations 规范 of 请求体
 // 3. 发送异步 POST 请求并解析返回的图片 URL
 // 4. 返回标准结构数据，大模型可在接收到后通过 markdown 标签渲染在聊天窗中
 // ============================================================
@@ -69,7 +69,22 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
       let apiKeyModels: unknown = null;
       let requestModel = input.model || "dall-e-3";
 
-      // 1. 根据 userId 查找数据库中配置的 API 密钥
+      // 1. 清洗模型名称：如果请求的模型名称是以 gpt- 开头的聊天模型名，为了防止生图端点 404/502，将其修正为标准的 dall-e-3。
+      // 因为标准的 /images/generations 接口通常不接受 gpt- 系列对话模型作为参数。
+      const isChatModel = requestModel.toLowerCase().startsWith("gpt-") || requestModel.toLowerCase().includes("chat");
+      const isKnownImageModel =
+        requestModel.toLowerCase().includes("dall") ||
+        requestModel.toLowerCase().includes("flux") ||
+        requestModel.toLowerCase().includes("midjourney") ||
+        requestModel.toLowerCase().includes("mj") ||
+        requestModel.toLowerCase().includes("sd") ||
+        requestModel.toLowerCase().includes("stable-diffusion");
+
+      if (isChatModel && !isKnownImageModel) {
+        requestModel = "dall-e-3";
+      }
+
+      // 2. 根据 userId 查找数据库中配置的 API 密钥
       if (userId) {
         try {
           const activeKeys = await db.apiKey.findMany({
@@ -112,7 +127,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
         }
       }
 
-      // 2. 回退读取系统环境变量
+      // 3. 回退读取系统环境变量
       if (!apiKey) {
         apiKey = process.env.OPENAI_API_KEY || null;
         baseUrl = process.env.OPENAI_API_BASE || undefined;
@@ -137,7 +152,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
         }
       }
 
-      // 3. 自动适配第三方中转代理已配置的模型（无硬编码，由配置数据驱动）
+      // 4. 自动适配第三方中转代理已配置的模型（无硬编码，由配置数据驱动）
       if (apiKeyModels) {
         try {
           const customModels = (apiKeyModels as unknown as { id: string }[]) || [];
@@ -148,7 +163,11 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
             );
 
             // 如果配置列表里没有当前请求的模型（比如不支持 dall-e-3），则启动智能重映射
-            if (!hasRequestedModel) {
+            // 注意：如果当前请求的是标准的 Dall-E 模型，我们直接保留，不进行重映射。
+            // 因为几乎所有兼容 OpenAI 的中转站 /images/generations 接口都直接支持 dall-e-3 和 dall-e-2，
+            // 即使该 API Key 配置的可用对话模型列表中没有它们。
+            const isStandardDallE = requestModel.toLowerCase().includes("dall-e");
+            if (!hasRequestedModel && !isStandardDallE) {
               // 1. 优先寻找名称中带有生图特征的模型（如包含 image, dall, midjourney, mj, flux, sd 等关键字）
               const imageKeywords = ["image", "dall", "midjourney", "mj", "flux", "sd"];
               const matchedModel = customModels.find((m) =>
@@ -168,98 +187,28 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
         }
       }
 
-      // 4. 调用 OpenAI 图片生成 API
+      // 5. 构造请求体，只有当模型名称包含 dall-e-3 时才传递 quality 和 style 参数，以防第三方代理（如 gpt-image-2）报错 502 Bad Gateway
+      const reqBody: Record<string, string | number> = {
+        prompt: input.prompt,
+        model: requestModel,
+        n: 1, // 绘图数量默认为 1
+        size: input.size,
+      };
+
+      if (requestModel.toLowerCase().includes("dall-e-3")) {
+        if (input.quality) reqBody.quality = input.quality;
+        if (input.style) reqBody.style = input.style;
+      }
+
+      // 5. 调用生图 API
       const response = await fetch(`${apiBase}/images/generations`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${apiKey}`,
         },
-        body: JSON.stringify({
-          prompt: input.prompt,
-          model: requestModel,
-          n: 1, // DALL-E 3 仅支持 n=1，此处统一默认为 1
-          size: input.size,
-          quality: input.quality,
-          style: input.style,
-        }),
+        body: JSON.stringify(reqBody),
       });
-
-      // 4.1 智能降级通道：如果第三方中转不支持标准的 /images/generations 端点（返回 404 / 405）
-      // 则自动尝试向聊天接口 /chat/completions 发送普通的生图对话请求（兼容将 Midjourney/DALL-E 包装为聊天模型的渠道）
-      if (response.status === 404 || response.status === 405) {
-        const chatResponse = await fetch(`${apiBase}/chat/completions`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: requestModel,
-            messages: [
-              { 
-                role: "system", 
-                content: "你是一个专业的生图服务，接收到用户的提示词后，你必须且只能直接在回复中输出生成的图片 Markdown 链接（如 ![Generated Image](https://...)），绝对不允许输出任何其他解释性或建议性文字。" 
-              },
-              { 
-                role: "user", 
-                content: `/imagine prompt: ${input.prompt}` 
-              }
-            ],
-            stream: false
-          })
-        });
-
-        if (chatResponse.ok) {
-          const chatData = await chatResponse.json();
-          const content = chatData.choices?.[0]?.message?.content || "";
-          
-          // 从聊天响应文本中精确提取图片 URL (匹配 Markdown 图片、裸 URL、含双引号或括号包裹等情况)
-          const mdUrlRegex = /!\[.*?\]\((https?:\/\/[^\s\)]+)\)/;
-          const rawUrlRegex = /(https?:\/\/[^\s"'`<>]+(?:\.png|\.jpg|\.jpeg|\.webp|\.gif|\/generations\/[^\s"'`<>]+))/i;
-          const generalUrlRegex = /(https?:\/\/[^\s"'`<>]+)/g;
-
-          let matchedUrl = "";
-          const mdMatch = content.match(mdUrlRegex);
-          if (mdMatch && mdMatch[1]) {
-            matchedUrl = mdMatch[1];
-          } else {
-            const rawMatch = content.match(rawUrlRegex);
-            if (rawMatch && rawMatch[0]) {
-              matchedUrl = rawMatch[0];
-            } else {
-              const allUrls = content.match(generalUrlRegex) || [];
-              if (allUrls.length > 0) {
-                // 过滤可能存在的无意义标点字符
-                matchedUrl = allUrls[0].replace(/[\.,\)"'\*]*$/, "");
-              }
-            }
-          }
-
-          if (matchedUrl) {
-            return {
-              success: true,
-              data: {
-                url: matchedUrl,
-                markdown: `![Generated Image](${matchedUrl})`,
-                revised_prompt: "",
-                raw: chatData,
-              },
-            };
-          } else {
-            return {
-              success: false,
-              error: `聊天生图降级执行成功，但未能在响应文本中提取出有效图片链接。回复内容: ${content}`,
-            };
-          }
-        } else {
-          const errorText = await chatResponse.text().catch(() => "");
-          return {
-            success: false,
-            error: `生图接口返回 ${response.status}，降级至聊天生图亦失败: ${chatResponse.statusText} ${errorText}`,
-          };
-        }
-      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -272,7 +221,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
 
       const resData = await response.json();
 
-      // 5. 验证图片 URL 数据返回格式
+      // 6. 验证图片 URL 数据返回格式
       if (!resData.data || !resData.data[0] || !resData.data[0].url) {
         return {
           success: false,
