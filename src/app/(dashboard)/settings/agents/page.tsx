@@ -45,6 +45,12 @@ interface AgentItem {
   _count: { conversations: number };
 }
 
+interface AvailableModelItem {
+  id: string;
+  name: string;
+  providerLabel?: string;
+}
+
 // ---------- 内置工具列表（硬编码，与 Day 4 注册的工具对应） ----------
 // 将来可以从 /api/tools 动态获取
 const BUILTIN_TOOLS = [
@@ -55,7 +61,6 @@ const BUILTIN_TOOLS = [
   { name: "make_word", label: "制作 Word" },
   { name: "make_excel", label: "制作 Excel" },
   { name: "make_ppt", label: "制作 PPT" },
-  { name: "image_generation", label: "生成图片" },
 ];
 
 // ---------- 表单默认值 ----------
@@ -115,8 +120,8 @@ export default function AgentsPage() {
     try {
       const res = await fetch("/api/models");
       if (res.ok) {
-        const data = await res.json();
-        const list = data.map((m: any) => ({
+        const data = (await res.json()) as AvailableModelItem[];
+        const list = data.map((m) => ({
           id: m.id,
           name: m.name,
           provider: m.providerLabel || "自定义",
@@ -153,7 +158,7 @@ export default function AgentsPage() {
       model: agent.model,
       temperature: agent.temperature,
       maxSteps: agent.maxSteps,
-      tools: agent.tools as string[],
+      tools: (agent.tools as string[]).filter((tool) => tool !== "image_generation"),
       isOrchestrator: agent.isOrchestrator,
     });
     setEditingId(agent.id);

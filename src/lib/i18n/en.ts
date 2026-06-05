@@ -195,7 +195,6 @@ const en = {
     memory_save: "Save Memory",
     memory_search: "Search Memory",
     call_agent: "Call Agent",
-    image_generation: "Generate Image",
     inputParams: "INPUT PARAMS",
     outputResult: "OUTPUT RESULT",
     error: "ERROR",

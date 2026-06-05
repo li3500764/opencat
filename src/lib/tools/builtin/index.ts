@@ -16,6 +16,4 @@ export { makePdfTool } from "./make-pdf";
 export { makeWordTool } from "./make-word";
 export { makeExcelTool } from "./make-excel";
 export { makePptTool } from "./make-ppt";
-export { imageGenerationTool } from "./image-generation";
-
 

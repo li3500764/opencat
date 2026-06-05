@@ -17,6 +17,7 @@ import { decrypt, isEncryptionConfigError } from "@/lib/crypto";
 import { createModel, getProviderForModel, calculateCost, type ApiFormat, type ModelInfo } from "@/lib/llm";
 import { createAgentStream } from "@/lib/agent";
 import type { SubAgentInfo } from "@/lib/tools";
+import type { ApiKey } from "@prisma/client";
 import {
   searchRelevantMemories,
   formatMemoriesForPrompt,
@@ -104,7 +105,7 @@ async function handleChatRequest(req: Request) {
     temperature: number;
     isOrchestrator: boolean;
   } | null = null;
-  let currentAgent: any = null;
+  let currentAgent: { id: string; projectId: string } | null = null;
 
   if (agentId) {
     const agent = await db.agent.findFirst({
@@ -147,7 +148,7 @@ async function handleChatRequest(req: Request) {
   let baseUrl: string | undefined;
   let keyFormat: string | undefined;   // ★ 用户 Key 上存的 API 格式
 
-  let userKey: any = null;
+  let userKey: ApiKey | null = null;
 
   // 如果是自定义模型，反向扫描用户的所有激活 ApiKey 记录，看该模型挂载在哪个 Key 下
   if (!staticProviderId) {
@@ -248,6 +249,11 @@ async function handleChatRequest(req: Request) {
     conversationId = conversation.id;
   }
 
+  if (!conversationId) {
+    return Response.json({ error: "Conversation could not be initialized" }, { status: 500 });
+  }
+  const activeConversationId = conversationId;
+
   // ---- 6. 存用户消息 ----
   const lastUserMessage = [...messages].reverse().find((m) => m.role === "user");
   const userText = lastUserMessage ? extractTextFromParts(lastUserMessage.parts) : "";
@@ -264,7 +270,7 @@ async function handleChatRequest(req: Request) {
     }
 
     await db.message.create({
-      data: { conversationId, role: "user", content: contentToStore },
+      data: { conversationId: activeConversationId, role: "user", content: contentToStore },
     });
   }
 
@@ -329,7 +335,7 @@ async function handleChatRequest(req: Request) {
   const modelMessages = await convertToModelMessages(messages);
 
   // ---- 9. 使用 Agent Engine 创建流式响应 ----
-  const defaultTools = ["memory_save", "memory_search", "image_generation"];
+  const defaultTools = ["memory_save", "memory_search"];
   const finalToolNames = enableTools
     ? (agentConfig?.toolNames ?? toolNames ?? defaultTools)
     : [];
@@ -374,7 +380,7 @@ async function handleChatRequest(req: Request) {
       toolNames: finalToolNames,
       context: {
         userId,
-        conversationId,
+        conversationId: activeConversationId,
       },
       subAgents: subAgents.length > 0 ? subAgents : undefined,
       // ★ Day 6: 传入 memory/RAG suffix 供 engine追加到系统提示词
@@ -395,7 +401,7 @@ async function handleChatRequest(req: Request) {
 
       await db.message.create({
         data: {
-          conversationId: conversationId!,
+          conversationId: activeConversationId,
           role: "assistant",
           content: text,
           model: modelId,
@@ -404,7 +410,7 @@ async function handleChatRequest(req: Request) {
       });
 
       await db.conversation.update({
-        where: { id: conversationId! },
+        where: { id: activeConversationId },
         data: {
           updatedAt: new Date(),
           // ★ 同步更新 agentId，确保切换 Agent 后下次打开对话能恢复
@@ -437,7 +443,7 @@ async function handleChatRequest(req: Request) {
 
   // ---- 11. 返回 SSE 流 ----
   return result.toUIMessageStreamResponse({
-    headers: { "X-Conversation-Id": conversationId },
+    headers: { "X-Conversation-Id": activeConversationId },
   });
 }
 
@@ -455,7 +461,7 @@ async function getModelInstanceForUser(userId: string, modelId: string) {
   let baseUrl: string | undefined;
   let keyFormat: string | undefined;
 
-  let userKey: any = null;
+  let userKey: ApiKey | null = null;
 
   if (!staticProviderId) {
     try {

@@ -22,7 +22,7 @@
 
 import { tool, type ToolSet } from "ai";
 import type { ToolDefinition, ToolExecutionContext, RegisteredTool } from "./types";
-import { calculatorTool, datetimeTool, httpRequestTool, memorySaveTool, memorySearchTool, propertyMatchTool, appointmentTool, stockQueryTool, marketNewsSearchTool, makePdfTool, makeWordTool, makeExcelTool, makePptTool, imageGenerationTool } from "./builtin";
+import { calculatorTool, datetimeTool, httpRequestTool, memorySaveTool, memorySearchTool, propertyMatchTool, appointmentTool, stockQueryTool, marketNewsSearchTool, makePdfTool, makeWordTool, makeExcelTool, makePptTool } from "./builtin";
 
 // ---------- 注册中心类 ----------
 // 用 class 实现，方便管理状态（存储已注册的工具）
@@ -163,7 +163,6 @@ registry.register(makePdfTool, "builtin");
 registry.register(makeWordTool, "builtin");
 registry.register(makeExcelTool, "builtin");
 registry.register(makePptTool, "builtin");
-registry.register(imageGenerationTool, "builtin");
 
 // 导出单例
 export { registry as toolRegistry };

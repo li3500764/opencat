@@ -9,10 +9,7 @@ type ImageGenerationResponse = {
 };
 
 type ToolResultLike = {
-  output?: {
-    success?: boolean;
-    data?: unknown;
-  };
+  output?: unknown;
 };
 
 function extractMarkdownStrings(value: unknown): string[] {
@@ -50,13 +47,25 @@ export function normalizeImageGenerationResult(resData: ImageGenerationResponse)
   };
 }
 
+function isSuccessfulToolOutput(output: unknown): output is { success: true; data?: unknown } {
+  return (
+    typeof output === "object" &&
+    output !== null &&
+    "success" in output &&
+    (output as { success?: unknown }).success === true
+  );
+}
+
 export function mergeToolRenderedContent(
   responseText: string,
   toolResults: ToolResultLike[] | undefined
 ) {
   const markdownBlocks = (toolResults || [])
-    .filter((toolResult) => toolResult.output?.success)
-    .flatMap((toolResult) => extractMarkdownStrings(toolResult.output?.data))
+    .flatMap((toolResult) =>
+      isSuccessfulToolOutput(toolResult.output)
+        ? extractMarkdownStrings(toolResult.output.data)
+        : []
+    )
     .filter((markdown, index, list) => list.indexOf(markdown) === index)
     .filter((markdown) => !responseText.includes(markdown));
 

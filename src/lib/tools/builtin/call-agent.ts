@@ -116,7 +116,7 @@ export function createCallAgentTool(
         const result = await generateText({
           model: targetAgent.model,
           system: targetAgent.systemPrompt +
-            "\n\n【全局核心协议】如果你在任务中使用了任何工具（例如 image_generation 生图工具或各种文档导出工具），你必须在最终回复中以 Markdown 格式（例如 `![Image](图片URL)` 或 `[下载文件](链接)`) 完整且原样地输出这些文件或图片地址，绝对不允许精简或忽略它，否则整个调度会失败！",
+            "\n\n【全局核心协议】如果你在任务中使用了任何文件导出工具，你必须在最终回复中以 Markdown 格式（例如 `[下载文件](链接)`) 完整且原样地输出文件地址，绝对不允许精简或忽略它，否则整个调度会失败！",
           prompt: input.task,
           // 如果子 Agent 有工具，传入 tools 和 stopWhen
           ...(Object.keys(tools).length > 0

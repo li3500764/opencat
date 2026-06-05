@@ -197,7 +197,6 @@ const zh: TranslationKeys = {
     memory_save: "保存记忆",
     memory_search: "搜索记忆",
     call_agent: "调用 Agent",
-    image_generation: "生成图片",
     inputParams: "输入参数",
     outputResult: "执行结果",
     error: "错误",
