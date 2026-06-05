@@ -52,8 +52,14 @@ func TestBuildImageEditMultipartRequestUsesImageFileField(t *testing.T) {
 		t.Fatalf("read request body: %v", err)
 	}
 	bodyText := string(body)
-	if !strings.Contains(bodyText, `name="image"; filename="source-task.jpg"`) {
+	if !strings.Contains(bodyText, `name="image[]"; filename="source-task.jpg"`) {
 		t.Fatalf("expected image file field, got %s", bodyText)
+	}
+	if !strings.Contains(bodyText, `name="response_format"`) || !strings.Contains(bodyText, "b64_json") {
+		t.Fatalf("expected response_format=b64_json, got %s", bodyText)
+	}
+	if !strings.Contains(bodyText, `name="output_format"`) || !strings.Contains(bodyText, "png") {
+		t.Fatalf("expected output_format=png, got %s", bodyText)
 	}
 	if !strings.Contains(bodyText, "fake-image-bytes") {
 		t.Fatalf("expected source image bytes in multipart body")
@@ -124,5 +130,15 @@ func TestDescribeUnexpectedResponseIncludesBodySnippet(t *testing.T) {
 	}
 	if !strings.Contains(message, "error code: upstream timeout") {
 		t.Fatalf("expected body snippet in message, got %s", message)
+	}
+}
+
+func TestBuildImageAPIBaseURLRewritesHeiyuWebHostToSLBHost(t *testing.T) {
+	baseURL := "https://www.heiyucode.com"
+	got := buildImageAPIBaseURL(&baseURL)
+	want := "https://api-slb.heiyucode.com/v1"
+
+	if got != want {
+		t.Fatalf("expected %s, got %s", want, got)
 	}
 }

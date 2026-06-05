@@ -309,6 +309,12 @@ func (e *ImageGenerationExecutor) buildImageEditMultipartRequest(
 	if err := writer.WriteField("n", "1"); err != nil {
 		return nil, err
 	}
+	if err := writer.WriteField("response_format", "b64_json"); err != nil {
+		return nil, err
+	}
+	if err := writer.WriteField("output_format", "png"); err != nil {
+		return nil, err
+	}
 	if details.Quality != "" {
 		if err := writer.WriteField("quality", details.Quality); err != nil {
 			return nil, err
@@ -320,7 +326,7 @@ func (e *ImageGenerationExecutor) buildImageEditMultipartRequest(
 		}
 	}
 
-	fileWriter, err := writer.CreateFormFile("image", fileNameOrFallback(details.SourceImageName, "source-"+taskID+".png"))
+	fileWriter, err := writer.CreateFormFile("image[]", fileNameOrFallback(details.SourceImageName, "source-"+taskID+".png"))
 	if err != nil {
 		return nil, fmt.Errorf("创建参考图表单字段失败: %w", err)
 	}
@@ -447,6 +453,7 @@ func buildImageAPIBaseURL(baseURL *string) string {
 	if baseURL != nil && strings.TrimSpace(*baseURL) != "" {
 		cleanBaseURL = strings.TrimRight(strings.TrimSpace(*baseURL), "/")
 	}
+	cleanBaseURL = strings.Replace(cleanBaseURL, "https://www.heiyucode.com", "https://api-slb.heiyucode.com", 1)
 	if strings.HasSuffix(cleanBaseURL, "/v1") || strings.Contains(cleanBaseURL, "/v1/") {
 		return cleanBaseURL
 	}
