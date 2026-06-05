@@ -3,13 +3,28 @@
 // ============================================================
 // Dedicated image generation endpoint. This intentionally does not use
 // Agent tool calling: the UI chooses an API key and model explicitly.
+//
+// This route now creates a persistent background task, returns immediately,
+// and lets the generation continue even if the page refreshes.
 
 import { z } from "zod/v4";
 import { auth } from "@/lib/auth";
 import { db } from "@/server/db";
-import { decrypt, isEncryptionConfigError } from "@/lib/crypto";
+import { isEncryptionConfigError } from "@/lib/crypto";
 import { classifyDatabaseError } from "@/server/db/errors";
-import { normalizeImageGenerationResult } from "@/lib/tools/builtin/image-generation-utils";
+import {
+  createImageGenerationTask,
+  runImageGenerationTask,
+} from "@/lib/images/task-runner";
+import { serializeImageGenerationTask } from "@/lib/images/task-serialization";
+
+type SerializableImageTask = Parameters<typeof serializeImageGenerationTask>[0];
+
+const backgroundTaskDb = db as typeof db & {
+  backgroundTask: {
+    findMany: (args: unknown) => Promise<unknown[]>;
+  };
+};
 
 const generateImageSchema = z.object({
   apiKeyId: z.string().trim().min(1),
@@ -40,72 +55,30 @@ export async function POST(req: Request) {
 
     const { apiKeyId, model, prompt, size, quality, style } = parsed.data;
     const key = await db.apiKey.findFirst({
-      where: {
-        id: apiKeyId,
-        userId: session.user.id,
-        isActive: true,
-      },
+      where: { id: apiKeyId, userId: session.user.id, isActive: true },
+      select: { id: true },
     });
 
     if (!key) {
       return Response.json({ error: "API key not found or inactive" }, { status: 404 });
     }
 
-    const apiKey = decrypt(key.encryptedKey, key.iv);
-    const cleanBaseUrl = (key.baseUrl || "https://api.openai.com").replace(/\/$/, "");
-    const apiBase =
-      cleanBaseUrl.endsWith("/v1") || cleanBaseUrl.includes("/v1/")
-        ? cleanBaseUrl
-        : `${cleanBaseUrl}/v1`;
-
-    const requestBody: Record<string, string | number> = {
+    const task = (await createImageGenerationTask({
+      userId: session.user.id,
+      apiKeyId,
       model,
       prompt,
       size,
-      n: 1,
-    };
+      quality,
+      style,
+    })) as SerializableImageTask;
 
-    if (quality) requestBody.quality = quality;
-    if (style) requestBody.style = style;
-
-    const response = await fetch(`${apiBase}/images/generations`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    const responseData = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      const message =
-        responseData?.error?.message ||
-        responseData?.message ||
-        response.statusText ||
-        "Image generation failed";
-      return Response.json({ error: message, raw: responseData }, { status: response.status });
-    }
-
-    const normalized = normalizeImageGenerationResult(responseData);
-    if (!normalized) {
-      return Response.json(
-        { error: "Image provider returned no usable image data", raw: responseData },
-        { status: 502 }
-      );
-    }
+    void runImageGenerationTask(task.id, session.user.id);
 
     return Response.json({
       success: true,
-      image: normalized,
-      request: {
-        apiKeyId,
-        model,
-        size,
-      },
-      raw: responseData,
-    });
+      task: serializeImageGenerationTask(task),
+    }, { status: 202 });
   } catch (error) {
     if (isEncryptionConfigError(error)) {
       return Response.json(
@@ -128,6 +101,41 @@ export async function POST(req: Request) {
 
     return Response.json(
       { error: error instanceof Error ? error.message : "Image generation failed" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const tasks = (await backgroundTaskDb.backgroundTask.findMany({
+      where: {
+        type: "image-generation",
+        project: {
+          userId: session.user.id,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 30,
+    })) as SerializableImageTask[];
+
+    return Response.json(tasks.map(serializeImageGenerationTask));
+  } catch (error) {
+    const databaseError = classifyDatabaseError(error);
+    if (databaseError) {
+      return Response.json(
+        { error: databaseError.message, code: databaseError.code },
+        { status: databaseError.status }
+      );
+    }
+
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Failed to load image tasks" },
       { status: 500 }
     );
   }

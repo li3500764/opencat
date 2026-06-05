@@ -111,7 +111,7 @@ export function Sidebar({ user }: SidebarProps) {
           }`}
         >
           <Layers className="h-3.5 w-3.5 shrink-0" />
-          <span>{locale === "en" ? "Smart Workspace" : "智能工作台"}</span>
+          <span>{t("sidebar.smartWorkspace")}</span>
         </button>
 
         {/* 数据看板 (ROI仪表盘) */}
@@ -136,14 +136,14 @@ export function Sidebar({ user }: SidebarProps) {
           }`}
         >
           <ImageIcon className="h-3.5 w-3.5 shrink-0" />
-          <span>{locale === "en" ? "AI Images" : "AI 生图"}</span>
+          <span>{t("sidebar.imageGeneration")}</span>
         </button>
       </div>
 
       {/* 对话列表 (调试沙箱分组) */}
       <div className="px-4 pt-3 pb-0.5">
         <span className="text-[9px] font-bold text-muted uppercase tracking-wider">
-          {locale === "en" ? "Agent Sandbox" : "Agent 调试沙箱"}
+          {t("sidebar.agentSandbox")}
         </span>
       </div>
 

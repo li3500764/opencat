@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CheckCircle2,
+  Clock3,
   Download,
   Image as ImageIcon,
   Loader2,
   RefreshCw,
   Sparkles,
   Wand2,
+  XCircle,
 } from "lucide-react";
+import { useTranslation } from "@/lib/i18n";
 
 interface ApiKeyItem {
   id: string;
@@ -18,10 +22,25 @@ interface ApiKeyItem {
   models: { id: string; name: string }[];
 }
 
-interface GeneratedImage {
-  url: string;
-  markdown: string;
-  revised_prompt: string;
+interface ImageGenerationTask {
+  id: string;
+  name: string;
+  status: "pending" | "running" | "completed" | "failed" | string;
+  progress: number;
+  createdAt: string;
+  updatedAt: string;
+  logs: string[];
+  details: {
+    apiKeyId?: string;
+    model?: string;
+    prompt?: string;
+    size?: string;
+    quality?: string;
+    style?: string;
+    imageUrl?: string;
+    revisedPrompt?: string;
+    error?: string;
+  } | null;
 }
 
 const IMAGE_KEYWORDS = ["image", "dall", "flux", "midjourney", "mj", "sd", "stable-diffusion"];
@@ -32,9 +51,6 @@ const SIZES = [
   { value: "1024x1792", label: "9:16", hint: "Portrait" },
   { value: "1792x1024", label: "16:9", hint: "Wide" },
 ] as const;
-
-const DEFAULT_PROMPT =
-  "Generate a premium 3D app icon, 1:1 square, centered subject, no text. A chubby cream-colored cartoon cat in Pop Mart blind box toy style with smooth matte clay texture, symmetrical light orange maple leaf cheek markings, dark brown fringe, confident smirk, one winking eye and one glowing soft blue cybernetic AI eye. Soft studio lighting, subtle drop shadow, white rounded-rectangle app icon frame, clean white background, iOS App Store premium style, octane render quality.";
 
 function isImageModel(modelId: string) {
   const value = modelId.toLowerCase();
@@ -49,17 +65,29 @@ function pickInitialKey(keys: ApiKeyItem[]) {
   );
 }
 
+function formatTaskStatus(task: ImageGenerationTask, t: ReturnType<typeof useTranslation>["t"]) {
+  if (task.status === "completed") return t("imageGeneration.completed");
+  if (task.status === "failed") return t("imageGeneration.failed");
+  if (task.status === "running") return t("imageGeneration.running");
+  return t("imageGeneration.pending");
+}
+
 export default function ImageGenerationPage() {
+  const { t } = useTranslation();
+  const defaultPrompt = t("imageGeneration.defaultPrompt");
+  const previousDefaultPromptRef = useRef(defaultPrompt);
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
+  const [tasks, setTasks] = useState<ImageGenerationTask[]>([]);
   const [selectedKeyId, setSelectedKeyId] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [size, setSize] = useState<(typeof SIZES)[number]["value"]>("1024x1024");
-  const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
+  const [prompt, setPrompt] = useState(defaultPrompt);
   const [quality, setQuality] = useState("");
   const [style, setStyle] = useState("");
-  const [image, setImage] = useState<GeneratedImage | null>(null);
   const [isLoadingKeys, setIsLoadingKeys] = useState(true);
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selectedKey = useMemo(
@@ -67,16 +95,28 @@ export default function ImageGenerationPage() {
     [keys, selectedKeyId]
   );
 
-  const models = selectedKey?.models || [];
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.id === selectedTaskId) || tasks[0] || null,
+    [tasks, selectedTaskId]
+  );
 
-  const fetchKeys = async () => {
+  const models = selectedKey?.models || [];
+  const hasActiveTask = tasks.some((task) => task.status === "pending" || task.status === "running");
+
+  const fetchKeys = useCallback(async () => {
     setIsLoadingKeys(true);
     setError(null);
     try {
       const res = await fetch("/api/keys");
-      if (!res.ok) throw new Error("API key list failed to load");
+      if (!res.ok) throw new Error(t("imageGeneration.failedToLoadKeys"));
       const data = (await res.json()) as ApiKeyItem[];
       setKeys(data);
+
+      const currentKeyStillExists = data.some((key) => key.id === selectedKeyId);
+      if (currentKeyStillExists) {
+        return;
+      }
+
       const initialKey = pickInitialKey(data);
       if (initialKey) {
         setSelectedKeyId(initialKey.id);
@@ -86,15 +126,69 @@ export default function ImageGenerationPage() {
         setSelectedModel(initialModel?.id || "");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "API key list failed to load");
+      setError(err instanceof Error ? err.message : t("imageGeneration.failedToLoadKeys"));
     } finally {
       setIsLoadingKeys(false);
     }
-  };
+  }, [selectedKeyId, t]);
+
+  const fetchTasks = useCallback(async (options?: { silent?: boolean }) => {
+    if (!options?.silent) {
+      setIsLoadingTasks(true);
+    }
+
+    try {
+      const res = await fetch("/api/images/generate", { cache: "no-store" });
+      if (!res.ok) throw new Error(t("imageGeneration.failedToLoadTasks"));
+      const data = (await res.json()) as ImageGenerationTask[];
+      setTasks(data);
+      setSelectedTaskId((current) => {
+        if (current && data.some((task) => task.id === current)) {
+          return current;
+        }
+        return data[0]?.id ?? null;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("imageGeneration.failedToLoadTasks"));
+    } finally {
+      if (!options?.silent) {
+        setIsLoadingTasks(false);
+      }
+    }
+  }, [t]);
 
   useEffect(() => {
-    fetchKeys();
-  }, []);
+    void fetchKeys();
+    void fetchTasks();
+  }, [fetchKeys, fetchTasks]);
+
+  useEffect(() => {
+    setPrompt((current) =>
+      current === previousDefaultPromptRef.current ? defaultPrompt : current
+    );
+    previousDefaultPromptRef.current = defaultPrompt;
+  }, [defaultPrompt]);
+
+  useEffect(() => {
+    if (!selectedKey) return;
+    const modelStillExists = selectedKey.models.some((model) => model.id === selectedModel);
+    if (modelStillExists) return;
+
+    const nextModel =
+      selectedKey.models.find((model) => isImageModel(model.id)) ||
+      selectedKey.models[0];
+    setSelectedModel(nextModel?.id || "");
+  }, [selectedKey, selectedModel]);
+
+  useEffect(() => {
+    if (!hasActiveTask) return;
+
+    const timer = window.setInterval(() => {
+      void fetchTasks({ silent: true });
+    }, 2500);
+
+    return () => window.clearInterval(timer);
+  }, [fetchTasks, hasActiveTask]);
 
   const handleKeyChange = (keyId: string) => {
     const nextKey = keys.find((key) => key.id === keyId);
@@ -108,9 +202,8 @@ export default function ImageGenerationPage() {
   const handleGenerate = async () => {
     if (!selectedKeyId || !selectedModel || !prompt.trim()) return;
 
-    setIsGenerating(true);
+    setIsCreatingTask(true);
     setError(null);
-    setImage(null);
 
     try {
       const res = await fetch("/api/images/generate", {
@@ -128,44 +221,52 @@ export default function ImageGenerationPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Image generation failed");
+        throw new Error(data.error || t("imageGeneration.createFailed"));
       }
 
-      setImage(data.image);
+      const createdTask = data.task as ImageGenerationTask | undefined;
+      if (createdTask) {
+        setSelectedTaskId(createdTask.id);
+      }
+      await fetchTasks({ silent: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Image generation failed");
+      setError(err instanceof Error ? err.message : t("imageGeneration.createFailed"));
     } finally {
-      setIsGenerating(false);
+      setIsCreatingTask(false);
     }
   };
 
-  const canGenerate = Boolean(selectedKeyId && selectedModel && prompt.trim() && !isGenerating);
+  const canGenerate = Boolean(selectedKeyId && selectedModel && prompt.trim() && !isCreatingTask);
 
   return (
     <div className="flex h-full overflow-y-auto bg-background">
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 px-6 py-8 lg:grid-cols-[420px_1fr]">
+      <div className="mx-auto grid w-full max-w-7xl grid-cols-1 gap-6 px-6 py-8 xl:grid-cols-[420px_minmax(0,1fr)]">
         <section className="space-y-5">
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-accent">
               <Sparkles className="h-4 w-4" />
-              <span className="text-xs font-semibold uppercase tracking-wide">AI Image Studio</span>
+              <span className="text-xs font-semibold uppercase tracking-wide">
+                {t("imageGeneration.badge")}
+              </span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">AI 生图</h1>
-            <p className="text-sm leading-6 text-muted">
-              独立调用生图 API，不走 Agent 工具链。选择专用 Key、模型和尺寸后直接生成。
-            </p>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {t("imageGeneration.title")}
+            </h1>
+            <p className="text-sm leading-6 text-muted">{t("imageGeneration.subtitle")}</p>
           </div>
 
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-sm font-semibold text-foreground">生成参数</h2>
-                <p className="text-xs text-muted">Key 和模型由你明确指定</p>
+                <h2 className="text-sm font-semibold text-foreground">
+                  {t("imageGeneration.formTitle")}
+                </h2>
+                <p className="text-xs text-muted">{t("imageGeneration.formSubtitle")}</p>
               </div>
               <button
-                onClick={fetchKeys}
+                onClick={() => void fetchKeys()}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-[var(--sidebar-hover)] hover:text-foreground"
-                title="刷新 Key"
+                title={t("imageGeneration.refreshKeys")}
               >
                 <RefreshCw className={`h-4 w-4 ${isLoadingKeys ? "animate-spin" : ""}`} />
               </button>
@@ -173,13 +274,13 @@ export default function ImageGenerationPage() {
 
             <div className="space-y-4">
               <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-muted">API Key</span>
+                <span className="text-xs font-medium text-muted">{t("imageGeneration.keyLabel")}</span>
                 <select
                   value={selectedKeyId}
                   onChange={(e) => handleKeyChange(e.target.value)}
                   className="h-10 w-full rounded-lg border border-border bg-input-bg px-3 text-sm outline-none focus:border-accent"
                 >
-                  <option value="">选择 API Key</option>
+                  <option value="">{t("imageGeneration.keyPlaceholder")}</option>
                   {keys.map((key) => (
                     <option key={key.id} value={key.id}>
                       {key.label} {key.baseUrl ? `- ${key.baseUrl}` : ""}
@@ -189,14 +290,14 @@ export default function ImageGenerationPage() {
               </label>
 
               <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-muted">模型</span>
+                <span className="text-xs font-medium text-muted">{t("imageGeneration.modelLabel")}</span>
                 <select
                   value={selectedModel}
                   onChange={(e) => setSelectedModel(e.target.value)}
                   className="h-10 w-full rounded-lg border border-border bg-input-bg px-3 text-sm outline-none focus:border-accent"
                   disabled={!selectedKey}
                 >
-                  <option value="">选择模型</option>
+                  <option value="">{t("imageGeneration.modelPlaceholder")}</option>
                   {models.map((model) => (
                     <option key={model.id} value={model.id}>
                       {model.name || model.id}
@@ -206,11 +307,12 @@ export default function ImageGenerationPage() {
               </label>
 
               <div className="space-y-2">
-                <span className="text-xs font-medium text-muted">尺寸</span>
+                <span className="text-xs font-medium text-muted">{t("imageGeneration.sizeLabel")}</span>
                 <div className="grid grid-cols-5 gap-2">
                   {SIZES.map((item) => (
                     <button
                       key={item.value}
+                      type="button"
                       onClick={() => setSize(item.value)}
                       className={`rounded-lg border px-2 py-2 text-left transition-colors ${
                         size === item.value
@@ -226,34 +328,38 @@ export default function ImageGenerationPage() {
               </div>
 
               <label className="block space-y-1.5">
-                <span className="text-xs font-medium text-muted">Prompt</span>
+                <span className="text-xs font-medium text-muted">{t("imageGeneration.promptLabel")}</span>
                 <textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   className="min-h-44 w-full resize-none rounded-lg border border-border bg-input-bg px-3 py-3 text-sm leading-6 outline-none focus:border-accent"
-                  placeholder="描述你想生成的图片"
+                  placeholder={t("imageGeneration.promptPlaceholder")}
                 />
               </label>
 
               <div className="grid grid-cols-2 gap-3">
                 <label className="block space-y-1.5">
-                  <span className="text-xs font-medium text-muted">Quality</span>
+                  <span className="text-xs font-medium text-muted">{t("imageGeneration.qualityLabel")}</span>
                   <input
                     value={quality}
                     onChange={(e) => setQuality(e.target.value)}
                     className="h-10 w-full rounded-lg border border-border bg-input-bg px-3 text-sm outline-none focus:border-accent"
-                    placeholder="standard / hd"
+                    placeholder={t("imageGeneration.qualityPlaceholder")}
                   />
                 </label>
                 <label className="block space-y-1.5">
-                  <span className="text-xs font-medium text-muted">Style</span>
+                  <span className="text-xs font-medium text-muted">{t("imageGeneration.styleLabel")}</span>
                   <input
                     value={style}
                     onChange={(e) => setStyle(e.target.value)}
                     className="h-10 w-full rounded-lg border border-border bg-input-bg px-3 text-sm outline-none focus:border-accent"
-                    placeholder="vivid / natural"
+                    placeholder={t("imageGeneration.stylePlaceholder")}
                   />
                 </label>
+              </div>
+
+              <div className="rounded-lg border border-border bg-background-secondary px-3 py-2 text-xs leading-5 text-muted">
+                {t("imageGeneration.queueTip")}
               </div>
 
               {error && (
@@ -263,73 +369,199 @@ export default function ImageGenerationPage() {
               )}
 
               <button
-                onClick={handleGenerate}
+                onClick={() => void handleGenerate()}
                 disabled={!canGenerate}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-foreground text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {isGenerating ? (
+                {isCreatingTask ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Wand2 className="h-4 w-4" />
                 )}
-                {isGenerating ? "生成中" : "开始生成"}
+                {isCreatingTask ? t("imageGeneration.creatingTask") : t("imageGeneration.createTask")}
               </button>
             </div>
           </div>
         </section>
 
-        <section className="flex min-h-[640px] flex-col rounded-xl border border-border bg-background-secondary p-4">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-foreground">预览</h2>
-              <p className="text-xs text-muted">生成结果会显示在这里</p>
-            </div>
-            {image && (
-              <a
-                href={image.url}
-                download="opencat-generated-image.png"
-                className="flex h-8 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs text-muted hover:text-foreground"
-              >
-                <Download className="h-3.5 w-3.5" />
-                下载
-              </a>
-            )}
-          </div>
-
-          <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-border bg-card p-4">
-            {isGenerating ? (
-              <div className="flex flex-col items-center gap-3 text-muted">
-                <Loader2 className="h-8 w-8 animate-spin text-accent" />
-                <p className="text-sm">正在调用生图 API...</p>
+        <section className="grid min-h-[720px] grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="flex flex-col rounded-xl border border-border bg-background-secondary p-4">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">
+                  {t("imageGeneration.previewTitle")}
+                </h2>
+                <p className="text-xs text-muted">{t("imageGeneration.previewSubtitle")}</p>
               </div>
-            ) : image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={image.url}
-                alt="Generated image"
-                className="max-h-full max-w-full rounded-xl object-contain shadow-sm"
-              />
-            ) : (
-              <div className="flex flex-col items-center gap-3 text-center text-muted">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/10 text-accent">
-                  <ImageIcon className="h-8 w-8" />
+              {selectedTask?.details?.imageUrl && (
+                <a
+                  href={selectedTask.details.imageUrl}
+                  download={`opencat-image-${selectedTask.id}.png`}
+                  className="flex h-8 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs text-muted hover:text-foreground"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {t("imageGeneration.download")}
+                </a>
+              )}
+            </div>
+
+            <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-border bg-card p-4">
+              {isLoadingTasks ? (
+                <div className="flex flex-col items-center gap-3 text-muted">
+                  <Loader2 className="h-8 w-8 animate-spin text-accent" />
+                  <p className="text-sm">{t("common.loading")}</p>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">还没有图片</p>
-                  <p className="mt-1 max-w-sm text-xs leading-5">
-                    选择你的 heiyu 生图 Key 和 gpt-image-2，然后点击开始生成。
+              ) : selectedTask?.details?.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={selectedTask.details.imageUrl}
+                  alt={t("imageGeneration.latestResult")}
+                  className="max-h-full max-w-full rounded-xl object-contain shadow-sm"
+                />
+              ) : selectedTask ? (
+                <div className="flex flex-col items-center gap-3 text-center text-muted">
+                  {selectedTask.status === "failed" ? (
+                    <XCircle className="h-10 w-10 text-danger" />
+                  ) : (
+                    <Loader2 className="h-10 w-10 animate-spin text-accent" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      {selectedTask.status === "failed"
+                        ? t("imageGeneration.failed")
+                        : t("imageGeneration.generating")}
+                    </p>
+                    <p className="mt-1 text-xs leading-5">
+                      {t("imageGeneration.progressLabel")}: {selectedTask.progress}%
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-3 text-center text-muted">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/10 text-accent">
+                    <ImageIcon className="h-8 w-8" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{t("imageGeneration.emptyTitle")}</p>
+                    <p className="mt-1 max-w-sm text-xs leading-5">{t("imageGeneration.emptyDesc")}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {selectedTask && (
+              <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                <div className="rounded-lg border border-border bg-card p-3">
+                  <p className="mb-2 text-xs font-semibold text-muted">
+                    {t("imageGeneration.originalPrompt")}
+                  </p>
+                  <p className="text-xs leading-5 text-foreground">
+                    {selectedTask.details?.prompt || "-"}
                   </p>
                 </div>
+
+                {selectedTask.details?.revisedPrompt && (
+                  <div className="rounded-lg border border-border bg-card p-3">
+                    <p className="mb-2 text-xs font-semibold text-muted">
+                      {t("imageGeneration.revisedPrompt")}
+                    </p>
+                    <p className="text-xs leading-5 text-foreground">
+                      {selectedTask.details.revisedPrompt}
+                    </p>
+                  </div>
+                )}
+
+                {selectedTask.logs.length > 0 && (
+                  <div className="rounded-lg border border-border bg-card p-3 xl:col-span-2">
+                    <p className="mb-2 text-xs font-semibold text-muted">{t("imageGeneration.logs")}</p>
+                    <div className="space-y-1 text-xs leading-5 text-foreground">
+                      {selectedTask.logs.slice(-6).map((log, index) => (
+                        <p key={`${selectedTask.id}-${index}`}>{log}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {image?.revised_prompt && (
-            <div className="mt-4 rounded-lg border border-border bg-card p-3">
-              <p className="mb-1 text-xs font-semibold text-muted">Revised Prompt</p>
-              <p className="text-xs leading-5 text-foreground">{image.revised_prompt}</p>
+          <aside className="flex flex-col rounded-xl border border-border bg-card p-4">
+            <div className="mb-4">
+              <h2 className="text-sm font-semibold text-foreground">{t("imageGeneration.historyTitle")}</h2>
+              <p className="text-xs text-muted">{t("imageGeneration.historySubtitle")}</p>
             </div>
-          )}
+
+            <div className="flex-1 space-y-3 overflow-y-auto">
+              {tasks.length === 0 && !isLoadingTasks ? (
+                <div className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-xs text-muted">
+                  {t("imageGeneration.noTasks")}
+                </div>
+              ) : (
+                tasks.map((task) => {
+                  const isSelected = task.id === selectedTask?.id;
+                  const hasImage = Boolean(task.details?.imageUrl);
+                  return (
+                    <button
+                      key={task.id}
+                      type="button"
+                      onClick={() => setSelectedTaskId(task.id)}
+                      className={`w-full rounded-xl border p-3 text-left transition-colors ${
+                        isSelected
+                          ? "border-accent bg-accent/5"
+                          : "border-border bg-background hover:border-accent/40"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {task.details?.model || task.name}
+                          </p>
+                          <p className="mt-1 text-[11px] text-muted">
+                            {task.details?.size || "-"} · {new Date(task.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <div className="shrink-0">
+                          {task.status === "completed" ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                          ) : task.status === "failed" ? (
+                            <XCircle className="h-4 w-4 text-danger" />
+                          ) : task.status === "running" ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                          ) : (
+                            <Clock3 className="h-4 w-4 text-muted" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-muted">{formatTaskStatus(task, t)}</span>
+                          <span className="text-muted">{task.progress}%</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-border">
+                          <div
+                            className={`h-full rounded-full ${
+                              task.status === "failed" ? "bg-danger" : "bg-accent"
+                            }`}
+                            style={{ width: `${Math.max(task.progress, 4)}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-muted">
+                          {hasImage ? (
+                            <span>{t("imageGeneration.resultSaved")}</span>
+                          ) : task.details?.error ? (
+                            <span className="truncate text-danger">{task.details.error}</span>
+                          ) : (
+                            <span className="truncate">{task.logs[task.logs.length - 1] || "-"}</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </aside>
         </section>
       </div>
     </div>
