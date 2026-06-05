@@ -5,7 +5,7 @@
 // 功能：使用 AI 模型（DALL-E 格式）根据文本描述生成图片
 //
 // 运作流程：
-// 1. 获取调用此工具用户的 API 密钥（优先从数据库加载 OpenAI 密钥，其次是 custom，最后是环境变量）
+// 1. 获取调用此工具用户的 API 密钥（优先从数据库加载匹配该模型的密钥，其次是 openai/custom，最后是环境变量）
 // 2. 构造符合 OpenAI /images/generations 规范的请求体
 // 3. 发送异步 POST 请求并解析返回的图片 URL
 // 4. 返回标准结构数据，大模型可在接收到后通过 markdown 标签渲染在聊天窗中
@@ -67,29 +67,52 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
       let apiKey: string | null = null;
       let baseUrl: string | undefined;
       let apiKeyModels: unknown = null;
+      let requestModel = input.model || "dall-e-3";
 
       // 1. 根据 userId 查找数据库中配置的 API 密钥
       if (userId) {
-        // 第一轮：精确查找 provider="openai" 的有效 Key
-        let userKey = await db.apiKey.findFirst({
-          where: { userId, provider: "openai", isActive: true },
-        });
-
-        // 第二轮：如果没有配置专用 openai，则寻找自定义 custom（可能是中转代理）
-        if (!userKey) {
-          userKey = await db.apiKey.findFirst({
-            where: { userId, provider: "custom", isActive: true },
+        try {
+          const activeKeys = await db.apiKey.findMany({
+            where: { userId, isActive: true },
           });
-        }
 
-        if (userKey) {
-          apiKey = decrypt(userKey.encryptedKey, userKey.iv);
-          baseUrl = userKey.baseUrl || undefined;
-          apiKeyModels = userKey.models;
+          // 优先查找配置的模型列表中直接包含 requestModel 的 Key（精确匹配）
+          let matchedKey = activeKeys.find((k) => {
+            const models = (k.models as unknown as { id: string }[]) || [];
+            return models.some((m) => m.id.toLowerCase() === requestModel.toLowerCase());
+          });
+
+          // 如果精确没有匹配到（例如传入 dall-e-3，但用户使用的是只配了 gpt-image-2 的第三方生图中转 Key）
+          if (!matchedKey) {
+            // 扫描用户是否存在配置了带有生图特征模型的 Key
+            matchedKey = activeKeys.find((k) => {
+              const models = (k.models as unknown as { id: string }[]) || [];
+              const imageKeywords = ["image", "dall", "midjourney", "mj", "flux", "sd"];
+              return models.some((m) =>
+                imageKeywords.some((kw) => m.id.toLowerCase().includes(kw))
+              );
+            });
+          }
+
+          // 如果依然没找到，则寻找 provider 为 openai 或 custom 的 Key 进行兜底
+          if (!matchedKey) {
+            matchedKey = activeKeys.find((k) => k.provider === "openai");
+          }
+          if (!matchedKey) {
+            matchedKey = activeKeys.find((k) => k.provider === "custom");
+          }
+
+          if (matchedKey) {
+            apiKey = decrypt(matchedKey.encryptedKey, matchedKey.iv);
+            baseUrl = matchedKey.baseUrl || undefined;
+            apiKeyModels = matchedKey.models;
+          }
+        } catch (err) {
+          console.error("扫描用户生图 API 密钥失败:", err);
         }
       }
 
-      // 2. 第三轮：回退读取系统环境变量
+      // 2. 回退读取系统环境变量
       if (!apiKey) {
         apiKey = process.env.OPENAI_API_KEY || null;
         baseUrl = process.env.OPENAI_API_BASE || undefined;
@@ -99,7 +122,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
       if (!apiKey) {
         return {
           success: false,
-          error: "未能在您的账户或系统配置中找到有效的 OpenAI 密钥。请先前往「设置 (Settings) -> API 密钥」配置 OpenAI 或自定义类型的 API Key。",
+          error: "未能在您的账户或系统配置中找到有效的生图 API 密钥。请先前往「设置 (Settings) -> API 密钥」配置对应的生图 Key 并关联模型（如 gpt-image-2）。",
         };
       }
 
@@ -114,9 +137,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
         }
       }
 
-      let requestModel = input.model || "dall-e-3";
-
-      // 3.1 自动适配第三方中转代理已配置的模型（无硬编码，由配置数据驱动）
+      // 3. 自动适配第三方中转代理已配置的模型（无硬编码，由配置数据驱动）
       if (apiKeyModels) {
         try {
           const customModels = (apiKeyModels as unknown as { id: string }[]) || [];
@@ -137,7 +158,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
               if (matchedModel) {
                 requestModel = matchedModel.id;
               } else {
-                // 2. 如果没找到含生图关键字的模型，直接回退使用该 Key 下配置的第一个模型（在专门用于生图的 API Key 中，列表里通常只包含该生图模型）
+                // 2. 如果没找到含生图关键字的模型，直接回退使用该 Key 下配置的第一个模型
                 requestModel = customModels[0].id;
               }
             }
@@ -147,7 +168,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
         }
       }
 
-      // 3. 调用 OpenAI 图片生成 API
+      // 4. 调用 OpenAI 图片生成 API
       const response = await fetch(`${apiBase}/images/generations`, {
         method: "POST",
         headers: {
@@ -164,7 +185,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
         }),
       });
 
-      // 3.1 智能降级通道：如果第三方中转不支持标准的 /images/generations 端点（返回 404 / 405）
+      // 4.1 智能降级通道：如果第三方中转不支持标准的 /images/generations 端点（返回 404 / 405）
       // 则自动尝试向聊天接口 /chat/completions 发送普通的生图对话请求（兼容将 Midjourney/DALL-E 包装为聊天模型的渠道）
       if (response.status === 404 || response.status === 405) {
         const chatResponse = await fetch(`${apiBase}/chat/completions`, {
@@ -176,7 +197,14 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
           body: JSON.stringify({
             model: requestModel,
             messages: [
-              { role: "user", content: input.prompt }
+              { 
+                role: "system", 
+                content: "你是一个专业的生图服务，接收到用户的提示词后，你必须且只能直接在回复中输出生成的图片 Markdown 链接（如 ![Generated Image](https://...)），绝对不允许输出任何其他解释性或建议性文字。" 
+              },
+              { 
+                role: "user", 
+                content: `/imagine prompt: ${input.prompt}` 
+              }
             ],
             stream: false
           })
@@ -186,7 +214,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
           const chatData = await chatResponse.json();
           const content = chatData.choices?.[0]?.message?.content || "";
           
-          // 从聊天响应文本中匹配提取图片 URL (支持 Markdown 图片及普通 http/https 链接)
+          // 从聊天响应文本中精确提取图片 URL (匹配 Markdown 图片、裸 URL、含双引号或括号包裹等情况)
           const mdUrlRegex = /!\[.*?\]\((https?:\/\/[^\s\)]+)\)/;
           const rawUrlRegex = /(https?:\/\/[^\s"'`<>]+(?:\.png|\.jpg|\.jpeg|\.webp|\.gif|\/generations\/[^\s"'`<>]+))/i;
           const generalUrlRegex = /(https?:\/\/[^\s"'`<>]+)/g;
@@ -202,7 +230,8 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
             } else {
               const allUrls = content.match(generalUrlRegex) || [];
               if (allUrls.length > 0) {
-                matchedUrl = allUrls[0];
+                // 过滤可能存在的无意义标点字符
+                matchedUrl = allUrls[0].replace(/[\.,\)"'\*]*$/, "");
               }
             }
           }
@@ -243,7 +272,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
 
       const resData = await response.json();
 
-      // 4. 验证图片 URL 数据返回格式
+      // 5. 验证图片 URL 数据返回格式
       if (!resData.data || !resData.data[0] || !resData.data[0].url) {
         return {
           success: false,
