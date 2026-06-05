@@ -70,7 +70,7 @@ function getPersistentImagesDir() {
 }
 
 function getPublicImageUrl(fileName: string) {
-  return `/downloads/images/${fileName}`;
+  return `/generated-images/${fileName}`;
 }
 
 async function updateTask(
