@@ -132,10 +132,10 @@ func cleanFiles(ctx context.Context, dbConn *db.DB, dirPath string, maxAge time.
 	duration := time.Since(startTime)
 	durationStr := fmt.Sprintf("%.2fs", duration.Seconds())
 	logText := fmt.Sprintf("本次清理共扫描并删除 %d 个超期文件，释放磁盘空间 %.2f MB", deletedCount, float64(totalDeletedSize)/(1024*1024))
-	
+
 	var detailsText string
 	if deletedCount > 0 {
-		detailsText = fmt.Sprintf("成功清理 %d 个 7 天前生成的过期图片与文档。已删除文件列表如下：\n%s", 
+		detailsText = fmt.Sprintf("成功清理 %d 个 7 天前生成的过期图片与文档。已删除文件列表如下：\n%s",
 			deletedCount, strings.Join(deletedFileNames, "\n"))
 	} else {
 		detailsText = "未扫描到生存期超过 7 天的过期图片与文档，无文件需要清理。"
@@ -145,9 +145,9 @@ func cleanFiles(ctx context.Context, dbConn *db.DB, dirPath string, maxAge time.
 		_ = dbConn.CompleteCleanupTask(ctx, tid, detailsText, durationStr, logText)
 	}
 
-	slog.Info("过期文件清理执行完毕！", 
-		"dir", dirPath, 
-		"deletedCount", deletedCount, 
+	slog.Info("过期文件清理执行完毕！",
+		"dir", dirPath,
+		"deletedCount", deletedCount,
 		"totalDeletedSize", totalDeletedSize,
 		"duration", durationStr,
 	)

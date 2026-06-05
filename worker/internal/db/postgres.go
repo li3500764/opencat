@@ -53,7 +53,7 @@ func (db *DB) GetTask(ctx context.Context, id string) (*models.BackgroundTask, e
 	task := &models.BackgroundTask{}
 	query := `SELECT id, "projectId", "agentId", "conversationId", name, type, status, progress, details, logs, "savedTime", "createdAt", "updatedAt" 
 	          FROM "BackgroundTask" WHERE id = $1`
-	
+
 	err := db.Pool.QueryRow(ctx, query, id).Scan(
 		&task.ID,
 		&task.ProjectID,
@@ -106,7 +106,7 @@ func (db *DB) UpdateTaskProgress(ctx context.Context, id string, status string, 
 	query := `UPDATE "BackgroundTask" 
 	          SET status = $1, progress = $2, logs = $3, "updatedAt" = $4 
 	          WHERE id = $5`
-	
+
 	_, err = db.Pool.Exec(ctx, query, status, progress, updatedLogs, time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("更新数据库任务记录失败: %w", err)
@@ -187,7 +187,7 @@ func (db *DB) CompleteTask(ctx context.Context, id string, savedTime string, new
 	query := `UPDATE "BackgroundTask" 
 	          SET status = 'completed', progress = 100, "savedTime" = $1, logs = $2, "updatedAt" = $3 
 	          WHERE id = $4`
-	
+
 	_, err = db.Pool.Exec(ctx, query, savedTime, updatedLogs, time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("标记任务完成失败: %w", err)
@@ -223,7 +223,7 @@ func (db *DB) FailTask(ctx context.Context, id string, errMsg string) error {
 	query := `UPDATE "BackgroundTask" 
 	          SET status = 'failed', details = $1, logs = $2, "updatedAt" = $3 
 	          WHERE id = $4`
-	
+
 	_, err = db.Pool.Exec(ctx, query, nextDetails, updatedLogs, time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("标记任务失败记录错误时失败: %w", err)
@@ -256,7 +256,7 @@ func (db *DB) CreateCleanupTask(ctx context.Context, projectID string, name stri
 
 	query := `INSERT INTO "BackgroundTask" (id, "projectId", name, type, status, progress, details, logs, "createdAt", "updatedAt")
 	          VALUES ($1, $2, $3, $4, 'running', 0, '', '[]'::json, $5, $6)`
-	
+
 	_, err := db.Pool.Exec(ctx, query, id, projectID, name, taskType, time.Now(), time.Now())
 	if err != nil {
 		return "", fmt.Errorf("创建 BackgroundTask 记录失败: %w", err)
@@ -283,7 +283,7 @@ func (db *DB) CompleteCleanupTask(ctx context.Context, id string, details string
 	query := `UPDATE "BackgroundTask" 
 	          SET status = 'completed', progress = 100, details = $1, "savedTime" = $2, logs = $3, "updatedAt" = $4 
 	          WHERE id = $5`
-	
+
 	_, err = db.Pool.Exec(ctx, query, details, savedTime, updatedLogs, time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("标记清理任务完成失败: %w", err)

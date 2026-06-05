@@ -170,9 +170,14 @@ func (e *ImageGenerationExecutor) callImageProvider(
 		return nil, fmt.Errorf("读取图片生成响应失败: %w", err)
 	}
 
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.Contains(strings.ToLower(contentType), "application/json") {
+		return nil, fmt.Errorf(describeUnexpectedResponse(resp.StatusCode, contentType, body))
+	}
+
 	var apiResp imageGenerationAPIResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, fmt.Errorf("解析图片生成响应失败: %w", err)
+		return nil, fmt.Errorf("解析图片生成响应失败: %w；%s", err, describeUnexpectedResponse(resp.StatusCode, contentType, body))
 	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -249,6 +254,36 @@ func (e *ImageGenerationExecutor) buildImageEditRequest(
 	apiKey string,
 	details *imageTaskDetails,
 ) (*http.Request, error) {
+	multipartReq, multipartErr := e.buildImageEditMultipartRequest(ctx, taskID, apiBase, apiKey, details)
+	if multipartErr == nil {
+		return multipartReq, nil
+	}
+
+	if details.SourceImageURL == "" {
+		return nil, fmt.Errorf("图生图任务缺少参考图")
+	}
+
+	sourcePath := filepath.Join(e.downloadsDir, "images", filepath.Base(details.SourceImageURL))
+	sourceBytes, err := os.ReadFile(sourcePath)
+	if err != nil {
+		return nil, fmt.Errorf("读取参考图失败: %w", err)
+	}
+
+	jsonReq, jsonErr := e.buildImageEditJSONRequest(ctx, apiBase, apiKey, details, sourceBytes)
+	if jsonErr == nil {
+		return jsonReq, nil
+	}
+
+	return nil, fmt.Errorf("构建图生图请求失败: multipart=%v; json=%v", multipartErr, jsonErr)
+}
+
+func (e *ImageGenerationExecutor) buildImageEditMultipartRequest(
+	ctx context.Context,
+	taskID string,
+	apiBase string,
+	apiKey string,
+	details *imageTaskDetails,
+) (*http.Request, error) {
 	if details.SourceImageURL == "" {
 		return nil, fmt.Errorf("图生图任务缺少参考图")
 	}
@@ -303,6 +338,49 @@ func (e *ImageGenerationExecutor) buildImageEditRequest(
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	return req, nil
+}
+
+func (e *ImageGenerationExecutor) buildImageEditJSONRequest(
+	ctx context.Context,
+	apiBase string,
+	apiKey string,
+	details *imageTaskDetails,
+	sourceBytes []byte,
+) (*http.Request, error) {
+	mimeType := details.SourceImageMimeType
+	if strings.TrimSpace(mimeType) == "" {
+		mimeType = "image/png"
+	}
+
+	payload := map[string]any{
+		"model":  details.Model,
+		"prompt": details.Prompt,
+		"size":   details.Size,
+		"images": []map[string]string{
+			{
+				"image_url": fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(sourceBytes)),
+			},
+		},
+	}
+	if details.Quality != "" {
+		payload["quality"] = details.Quality
+	}
+	if details.Style != "" {
+		payload["style"] = details.Style
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("序列化图生图 JSON 请求失败: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiBase+"/images/edits", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("创建图生图 JSON 请求失败: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", "application/json")
 	return req, nil
 }
 
@@ -407,4 +485,21 @@ func fileNameOrFallback(name string, fallback string) string {
 		return fallback
 	}
 	return trimmed
+}
+
+func describeUnexpectedResponse(statusCode int, contentType string, body []byte) string {
+	snippet := strings.TrimSpace(string(body))
+	if len(snippet) > 240 {
+		snippet = snippet[:240]
+	}
+	if snippet == "" {
+		snippet = "(empty body)"
+	}
+
+	return fmt.Sprintf(
+		"图片服务返回了非 JSON 响应，status=%d content-type=%q body=%q",
+		statusCode,
+		contentType,
+		snippet,
+	)
 }
