@@ -111,6 +111,11 @@ export default function ImageGenerationPage() {
     [tasks, selectedTaskId]
   );
 
+  const selectedTaskImageUrl = useMemo(() => {
+    if (!selectedTask?.details?.imageUrl) return null;
+    return selectedTask.details.imageUrl;
+  }, [selectedTask]);
+
   const models = selectedKey?.models || [];
   const hasActiveTask = tasks.some((task) => task.status === "pending" || task.status === "running");
 
@@ -529,9 +534,9 @@ export default function ImageGenerationPage() {
                 </h2>
                 <p className="text-xs text-muted">{t("imageGeneration.previewSubtitle")}</p>
               </div>
-              {selectedTask?.details?.imageUrl && (
+              {selectedTaskImageUrl && (
                 <a
-                  href={selectedTask.details.imageUrl}
+                  href={selectedTaskImageUrl}
                   download={`opencat-image-${selectedTask.id}.png`}
                   className="flex h-8 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs text-muted hover:text-foreground"
                 >
@@ -547,12 +552,15 @@ export default function ImageGenerationPage() {
                   <Loader2 className="h-8 w-8 animate-spin text-accent" />
                   <p className="text-sm">{t("common.loading")}</p>
                 </div>
-              ) : selectedTask?.details?.imageUrl ? (
+              ) : selectedTaskImageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={selectedTask.details.imageUrl}
+                  src={selectedTaskImageUrl}
                   alt={t("imageGeneration.latestResult")}
                   className="max-h-full max-w-full rounded-xl object-contain shadow-sm"
+                  onError={(event) => {
+                    event.currentTarget.style.display = "none";
+                  }}
                 />
               ) : selectedTask ? (
                 <div className="flex flex-col items-center gap-3 text-center text-muted">
