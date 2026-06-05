@@ -12,6 +12,7 @@ const zh: TranslationKeys = {
     create: "创建",
     edit: "编辑",
     delete: "删除",
+    deleting: "删除中...",
     retry: "重试",
     refresh: "刷新",
     loading: "加载中...",
@@ -228,6 +229,8 @@ const zh: TranslationKeys = {
     resultSaved: "已保存到本地",
     progressLabel: "进度",
     sourceImageRequired: "请先上传参考图片",
+    deleteTask: "删除任务",
+    deleteTaskConfirm: "删除这条任务及其已保存的图片文件？",
   },
 
   // ---- 认证 ----

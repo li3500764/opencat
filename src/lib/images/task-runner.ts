@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { db } from "@/server/db";
 import { decrypt } from "@/lib/crypto";
@@ -261,6 +261,30 @@ export async function updateImageGenerationTaskDetails(
       details: JSON.stringify(nextDetails),
     },
   });
+}
+
+export async function deleteImageGenerationTaskAssets(details: string | null | undefined) {
+  const parsedDetails = parseDetails(details);
+  if (!parsedDetails) return;
+
+  const candidateUrls = [
+    parsedDetails.imageUrl,
+    parsedDetails.sourceImageUrl,
+  ].filter((value): value is string => Boolean(value));
+
+  const imageDir = getPersistentImagesDir();
+
+  await Promise.all(
+    candidateUrls.map(async (assetUrl) => {
+      const fileName = path.basename(assetUrl);
+      const filePath = path.join(imageDir, fileName);
+      try {
+        await rm(filePath, { force: true });
+      } catch (error) {
+        console.warn("Failed to remove generated image asset", filePath, error);
+      }
+    })
+  );
 }
 
 export async function runImageGenerationTask(taskId: string, userId: string) {

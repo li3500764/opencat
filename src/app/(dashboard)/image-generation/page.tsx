@@ -10,6 +10,7 @@ import {
   Loader2,
   RefreshCw,
   Sparkles,
+  Trash2,
   Wand2,
   XCircle,
 } from "lucide-react";
@@ -99,6 +100,7 @@ export default function ImageGenerationPage() {
   const [isLoadingKeys, setIsLoadingKeys] = useState(true);
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
   const [isCreatingTask, setIsCreatingTask] = useState(false);
+  const [deletingTaskId, setDeletingTaskId] = useState<string | null>(null);
   const [brokenImageUrls, setBrokenImageUrls] = useState<Record<string, true>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -298,6 +300,37 @@ export default function ImageGenerationPage() {
       setError(err instanceof Error ? err.message : createFailedText);
     } finally {
       setIsCreatingTask(false);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!confirm(t("imageGeneration.deleteTaskConfirm"))) {
+      return;
+    }
+
+    setDeletingTaskId(taskId);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          data.error || (data.message as string | undefined) || failedToLoadTasksText
+        );
+      }
+
+      setTasks((currentTasks) => currentTasks.filter((task) => task.id !== taskId));
+      setSelectedTaskId((currentSelectedTaskId) =>
+        currentSelectedTaskId === taskId ? null : currentSelectedTaskId
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : failedToLoadTasksText);
+    } finally {
+      setDeletingTaskId(null);
     }
   };
 
@@ -713,15 +746,33 @@ export default function ImageGenerationPage() {
                           </p>
                         </div>
                         <div className="shrink-0">
-                          {task.status === "completed" ? (
-                            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                          ) : task.status === "failed" ? (
-                            <XCircle className="h-4 w-4 text-danger" />
-                          ) : task.status === "running" ? (
-                            <Loader2 className="h-4 w-4 animate-spin text-accent" />
-                          ) : (
-                            <Clock3 className="h-4 w-4 text-muted" />
-                          )}
+                          <div className="flex items-center gap-2">
+                            {task.status === "completed" ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            ) : task.status === "failed" ? (
+                              <XCircle className="h-4 w-4 text-danger" />
+                            ) : task.status === "running" ? (
+                              <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                            ) : (
+                              <Clock3 className="h-4 w-4 text-muted" />
+                            )}
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleDeleteTask(task.id);
+                              }}
+                              disabled={deletingTaskId === task.id}
+                              className="rounded-md p-1 text-muted transition-colors hover:bg-background-secondary hover:text-danger disabled:cursor-not-allowed disabled:opacity-50"
+                              title={t("imageGeneration.deleteTask")}
+                            >
+                              {deletingTaskId === task.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
                         </div>
                       </div>
 

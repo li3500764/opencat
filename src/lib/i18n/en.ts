@@ -10,6 +10,7 @@ const en = {
     create: "Create",
     edit: "Edit",
     delete: "Delete",
+    deleting: "Deleting...",
     retry: "Retry",
     refresh: "Refresh",
     loading: "Loading...",
@@ -227,6 +228,8 @@ const en = {
     resultSaved: "Saved locally",
     progressLabel: "Progress",
     sourceImageRequired: "Please upload a reference image first",
+    deleteTask: "Delete task",
+    deleteTaskConfirm: "Delete this task and its stored images?",
   },
 
   // ---- Auth ----
