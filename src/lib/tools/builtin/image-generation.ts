@@ -15,6 +15,7 @@ import { z } from "zod";
 import type { ToolDefinition } from "../types";
 import { db } from "@/server/db";
 import { decrypt } from "@/lib/crypto";
+import { normalizeImageGenerationResult } from "./image-generation-utils";
 
 // ---------- 参数 Schema ----------
 const imageGenerationSchema = z.object({
@@ -220,9 +221,10 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
       }
 
       const resData = await response.json();
+      const normalizedImage = normalizeImageGenerationResult(resData);
 
-      // 6. 验证图片 URL 数据返回格式
-      if (!resData.data || !resData.data[0] || !resData.data[0].url) {
+      // 6. 验证图片返回格式，兼容 url 与 b64_json 两种 OpenAI 兼容响应
+      if (!normalizedImage) {
         return {
           success: false,
           error: "生图接口返回的数据为空或格式不正确，未能解析到图片地址。",
@@ -232,9 +234,7 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
       return {
         success: true,
         data: {
-          url: resData.data[0].url,
-          markdown: `![Generated Image](${resData.data[0].url})`,
-          revised_prompt: resData.data[0].revised_prompt || "",
+          ...normalizedImage,
           raw: resData,
         },
       };

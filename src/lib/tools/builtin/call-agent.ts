@@ -38,6 +38,7 @@ import { generateText, stepCountIs } from "ai";
 import type { LanguageModel } from "ai";
 import { toolRegistry } from "../registry";
 import type { ToolDefinition, ToolExecutionContext } from "../types";
+import { mergeToolRenderedContent } from "./image-generation-utils";
 
 // ---------- 参数 Schema ----------
 const callAgentSchema = z.object({
@@ -122,6 +123,7 @@ export function createCallAgentTool(
             ? { tools, stopWhen: stepCountIs(targetAgent.maxSteps) }
             : {}),
         });
+        const mergedResponse = mergeToolRenderedContent(result.text, result.toolResults);
 
         return {
           success: true,
@@ -129,13 +131,14 @@ export function createCallAgentTool(
             agent: targetAgent.name,
             task: input.task,
             // 子 Agent 的回复文本
-            response: result.text,
+            response: mergedResponse,
             // 子 Agent 执行了多少步
             steps: result.steps.length,
             // Token 用量
             usage: {
               totalTokens: result.usage?.totalTokens ?? 0,
             },
+            toolResults: result.toolResults,
           },
         };
       } catch (err) {
