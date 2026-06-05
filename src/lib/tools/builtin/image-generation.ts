@@ -164,6 +164,74 @@ export const imageGenerationTool: ToolDefinition<ImageGenerationInput> = {
         }),
       });
 
+      // 3.1 智能降级通道：如果第三方中转不支持标准的 /images/generations 端点（返回 404 / 405）
+      // 则自动尝试向聊天接口 /chat/completions 发送普通的生图对话请求（兼容将 Midjourney/DALL-E 包装为聊天模型的渠道）
+      if (response.status === 404 || response.status === 405) {
+        const chatResponse = await fetch(`${apiBase}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: requestModel,
+            messages: [
+              { role: "user", content: input.prompt }
+            ],
+            stream: false
+          })
+        });
+
+        if (chatResponse.ok) {
+          const chatData = await chatResponse.json();
+          const content = chatData.choices?.[0]?.message?.content || "";
+          
+          // 从聊天响应文本中匹配提取图片 URL (支持 Markdown 图片及普通 http/https 链接)
+          const mdUrlRegex = /!\[.*?\]\((https?:\/\/[^\s\)]+)\)/;
+          const rawUrlRegex = /(https?:\/\/[^\s"'`<>]+(?:\.png|\.jpg|\.jpeg|\.webp|\.gif|\/generations\/[^\s"'`<>]+))/i;
+          const generalUrlRegex = /(https?:\/\/[^\s"'`<>]+)/g;
+
+          let matchedUrl = "";
+          const mdMatch = content.match(mdUrlRegex);
+          if (mdMatch && mdMatch[1]) {
+            matchedUrl = mdMatch[1];
+          } else {
+            const rawMatch = content.match(rawUrlRegex);
+            if (rawMatch && rawMatch[0]) {
+              matchedUrl = rawMatch[0];
+            } else {
+              const allUrls = content.match(generalUrlRegex) || [];
+              if (allUrls.length > 0) {
+                matchedUrl = allUrls[0];
+              }
+            }
+          }
+
+          if (matchedUrl) {
+            return {
+              success: true,
+              data: {
+                url: matchedUrl,
+                markdown: `![Generated Image](${matchedUrl})`,
+                revised_prompt: "",
+                raw: chatData,
+              },
+            };
+          } else {
+            return {
+              success: false,
+              error: `聊天生图降级执行成功，但未能在响应文本中提取出有效图片链接。回复内容: ${content}`,
+            };
+          }
+        } else {
+          const errorText = await chatResponse.text().catch(() => "");
+          return {
+            success: false,
+            error: `生图接口返回 ${response.status}，降级至聊天生图亦失败: ${chatResponse.statusText} ${errorText}`,
+          };
+        }
+      }
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData.error?.message || response.statusText;
