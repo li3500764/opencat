@@ -115,6 +115,59 @@ func (db *DB) UpdateTaskProgress(ctx context.Context, id string, status string, 
 	return nil
 }
 
+func (db *DB) GetTaskUserID(ctx context.Context, taskID string) (string, error) {
+	var userID string
+	query := `
+		SELECT p."userId"
+		FROM "BackgroundTask" bt
+		INNER JOIN "Project" p ON p.id = bt."projectId"
+		WHERE bt.id = $1
+	`
+
+	if err := db.Pool.QueryRow(ctx, query, taskID).Scan(&userID); err != nil {
+		return "", fmt.Errorf("查询任务所属用户失败: %w", err)
+	}
+
+	return userID, nil
+}
+
+type APIKeyRecord struct {
+	EncryptedKey string
+	IV           string
+	BaseURL      *string
+}
+
+func (db *DB) GetAPIKeyByID(ctx context.Context, apiKeyID string, userID string) (*APIKeyRecord, error) {
+	query := `
+		SELECT "encryptedKey", iv, "baseUrl"
+		FROM "ApiKey"
+		WHERE id = $1 AND "userId" = $2 AND "isActive" = true
+		LIMIT 1
+	`
+
+	record := &APIKeyRecord{}
+	if err := db.Pool.QueryRow(ctx, query, apiKeyID, userID).Scan(&record.EncryptedKey, &record.IV, &record.BaseURL); err != nil {
+		return nil, fmt.Errorf("查询 API Key 记录失败: %w", err)
+	}
+
+	return record, nil
+}
+
+func (db *DB) UpdateTaskDetails(ctx context.Context, id string, details any) error {
+	serialized, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("序列化任务详情失败: %w", err)
+	}
+
+	query := `UPDATE "BackgroundTask" SET details = $1, "updatedAt" = $2 WHERE id = $3`
+	_, err = db.Pool.Exec(ctx, query, string(serialized), time.Now(), id)
+	if err != nil {
+		return fmt.Errorf("更新任务详情失败: %w", err)
+	}
+
+	return nil
+}
+
 // CompleteTask 标记任务完成
 func (db *DB) CompleteTask(ctx context.Context, id string, savedTime string, newLog string) error {
 	task, err := db.GetTask(ctx, id)
@@ -156,11 +209,22 @@ func (db *DB) FailTask(ctx context.Context, id string, errMsg string) error {
 	logs = append(logs, fmt.Sprintf("[%s] [ERROR] 任务执行失败: %s", time.Now().Format("15:04:05"), errMsg))
 	updatedLogs, _ := json.Marshal(logs)
 
+	nextDetails := errMsg
+	if task.Details != nil && *task.Details != "" {
+		var detailsObject map[string]any
+		if err := json.Unmarshal([]byte(*task.Details), &detailsObject); err == nil && detailsObject != nil {
+			detailsObject["error"] = errMsg
+			if marshaled, marshalErr := json.Marshal(detailsObject); marshalErr == nil {
+				nextDetails = string(marshaled)
+			}
+		}
+	}
+
 	query := `UPDATE "BackgroundTask" 
 	          SET status = 'failed', details = $1, logs = $2, "updatedAt" = $3 
 	          WHERE id = $4`
 	
-	_, err = db.Pool.Exec(ctx, query, errMsg, updatedLogs, time.Now(), id)
+	_, err = db.Pool.Exec(ctx, query, nextDetails, updatedLogs, time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("标记任务失败记录错误时失败: %w", err)
 	}

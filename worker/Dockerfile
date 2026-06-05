@@ -29,6 +29,8 @@ RUN apk add --no-cache tzdata ca-certificates
 # 设置中国时区
 ENV TZ=Asia/Shanghai
 
+WORKDIR /app
+
 # 从构建阶段拷贝编译好的二进制
 COPY --from=builder /worker /worker
 

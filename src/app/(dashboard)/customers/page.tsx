@@ -67,7 +67,7 @@ interface BackgroundTask {
   id: string;
   name: string;
   type: string;
-  status: "running" | "completed" | "failed";
+  status: "pending" | "running" | "completed" | "failed";
   progress: number; // 0 - 100
   savedTime: string;
   details: string;
@@ -102,6 +102,7 @@ export default function SmartWorkspacePage() {
   const [showLogModal, setShowLogModal] = useState<BackgroundTask | null>(null);
   const [tasks, setTasks] = useState<BackgroundTask[]>([]);
   const [tasksLoading, setTasksLoading] = useState(true);
+  const activeTaskCount = tasks.filter((task) => task.status === "pending" || task.status === "running").length;
 
   // ----------------- API 数据交互 -----------------
 
@@ -671,7 +672,7 @@ export default function SmartWorkspacePage() {
               </div>
               <span className="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-600 flex items-center gap-1 animate-pulse">
                 <Clock className="h-3 w-3 animate-spin" />
-                {isEn ? `${tasks.filter(t => t.status === "running").length} Task(s) Running` : `${tasks.filter(t => t.status === "running").length} 个任务执行中`}
+                {isEn ? `${activeTaskCount} Task(s) Active` : `${activeTaskCount} 个任务执行中`}
               </span>
             </div>
 
@@ -745,7 +746,7 @@ export default function SmartWorkspacePage() {
                   <div className="flex items-center justify-between pt-3 border-t border-border/80 text-[10px] text-muted">
                     <span>
                       {isEn ? "Est. Time Saved: " : "累计自动省时: "}
-                      <span className="font-bold text-foreground">{task.savedTime || "N/A"}</span>
+                      <span className="font-bold text-foreground">{task.savedTime || (isEn ? "Not available" : "暂无")}</span>
                     </span>
                     
                     <div className="flex items-center gap-2">

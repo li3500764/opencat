@@ -88,11 +88,14 @@ services:
       WORKER_CONCURRENCY: 20
       WORKER_TASK_TIMEOUT: 1800
       LOG_LEVEL: info
+      DOWNLOADS_DIR: /app/public/downloads
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - ./public/downloads:/app/public/downloads
     networks:
       - internal
     restart: unless-stopped

@@ -263,6 +263,35 @@ export async function updateImageGenerationTaskDetails(
   });
 }
 
+export async function failImageGenerationTask(taskId: string, errorMessage: string) {
+  const current = (await backgroundTaskDb.backgroundTask.findUnique({
+    where: { id: taskId },
+    select: { details: true },
+  })) as Pick<BackgroundTaskRecord, "details"> | null;
+
+  const nextDetails = {
+    ...(parseDetails(current?.details) || {
+      kind: "image-generation" as const,
+      mode: "text-to-image" as const,
+      apiKeyId: "",
+      model: "",
+      prompt: "",
+      size: "",
+    }),
+    error: errorMessage,
+  };
+
+  await backgroundTaskDb.backgroundTask.update({
+    where: { id: taskId },
+    data: {
+      status: "failed",
+      progress: 100,
+      details: JSON.stringify(nextDetails),
+      logs: ["[SYSTEM] Image generation task created.", `[ERROR] ${errorMessage}`],
+    },
+  });
+}
+
 export async function deleteImageGenerationTaskAssets(details: string | null | undefined) {
   const parsedDetails = parseDetails(details);
   if (!parsedDetails) return;

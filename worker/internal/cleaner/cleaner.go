@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -85,52 +86,44 @@ func cleanFiles(ctx context.Context, dbConn *db.DB, dirPath string, maxAge time.
 
 	// 更新各任务进度
 	for _, tid := range taskIDs {
-		_ = dbConn.UpdateTaskProgress(ctx, tid, "running", 40, "正在读取下载目录，准备比对文件最后修改时间...")
+		_ = dbConn.UpdateTaskProgress(ctx, tid, "running", 40, fmt.Sprintf("正在读取下载目录 %s，准备比对文件最后修改时间...", dirPath))
 	}
 
-	// 3. 读取目录
-	files, err := os.ReadDir(dirPath)
+	// 3. 递归扫描目录，找出所有过期文件
+	expiredFiles, err := findExpiredFiles(dirPath, maxAge, time.Now())
 	if err != nil {
-		errMsg := fmt.Sprintf("读取目录内容失败: %v", err)
-		slog.Error("读取目录内容失败", "dir", dirPath, "err", err)
+		errMsg := fmt.Sprintf("扫描目录内容失败: %v", err)
+		slog.Error("扫描目录内容失败", "dir", dirPath, "err", err)
 		for _, tid := range taskIDs {
 			_ = dbConn.FailTask(ctx, tid, errMsg)
 		}
 		return
 	}
 
-	now := time.Now()
 	deletedCount := 0
 	var totalDeletedSize int64 = 0
 	var deletedFileNames []string
 
-	for _, file := range files {
-		// 跳过子目录，只清理具体生成的文件
-		if file.IsDir() {
-			continue
-		}
-
-		filePath := filepath.Join(dirPath, file.Name())
-
-		// 获取文件详细元数据
-		fileInfo, err := file.Info()
+	for _, candidate := range expiredFiles {
+		fileInfo, err := os.Stat(candidate)
 		if err != nil {
-			slog.Warn("获取文件详情失败，跳过该文件", "path", filePath, "err", err)
+			slog.Warn("获取过期文件详情失败，跳过该文件", "path", candidate, "err", err)
 			continue
 		}
 
-		// 计算文件的生存时间（根据最后修改时间）
-		age := now.Sub(fileInfo.ModTime())
-		if age > maxAge {
-			fileSize := fileInfo.Size()
-			// 执行删除操作
-			if err := os.Remove(filePath); err != nil {
-				slog.Error("删除过期文件失败", "path", filePath, "err", err)
+		age := time.Since(fileInfo.ModTime())
+		fileSize := fileInfo.Size()
+		if err := os.Remove(candidate); err != nil {
+			slog.Error("删除过期文件失败", "path", candidate, "err", err)
+		} else {
+			slog.Info("成功删除过期文件", "path", candidate, "age", age.String(), "size", fileSize)
+			deletedCount++
+			totalDeletedSize += fileSize
+			relativePath, relErr := filepath.Rel(dirPath, candidate)
+			if relErr != nil {
+				deletedFileNames = append(deletedFileNames, filepath.Base(candidate))
 			} else {
-				slog.Info("成功删除过期文件", "path", filePath, "age", age.String(), "size", fileSize)
-				deletedCount++
-				totalDeletedSize += fileSize
-				deletedFileNames = append(deletedFileNames, file.Name())
+				deletedFileNames = append(deletedFileNames, relativePath)
 			}
 		}
 	}
@@ -158,4 +151,35 @@ func cleanFiles(ctx context.Context, dbConn *db.DB, dirPath string, maxAge time.
 		"totalDeletedSize", totalDeletedSize,
 		"duration", durationStr,
 	)
+}
+
+func findExpiredFiles(dirPath string, maxAge time.Duration, now time.Time) ([]string, error) {
+	var expiredFiles []string
+
+	err := filepath.WalkDir(dirPath, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		if entry.IsDir() {
+			return nil
+		}
+
+		fileInfo, err := entry.Info()
+		if err != nil {
+			return err
+		}
+
+		if now.Sub(fileInfo.ModTime()) > maxAge {
+			expiredFiles = append(expiredFiles, path)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Strings(expiredFiles)
+	return expiredFiles, nil
 }

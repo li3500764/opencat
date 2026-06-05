@@ -32,6 +32,10 @@ func NewDispatcher(database *db.DB, redisQueue *queue.RedisQueue, maxConcurrency
 	if err != nil {
 		hostname = "unknown-worker-host"
 	}
+	downloadsDir := os.Getenv("DOWNLOADS_DIR")
+	if downloadsDir == "" {
+		downloadsDir = "./public/downloads"
+	}
 
 	rep := reporter.NewDefaultReporter(database, redisQueue)
 
@@ -47,6 +51,7 @@ func NewDispatcher(database *db.DB, redisQueue *queue.RedisQueue, maxConcurrency
 
 	// 注册默认的执行器
 	d.RegisterExecutor("rag-ingest", executor.NewRagIngestExecutor(database))
+	d.RegisterExecutor("image-generation", executor.NewImageGenerationExecutor(database, downloadsDir))
 
 	return d
 }

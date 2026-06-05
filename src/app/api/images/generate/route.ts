@@ -12,10 +12,11 @@ import { auth } from "@/lib/auth";
 import { db } from "@/server/db";
 import { isEncryptionConfigError } from "@/lib/crypto";
 import { classifyDatabaseError } from "@/server/db/errors";
+import { redis } from "@/lib/redis";
 import {
   createImageGenerationTask,
+  failImageGenerationTask,
   persistReferenceImageAsset,
-  runImageGenerationTask,
   updateImageGenerationTaskDetails,
 } from "@/lib/images/task-runner";
 import { serializeImageGenerationTask } from "@/lib/images/task-serialization";
@@ -115,7 +116,35 @@ export async function POST(req: Request) {
       });
     }
 
-    void runImageGenerationTask(task.id, session.user.id);
+    try {
+      await redis.xadd(
+        "opencat:tasks",
+        "*",
+        "taskId",
+        task.id,
+        "type",
+        "image-generation",
+        "userId",
+        session.user.id,
+        "payload",
+        JSON.stringify({
+          details:
+            mode === "image-to-image" && referenceImage
+              ? {
+                  mode,
+                  sourceImageName: referenceImage.name,
+                  sourceImageMimeType: referenceImage.type || "image/png",
+                }
+              : { mode },
+        })
+      );
+    } catch (queueError) {
+      await failImageGenerationTask(
+        task.id,
+        queueError instanceof Error ? queueError.message : "Failed to enqueue image generation task"
+      );
+      throw queueError;
+    }
 
     return Response.json({
       success: true,
