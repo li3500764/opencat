@@ -56,6 +56,7 @@ export function createModel(
   maybeBaseUrl?: string
 ): LanguageModel {
   let baseUrl: string | undefined;
+  let format: ApiFormat | undefined;
 
   // 1. 如果第三个参数是 string (代表 format / url)
   if (typeof optionsOrFormat === "string") {
@@ -63,17 +64,21 @@ export function createModel(
     if (optionsOrFormat.startsWith("http")) {
       baseUrl = optionsOrFormat;
     } else {
+      format = optionsOrFormat;
       baseUrl = maybeBaseUrl;
     }
   }
   // 2. 如果第三个参数是 options 对象
   else if (optionsOrFormat) {
     baseUrl = optionsOrFormat.baseUrl;
+    format = optionsOrFormat.format;
   }
 
   // 统一通过 @ai-sdk/openai 构建 OpenAI 兼容模型实例
   const client = createOpenAI({ apiKey, baseURL: baseUrl });
-  return client.chat(modelId);
+  return format === "openai-responses"
+    ? client.responses(modelId)
+    : client.chat(modelId);
 }
 
 // ============================================================
@@ -103,4 +108,3 @@ export function calculateCost(
     );
   }
 }
-

@@ -391,59 +391,63 @@ async function handleChatRequest(req: Request) {
     }
   );
 
-  // ---- 10. 后台保存 ----
-  void (async () => {
-    try {
-      const [text, totalUsage] = await Promise.all([
-        result.text,
-        result.totalUsage,
-      ]);
-
-      await db.message.create({
-        data: {
-          conversationId: activeConversationId,
-          role: "assistant",
-          content: text,
-          model: modelId,
-          tokenCount: totalUsage?.totalTokens ?? 0,
-        },
-      });
-
-      await db.conversation.update({
-        where: { id: activeConversationId },
-        data: {
-          updatedAt: new Date(),
-          // ★ 同步更新 agentId，确保切换 Agent 后下次打开对话能恢复
-          agentId: agentId || null,
-        },
-      });
-
-      if (totalUsage) {
-        const cost = calculateCost(
-          modelId,
-          totalUsage.inputTokens ?? 0,
-          totalUsage.outputTokens ?? 0
-        );
-        await db.usageLog.create({
-          data: {
-            userId,
-            model: modelId,
-            provider: providerId,
-            promptTokens: totalUsage.inputTokens ?? 0,
-            completionTokens: totalUsage.outputTokens ?? 0,
-            totalTokens: totalUsage.totalTokens ?? 0,
-            cost,
-          },
-        });
-      }
-    } catch (err) {
-      console.error("[Chat API] Failed to save response:", err);
-    }
-  })();
-
-  // ---- 11. 返回 SSE 流 ----
+  // ---- 10. 返回 SSE 流，并在流结束时保存助手消息 ----
   return result.toUIMessageStreamResponse({
     headers: { "X-Conversation-Id": activeConversationId },
+    originalMessages: messages,
+    onFinish: async ({ responseMessage }) => {
+      try {
+        const text = extractTextFromParts(responseMessage.parts);
+        const totalUsage = await result.totalUsage;
+
+        if (text.trim()) {
+          await db.message.create({
+            data: {
+              conversationId: activeConversationId,
+              role: "assistant",
+              content: text,
+              model: modelId,
+              tokenCount: totalUsage?.totalTokens ?? 0,
+            },
+          });
+        } else {
+          console.warn("[Chat API] Assistant response was empty; skipping message persistence.", {
+            conversationId: activeConversationId,
+            modelId,
+          });
+        }
+
+        await db.conversation.update({
+          where: { id: activeConversationId },
+          data: {
+            updatedAt: new Date(),
+            // ★ 同步更新 agentId，确保切换 Agent 后下次打开对话能恢复
+            agentId: agentId || null,
+          },
+        });
+
+        if (totalUsage) {
+          const cost = calculateCost(
+            modelId,
+            totalUsage.inputTokens ?? 0,
+            totalUsage.outputTokens ?? 0
+          );
+          await db.usageLog.create({
+            data: {
+              userId,
+              model: modelId,
+              provider: providerId,
+              promptTokens: totalUsage.inputTokens ?? 0,
+              completionTokens: totalUsage.outputTokens ?? 0,
+              totalTokens: totalUsage.totalTokens ?? 0,
+              cost,
+            },
+          });
+        }
+      } catch (err) {
+        console.error("[Chat API] Failed to save response:", err);
+      }
+    },
   });
 }
 
