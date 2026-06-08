@@ -51,10 +51,11 @@ interface ImageGenerationTask {
 const IMAGE_KEYWORDS = ["image", "dall", "flux", "midjourney", "mj", "sd", "stable-diffusion"];
 const SIZES = [
   { value: "1024x1024", label: "1K", hint: "1024" },
+  { value: "1536x1024", label: "3:2", hint: "1536" },
   { value: "2048x2048", label: "2K", hint: "2048" },
   { value: "4096x4096", label: "4K", hint: "4096" },
-  { value: "1024x1792", label: "9:16", hint: "Portrait" },
-  { value: "1792x1024", label: "16:9", hint: "Wide" },
+  { value: "1024x1792", label: "9:16", hint: "竖图" },
+  { value: "1792x1024", label: "16:9", hint: "横图" },
 ] as const;
 
 function isImageModel(modelId: string) {
@@ -382,7 +383,10 @@ export default function ImageGenerationPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setMode("text-to-image")}
+                    onClick={() => {
+                      setMode("text-to-image");
+                      setSize((currentSize) => currentSize === "1536x1024" ? "1024x1024" : currentSize);
+                    }}
                     className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
                       mode === "text-to-image"
                         ? "border-accent bg-accent/10 text-accent"
@@ -393,7 +397,10 @@ export default function ImageGenerationPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setMode("image-to-image")}
+                    onClick={() => {
+                      setMode("image-to-image");
+                      setSize("1536x1024");
+                    }}
                     className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
                       mode === "image-to-image"
                         ? "border-accent bg-accent/10 text-accent"
@@ -440,7 +447,7 @@ export default function ImageGenerationPage() {
 
               <div className="space-y-2">
                 <span className="text-xs font-medium text-muted">{t("imageGeneration.sizeLabel")}</span>
-                <div className="grid grid-cols-5 gap-2">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
                   {SIZES.map((item) => (
                     <button
                       key={item.value}

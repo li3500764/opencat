@@ -10,7 +10,7 @@ type CreateImageTaskInput = {
   apiKeyId: string;
   model: string;
   prompt: string;
-  size: "1024x1024" | "2048x2048" | "4096x4096" | "1024x1792" | "1792x1024";
+  size: "1024x1024" | "1536x1024" | "2048x2048" | "4096x4096" | "1024x1792" | "1792x1024";
   quality?: string;
   style?: string;
   mode?: "text-to-image" | "image-to-image";

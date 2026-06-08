@@ -35,7 +35,7 @@ const generateImageSchema = z.object({
   prompt: z.string().trim().min(1).max(8000),
   mode: z.enum(["text-to-image", "image-to-image"]).default("text-to-image"),
   size: z
-    .enum(["1024x1024", "2048x2048", "4096x4096", "1024x1792", "1792x1024"])
+    .enum(["1024x1024", "1536x1024", "2048x2048", "4096x4096", "1024x1792", "1792x1024"])
     .default("1024x1024"),
   quality: z.string().trim().optional(),
   style: z.string().trim().optional(),

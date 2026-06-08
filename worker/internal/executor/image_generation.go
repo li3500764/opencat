@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,6 +54,7 @@ type imageGenerationAPIResponse struct {
 	} `json:"data"`
 	Error *struct {
 		Message string `json:"message"`
+		Type    string `json:"type,omitempty"`
 	} `json:"error,omitempty"`
 	Message string `json:"message,omitempty"`
 }
@@ -61,7 +64,7 @@ func NewImageGenerationExecutor(database *db.DB, downloadsDir string) *ImageGene
 		db:           database,
 		downloadsDir: downloadsDir,
 		httpClient: &http.Client{
-			Timeout: 5 * time.Minute,
+			Timeout: 10 * time.Minute,
 		},
 	}
 }
@@ -148,10 +151,7 @@ func (e *ImageGenerationExecutor) callImageProvider(
 	)
 
 	if details.Mode == "image-to-image" {
-		req, err = e.buildImageEditRequest(ctx, taskID, apiBase, apiKey, details)
-		if err != nil {
-			return nil, err
-		}
+		return e.callImageEditProvider(ctx, taskID, apiBase, apiKey, details)
 	} else {
 		req, err = e.buildImageGenerationRequest(ctx, apiBase, apiKey, details)
 		if err != nil {
@@ -170,24 +170,85 @@ func (e *ImageGenerationExecutor) callImageProvider(
 		return nil, fmt.Errorf("读取图片生成响应失败: %w", err)
 	}
 
-	contentType := resp.Header.Get("Content-Type")
-	if !strings.Contains(strings.ToLower(contentType), "application/json") {
-		return nil, fmt.Errorf(describeUnexpectedResponse(resp.StatusCode, contentType, body))
+	apiResp, err := normalizeImageResponse(resp.Header.Get("Content-Type"), resp.StatusCode, body)
+	if err != nil {
+		return nil, err
 	}
 
-	var apiResp imageGenerationAPIResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, fmt.Errorf("解析图片生成响应失败: %w；%s", err, describeUnexpectedResponse(resp.StatusCode, contentType, body))
+	if len(apiResp.Data) == 0 {
+		return nil, fmt.Errorf("图片生成接口未返回任何图片")
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		if apiResp.Error != nil && apiResp.Error.Message != "" {
-			return nil, fmt.Errorf(apiResp.Error.Message)
+	item := apiResp.Data[0]
+	if item.URL != "" {
+		return e.downloadRemoteImage(ctx, item.URL, item.RevisedPrompt)
+	}
+	if item.B64JSON != "" {
+		bytes, err := base64.StdEncoding.DecodeString(item.B64JSON)
+		if err != nil {
+			return nil, fmt.Errorf("解码图片 base64 失败: %w", err)
 		}
-		if apiResp.Message != "" {
-			return nil, fmt.Errorf(apiResp.Message)
+		return &normalizedImageResult{
+			remoteURL:     "data:image/png;base64," + item.B64JSON,
+			revisedPrompt: item.RevisedPrompt,
+			bytes:         bytes,
+			extension:     "png",
+		}, nil
+	}
+
+	return nil, fmt.Errorf("图片生成接口返回了无法识别的图片格式")
+}
+
+func (e *ImageGenerationExecutor) callImageEditProvider(
+	ctx context.Context,
+	taskID string,
+	apiBase string,
+	apiKey string,
+	details *imageTaskDetails,
+) (*normalizedImageResult, error) {
+	var lastErr error
+	attempts := []bool{true, false, true}
+	for index, stream := range attempts {
+		result, err := e.callImageEditProviderOnce(ctx, taskID, apiBase, apiKey, details, stream)
+		if err == nil {
+			return result, nil
 		}
-		return nil, fmt.Errorf("图片生成接口返回状态码 %d", resp.StatusCode)
+		lastErr = err
+		if index == len(attempts)-1 || !shouldRetryImageEdit(err) {
+			break
+		}
+		time.Sleep(time.Duration(index+1) * 2 * time.Second)
+	}
+	return nil, lastErr
+}
+
+func (e *ImageGenerationExecutor) callImageEditProviderOnce(
+	ctx context.Context,
+	taskID string,
+	apiBase string,
+	apiKey string,
+	details *imageTaskDetails,
+	stream bool,
+) (*normalizedImageResult, error) {
+	req, err := e.buildImageEditRequest(ctx, taskID, apiBase, apiKey, details, stream)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := e.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("调用图片生成服务失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取图片生成响应失败: %w", err)
+	}
+
+	apiResp, err := normalizeImageResponse(resp.Header.Get("Content-Type"), resp.StatusCode, body)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(apiResp.Data) == 0 {
@@ -253,8 +314,9 @@ func (e *ImageGenerationExecutor) buildImageEditRequest(
 	apiBase string,
 	apiKey string,
 	details *imageTaskDetails,
+	stream bool,
 ) (*http.Request, error) {
-	multipartReq, multipartErr := e.buildImageEditMultipartRequest(ctx, taskID, apiBase, apiKey, details)
+	multipartReq, multipartErr := e.buildImageEditMultipartRequest(ctx, taskID, apiBase, apiKey, details, stream)
 	if multipartErr == nil {
 		return multipartReq, nil
 	}
@@ -283,6 +345,7 @@ func (e *ImageGenerationExecutor) buildImageEditMultipartRequest(
 	apiBase string,
 	apiKey string,
 	details *imageTaskDetails,
+	stream bool,
 ) (*http.Request, error) {
 	if details.SourceImageURL == "" {
 		return nil, fmt.Errorf("图生图任务缺少参考图")
@@ -315,8 +378,15 @@ func (e *ImageGenerationExecutor) buildImageEditMultipartRequest(
 	if err := writer.WriteField("output_format", "png"); err != nil {
 		return nil, err
 	}
-	if details.Quality != "" {
-		if err := writer.WriteField("quality", details.Quality); err != nil {
+	quality := strings.TrimSpace(details.Quality)
+	if quality == "" {
+		quality = "medium"
+	}
+	if err := writer.WriteField("quality", quality); err != nil {
+		return nil, err
+	}
+	if stream {
+		if err := writer.WriteField("stream", "true"); err != nil {
 			return nil, err
 		}
 	}
@@ -326,7 +396,7 @@ func (e *ImageGenerationExecutor) buildImageEditMultipartRequest(
 		}
 	}
 
-	fileWriter, err := writer.CreateFormFile("image[]", fileNameOrFallback(details.SourceImageName, "source-"+taskID+".png"))
+	fileWriter, err := createImageFormFilePart(writer, "image[]", filepath.Base(sourcePath), details.SourceImageMimeType)
 	if err != nil {
 		return nil, fmt.Errorf("创建参考图表单字段失败: %w", err)
 	}
@@ -343,6 +413,13 @@ func (e *ImageGenerationExecutor) buildImageEditMultipartRequest(
 		return nil, fmt.Errorf("创建图片编辑请求失败: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Referer", "https://www.heiyucode.com/")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36")
+	if stream {
+		req.Header.Set("Accept", "text/event-stream")
+	} else {
+		req.Header.Set("Accept", "application/json")
+	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	return req, nil
 }
@@ -494,11 +571,112 @@ func fileNameOrFallback(name string, fallback string) string {
 	return trimmed
 }
 
-func describeUnexpectedResponse(statusCode int, contentType string, body []byte) string {
-	snippet := strings.TrimSpace(string(body))
-	if len(snippet) > 240 {
-		snippet = snippet[:240]
+func normalizeImageResponse(contentType string, statusCode int, body []byte) (*imageGenerationAPIResponse, error) {
+	lowerContentType := strings.ToLower(contentType)
+	var apiResp imageGenerationAPIResponse
+
+	if strings.Contains(lowerContentType, "text/event-stream") {
+		parsed, err := parseImageEventStream(body)
+		if err != nil {
+			return nil, err
+		}
+		apiResp = *parsed
+	} else {
+		if !strings.Contains(lowerContentType, "application/json") {
+			return nil, fmt.Errorf(describeUnexpectedResponse(statusCode, contentType, body))
+		}
+		if err := json.Unmarshal(body, &apiResp); err != nil {
+			return nil, fmt.Errorf("解析图片生成响应失败: %w；%s", err, describeUnexpectedResponse(statusCode, contentType, body))
+		}
 	}
+
+	if statusCode < 200 || statusCode >= 300 {
+		return nil, imageAPIError(statusCode, &apiResp)
+	}
+
+	if apiResp.Error != nil && apiResp.Error.Message != "" {
+		return nil, imageAPIError(statusCode, &apiResp)
+	}
+	if apiResp.Message != "" && len(apiResp.Data) == 0 {
+		return nil, imageAPIError(statusCode, &apiResp)
+	}
+
+	return &apiResp, nil
+}
+
+func parseImageEventStream(body []byte) (*imageGenerationAPIResponse, error) {
+	scanner := bufio.NewScanner(bytes.NewReader(body))
+	scanner.Buffer(make([]byte, 1024), maxImageResponseBytes)
+	var lastData string
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		dataIndex := strings.Index(line, "data:")
+		if dataIndex < 0 {
+			continue
+		}
+
+		payload := strings.TrimSpace(line[dataIndex+len("data:"):])
+		if payload == "" || payload == "[DONE]" {
+			continue
+		}
+		lastData = payload
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("读取图片流式响应失败: %w", err)
+	}
+	if lastData == "" {
+		return nil, fmt.Errorf("图片流式响应没有返回有效 data 事件")
+	}
+
+	var apiResp imageGenerationAPIResponse
+	if err := json.Unmarshal([]byte(lastData), &apiResp); err != nil {
+		return nil, fmt.Errorf("解析图片流式响应失败: %w；data=%q", err, trimForLog(lastData, 240))
+	}
+
+	return &apiResp, nil
+}
+
+func imageAPIError(statusCode int, apiResp *imageGenerationAPIResponse) error {
+	if apiResp != nil && apiResp.Error != nil && apiResp.Error.Message != "" {
+		if apiResp.Error.Type != "" {
+			return fmt.Errorf("图片生成接口返回错误: status=%d type=%s message=%s", statusCode, apiResp.Error.Type, apiResp.Error.Message)
+		}
+		return fmt.Errorf("图片生成接口返回错误: status=%d message=%s", statusCode, apiResp.Error.Message)
+	}
+	if apiResp != nil && apiResp.Message != "" {
+		return fmt.Errorf("图片生成接口返回错误: status=%d message=%s", statusCode, apiResp.Message)
+	}
+	return fmt.Errorf("图片生成接口返回状态码 %d", statusCode)
+}
+
+func shouldRetryImageEdit(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := err.Error()
+	retryHints := []string{
+		"context deadline exceeded",
+		"Client.Timeout exceeded",
+		"status=502",
+		"type=upstream_error",
+		"type=server_error",
+		"server_error",
+		"上游请求失败",
+	}
+	for _, hint := range retryHints {
+		if strings.Contains(message, hint) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func describeUnexpectedResponse(statusCode int, contentType string, body []byte) string {
+	snippet := trimForLog(strings.TrimSpace(string(body)), 240)
 	if snippet == "" {
 		snippet = "(empty body)"
 	}
@@ -509,4 +687,44 @@ func describeUnexpectedResponse(statusCode int, contentType string, body []byte)
 		contentType,
 		snippet,
 	)
+}
+
+func trimForLog(value string, maxLength int) string {
+	if len(value) <= maxLength {
+		return value
+	}
+	return value[:maxLength]
+}
+
+const maxImageResponseBytes = 32 * 1024 * 1024
+
+func createImageFormFilePart(writer *multipart.Writer, fieldName string, fileName string, mimeType string) (io.Writer, error) {
+	header := make(textproto.MIMEHeader)
+	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, escapeQuotes(fieldName), escapeQuotes(fileName)))
+
+	contentType := strings.TrimSpace(mimeType)
+	if contentType == "" {
+		contentType = inferMimeTypeFromFileName(fileName)
+	}
+	header.Set("Content-Type", contentType)
+
+	return writer.CreatePart(header)
+}
+
+func inferMimeTypeFromFileName(fileName string) string {
+	extension := strings.ToLower(filepath.Ext(fileName))
+	switch extension {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".webp":
+		return "image/webp"
+	case ".gif":
+		return "image/gif"
+	default:
+		return "image/png"
+	}
+}
+
+func escapeQuotes(value string) string {
+	return strings.NewReplacer("\\", "\\\\", `"`, "\\\"").Replace(value)
 }
