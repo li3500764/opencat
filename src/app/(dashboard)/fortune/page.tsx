@@ -1,0 +1,748 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  Compass,
+  History,
+  Loader2,
+  MapPin,
+  RefreshCw,
+  ScrollText,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react";
+import { ModelSelector } from "@/components/chat/model-selector";
+import { FORTUNE_LOCATIONS } from "@/lib/fortune/locations";
+import { extractFortuneCharts } from "@/lib/fortune/normalize";
+import type { BaziChart, FortuneGender, FortuneLocation } from "@/lib/fortune/types";
+import type { TarotChart } from "@/lib/fortune/tarot";
+import type { ZiweiChart } from "@/lib/fortune/ziwei";
+import type { ZhouyiTimeChart } from "@/lib/fortune/zhouyi";
+
+interface FortuneReadingListItem {
+  id: string;
+  profileName: string;
+  gender: string;
+  birthDateTime: string;
+  queryDateTime: string;
+  locationName: string;
+  useTrueSolarTime: boolean;
+  model: string;
+  dayPillar: string;
+  createdAt: string;
+}
+
+interface FortuneReadingDetail {
+  id: string;
+  chart: unknown;
+  baziChart?: BaziChart | null;
+  zhouyiChart?: ZhouyiTimeChart;
+  ziweiChart?: ZiweiChart;
+  tarotChart?: TarotChart;
+  interpretation: string;
+  model: string;
+  createdAt: string;
+}
+
+interface FortuneResponse {
+  readingId: string;
+  chart: unknown;
+  baziChart?: BaziChart;
+  zhouyiChart?: ZhouyiTimeChart;
+  ziweiChart?: ZiweiChart;
+  tarotChart?: TarotChart;
+  interpretation: string;
+}
+
+const DEFAULT_LOCATION = FORTUNE_LOCATIONS.find((location) => location.id === "cn-beijing") || FORTUNE_LOCATIONS[0];
+
+function nowLocalInputValue() {
+  const date = new Date();
+  date.setSeconds(0, 0);
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
+}
+
+function formatDisplayDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function elementLabel(element: string) {
+  const labels: Record<string, string> = {
+    wood: "木",
+    fire: "火",
+    earth: "土",
+    metal: "金",
+    water: "水",
+  };
+  return labels[element] || element;
+}
+
+function readChartsFromPayload(payload: { chart?: unknown; baziChart?: BaziChart | null; zhouyiChart?: ZhouyiTimeChart; ziweiChart?: ZiweiChart; tarotChart?: TarotChart }) {
+  if (payload.baziChart) {
+    return {
+      bazi: payload.baziChart,
+      zhouyi: payload.zhouyiChart,
+      ziwei: payload.ziweiChart,
+      tarot: payload.tarotChart,
+    };
+  }
+  const extracted = extractFortuneCharts(payload.chart);
+  return {
+    bazi: extracted.bazi,
+    zhouyi: payload.zhouyiChart || extracted.zhouyi,
+    ziwei: payload.ziweiChart || extracted.ziwei,
+    tarot: payload.tarotChart || extracted.tarot,
+  };
+}
+
+export default function FortunePage() {
+  const [profileName, setProfileName] = useState("");
+  const [gender, setGender] = useState<FortuneGender>("male");
+  const [birthDateTimeLocal, setBirthDateTimeLocal] = useState("1990-05-17T08:30");
+  const [queryDateTimeLocal, setQueryDateTimeLocal] = useState(nowLocalInputValue());
+  const [locationId, setLocationId] = useState(DEFAULT_LOCATION.id || "");
+  const [customLocation, setCustomLocation] = useState<FortuneLocation>({
+    name: "",
+    longitude: 116.4074,
+    latitude: 39.9042,
+    timezone: "Asia/Shanghai",
+  });
+  const [useCustomLocation, setUseCustomLocation] = useState(false);
+  const [useTrueSolarTime, setUseTrueSolarTime] = useState(false);
+  const [modelId, setModelId] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [history, setHistory] = useState<FortuneReadingListItem[]>([]);
+  const [activeReading, setActiveReading] = useState<FortuneReadingDetail | null>(null);
+  const [chart, setChart] = useState<BaziChart | null>(null);
+  const [zhouyiChart, setZhouyiChart] = useState<ZhouyiTimeChart | null>(null);
+  const [ziweiChart, setZiweiChart] = useState<ZiweiChart | null>(null);
+  const [tarotChart, setTarotChart] = useState<TarotChart | null>(null);
+  const [interpretation, setInterpretation] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedLocation = useMemo(
+    () => FORTUNE_LOCATIONS.find((location) => location.id === locationId) || DEFAULT_LOCATION,
+    [locationId]
+  );
+  const birthLocation = useCustomLocation ? customLocation : selectedLocation;
+
+  const fetchHistory = useCallback(async () => {
+    setIsLoadingHistory(true);
+    try {
+      const res = await fetch("/api/fortune/readings", { cache: "no-store" });
+      if (!res.ok) throw new Error("加载历史记录失败");
+      setHistory(await res.json());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "加载历史记录失败");
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchHistory();
+  }, [fetchHistory]);
+
+  const submitReading = async () => {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/fortune/readings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profileName,
+          gender,
+          birthCalendar: "gregorian",
+          birthDateTimeLocal,
+          birthLocation,
+          useTrueSolarTime,
+          queryDateTimeLocal,
+          modelId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "生成命盘失败");
+      }
+      const result = data as FortuneResponse;
+      const charts = readChartsFromPayload(result);
+      if (!charts.bazi) throw new Error("命盘数据格式无效");
+      setChart(charts.bazi);
+      setZhouyiChart(charts.zhouyi || null);
+      setZiweiChart(charts.ziwei || null);
+      setTarotChart(charts.tarot || null);
+      setInterpretation(result.interpretation);
+      setActiveReading(null);
+      await fetchHistory();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "生成命盘失败");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const loadReading = async (id: string) => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/fortune/readings/${id}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("读取历史命盘失败");
+      const detail = (await res.json()) as FortuneReadingDetail;
+      const charts = readChartsFromPayload(detail);
+      if (!charts.bazi) throw new Error("历史命盘数据格式无效");
+      setActiveReading(detail);
+      setChart(charts.bazi);
+      setZhouyiChart(charts.zhouyi || null);
+      setZiweiChart(charts.ziwei || null);
+      setTarotChart(charts.tarot || null);
+      setInterpretation(detail.interpretation);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "读取历史命盘失败");
+    }
+  };
+
+  return (
+    <div className="flex h-full flex-col overflow-y-auto bg-background">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-5 py-6">
+        <header className="flex flex-col gap-3 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-accent">
+              <Compass className="h-3.5 w-3.5" />
+              四柱八字 · 程序排盘
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">算命</h1>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
+              先由代码严谨排出四柱、十神、五行、大运与流年，再让模型基于结构化命盘解读。AI 不参与排盘。
+            </p>
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+            <ShieldCheck className="h-4 w-4" />
+            历史记录仅当前登录账号可见
+          </div>
+        </header>
+
+        {error && (
+          <div className="flex items-center gap-2 rounded-lg border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger">
+            <AlertTriangle className="h-4 w-4" />
+            {error}
+          </div>
+        )}
+
+        <div className="grid gap-5 xl:grid-cols-[390px_1fr]">
+          <section className="space-y-4">
+            <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-semibold text-foreground">输入信息</h2>
+                  <p className="text-xs text-muted">首版默认公历出生时间</p>
+                </div>
+                <ModelSelector value={modelId} onChange={setModelId} />
+              </div>
+
+              <div className="space-y-3">
+                <label className="block text-xs font-medium text-muted">
+                  姓名
+                  <input
+                    value={profileName}
+                    onChange={(event) => setProfileName(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm text-foreground outline-none focus:border-accent/60"
+                    placeholder="请输入姓名"
+                  />
+                </label>
+
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    ["male", "男"],
+                    ["female", "女"],
+                    ["other", "其他"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setGender(value as FortuneGender)}
+                      className={`rounded-lg border px-3 py-2 text-sm transition-colors ${
+                        gender === value
+                          ? "border-accent bg-accent/10 text-accent"
+                          : "border-border text-muted hover:bg-[var(--sidebar-hover)] hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                <label className="block text-xs font-medium text-muted">
+                  公历出生时间
+                  <input
+                    type="datetime-local"
+                    value={birthDateTimeLocal}
+                    onChange={(event) => setBirthDateTimeLocal(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm text-foreground outline-none focus:border-accent/60"
+                  />
+                </label>
+
+                <label className="block text-xs font-medium text-muted">
+                  起盘/测算时间
+                  <input
+                    type="datetime-local"
+                    value={queryDateTimeLocal}
+                    onChange={(event) => setQueryDateTimeLocal(event.target.value)}
+                    className="mt-1 w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm text-foreground outline-none focus:border-accent/60"
+                  />
+                </label>
+
+                <div className="rounded-lg border border-border p-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted">出生地区</span>
+                    <button
+                      onClick={() => setUseCustomLocation((value) => !value)}
+                      className="text-xs font-medium text-accent hover:text-accent-hover"
+                    >
+                      {useCustomLocation ? "使用城市库" : "手动经纬度"}
+                    </button>
+                  </div>
+
+                  {useCustomLocation ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        value={customLocation.name}
+                        onChange={(event) => setCustomLocation({ ...customLocation, name: event.target.value })}
+                        className="col-span-2 rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/60"
+                        placeholder="地区名称"
+                      />
+                      <input
+                        type="number"
+                        value={customLocation.longitude}
+                        onChange={(event) => setCustomLocation({ ...customLocation, longitude: Number(event.target.value) })}
+                        className="rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/60"
+                        placeholder="经度"
+                      />
+                      <input
+                        type="number"
+                        value={customLocation.latitude}
+                        onChange={(event) => setCustomLocation({ ...customLocation, latitude: Number(event.target.value) })}
+                        className="rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/60"
+                        placeholder="纬度"
+                      />
+                      <input
+                        value={customLocation.timezone}
+                        onChange={(event) => setCustomLocation({ ...customLocation, timezone: event.target.value })}
+                        className="col-span-2 rounded-lg border border-border bg-input-bg px-3 py-2 text-sm outline-none focus:border-accent/60"
+                        placeholder="Asia/Shanghai"
+                      />
+                    </div>
+                  ) : (
+                    <select
+                      value={locationId}
+                      onChange={(event) => setLocationId(event.target.value)}
+                      className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm text-foreground outline-none focus:border-accent/60"
+                    >
+                      {FORTUNE_LOCATIONS.map((location) => (
+                        <option key={location.id} value={location.id}>
+                          {location.name} · {location.longitude.toFixed(2)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <label className="flex items-start gap-3 rounded-lg border border-border p-3">
+                  <input
+                    type="checkbox"
+                    checked={useTrueSolarTime}
+                    onChange={(event) => setUseTrueSolarTime(event.target.checked)}
+                    className="mt-1 h-4 w-4 accent-[var(--accent)]"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-foreground">启用真太阳时修正</span>
+                    <span className="text-xs leading-5 text-muted">
+                      根据出生地经度修正时间，可能影响时柱或临界日柱。默认关闭并按标准时间排盘。
+                    </span>
+                  </span>
+                </label>
+
+                <button
+                  onClick={submitReading}
+                  disabled={isSubmitting || !profileName.trim() || !modelId}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {isSubmitting ? "正在排盘并解读..." : "生成综合命盘"}
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <History className="h-4 w-4 text-muted" />
+                  历史记录
+                </h2>
+                <button onClick={fetchHistory} className="text-muted hover:text-foreground">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {isLoadingHistory ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted" />
+                </div>
+              ) : history.length === 0 ? (
+                <p className="py-6 text-center text-xs text-muted">暂无历史命盘</p>
+              ) : (
+                <div className="space-y-2">
+                  {history.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => loadReading(item.id)}
+                      className="w-full rounded-lg border border-border px-3 py-2 text-left transition-colors hover:bg-[var(--sidebar-hover)]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium text-foreground">{item.profileName}</span>
+                        <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">{item.dayPillar || "日柱"}</span>
+                      </div>
+                      <div className="mt-1 flex items-center gap-1 text-[11px] text-muted">
+                        <MapPin className="h-3 w-3" />
+                        {item.locationName} · {formatDisplayDate(item.createdAt)}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="min-h-[620px] rounded-lg border border-border bg-card shadow-sm">
+            {!chart ? (
+              <div className="flex h-full min-h-[620px] flex-col items-center justify-center px-8 text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 text-accent">
+                  <ScrollText className="h-7 w-7" />
+                </div>
+                <h2 className="text-lg font-semibold text-foreground">等待生成命盘</h2>
+                <p className="mt-2 max-w-md text-sm leading-6 text-muted">
+                  填写左侧信息后，系统会先输出程序排盘结果，再生成模型解读。命盘基础不会交给 AI 猜。
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-5 p-5">
+                <div className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-accent">Programmatic Chart</p>
+                    <h2 className="mt-1 text-xl font-bold text-foreground">
+                      {chart.profileName} · 日主 {chart.pillars.day.stem}
+                    </h2>
+                    <p className="mt-1 text-xs text-muted">
+                      {activeReading ? `历史记录 · ${formatDisplayDate(activeReading.createdAt)}` : "最新生成"}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-border px-3 py-2 text-xs text-muted">
+                    {chart.calculationBasis.timeBasis === "trueSolar" ? "真太阳时" : "标准时间"} · {chart.calculationBasis.locationName}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                  {(["year", "month", "day", "hour"] as const).map((key) => {
+                    const pillar = chart.pillars[key];
+                    const title = { year: "年柱", month: "月柱", day: "日柱", hour: "时柱" }[key];
+                    return (
+                      <div key={key} className="rounded-lg border border-border bg-background-secondary p-4">
+                        <p className="text-xs text-muted">{title}</p>
+                        <div className="mt-2 text-2xl font-black tracking-wide text-foreground">{pillar.stemBranch}</div>
+                        <p className="mt-1 text-xs text-muted">
+                          {pillar.tenGod} · {pillar.naYin}
+                        </p>
+                        <p className="mt-2 text-[11px] text-muted">
+                          藏干：{pillar.hiddenStems.map((stem) => `${stem.stem}${stem.tenGod}`).join(" / ")}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-3">
+                  <div className="rounded-lg border border-border p-4">
+                    <h3 className="mb-3 text-sm font-semibold text-foreground">五行分布</h3>
+                    {(["wood", "fire", "earth", "metal", "water"] as const).map((element) => (
+                      <div key={element} className="mb-2 last:mb-0">
+                        <div className="mb-1 flex justify-between text-xs text-muted">
+                          <span>{elementLabel(element)}</span>
+                          <span>{chart.fiveElementBalance[element]}</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-border">
+                          <div
+                            className="h-full rounded-full bg-accent"
+                            style={{ width: `${(chart.fiveElementBalance[element] / chart.fiveElementBalance.total) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-lg border border-border p-4">
+                    <h3 className="mb-3 text-sm font-semibold text-foreground">格局与旺衰</h3>
+                    <p className="text-sm font-semibold text-foreground">{chart.pattern.name}</p>
+                    <p className="mt-2 text-xs leading-5 text-muted">{chart.dayMasterStrength.explanation}</p>
+                    <p className="mt-2 text-xs text-muted">建议元素：{chart.pattern.usefulElements.map(elementLabel).join("、")}</p>
+                  </div>
+
+                  <div className="rounded-lg border border-border p-4">
+                    <h3 className="mb-3 text-sm font-semibold text-foreground">节气口径</h3>
+                    <p className="text-xs text-muted">上一节气：{chart.solarTerms.previous.name}</p>
+                    <p className="mt-1 text-xs text-muted">下一节气：{chart.solarTerms.next.name}</p>
+                    <p className="mt-1 text-xs text-muted">月令边界：{chart.solarTerms.monthBoundaryUsed.name}</p>
+                    <p className="mt-3 text-[11px] leading-5 text-muted">
+                      修正时间：{chart.calculationBasis.effectiveBirthDateTimeLocal}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border p-4">
+                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <CalendarClock className="h-4 w-4 text-muted" />
+                    大运与流年
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px] text-left text-xs">
+                      <thead className="text-muted">
+                        <tr className="border-b border-border">
+                          <th className="py-2">序</th>
+                          <th>大运</th>
+                          <th>年龄</th>
+                          <th>年份</th>
+                          <th>方向</th>
+                          <th>十神</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {chart.luckCycles.slice(0, 8).map((cycle) => (
+                          <tr key={cycle.index} className="border-b border-border/60 last:border-0">
+                            <td className="py-2 text-muted">{cycle.index}</td>
+                            <td className="font-semibold text-foreground">{cycle.pillar.stemBranch}</td>
+                            <td className="text-muted">{cycle.startAge}-{cycle.endAge}</td>
+                            <td className="text-muted">{cycle.startYear}-{cycle.endYear}</td>
+                            <td className="text-muted">{cycle.direction === "forward" ? "顺行" : "逆行"}</td>
+                            <td className="text-muted">{cycle.pillar.tenGod}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-3 rounded-lg bg-background-secondary px-3 py-2 text-xs text-muted">
+                    当前流年：{chart.annualFortune.year} · {chart.annualFortune.pillar.stemBranch} · {chart.annualFortune.relationToDayMaster}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="rounded-lg border border-border p-4">
+                    <h3 className="mb-2 text-sm font-semibold text-foreground">合冲刑害破</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {(chart.relations.length ? chart.relations : ["无明显合冲"]).map((item) => (
+                        <span key={item} className="rounded bg-background-secondary px-2 py-1 text-xs text-muted">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border p-4">
+                    <h3 className="mb-2 text-sm font-semibold text-foreground">神煞</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {chart.shenSha.map((item) => (
+                        <span key={item} className="rounded bg-accent/10 px-2 py-1 text-xs text-accent">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {ziweiChart && (
+                  <div className="rounded-lg border border-border p-4">
+                    <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">紫微斗数</h3>
+                        <p className="mt-1 text-xs text-muted">
+                          {ziweiChart.calculationBasis.ruleSet} · {ziweiChart.lunarDate} · {ziweiChart.time} {ziweiChart.timeRange}
+                        </p>
+                      </div>
+                      <span className="rounded bg-background-secondary px-2 py-1 text-xs text-muted">
+                        {ziweiChart.fiveElementsClass} · 命主{ziweiChart.soul} · 身主{ziweiChart.body}
+                      </span>
+                    </div>
+
+                    <div className="mb-3 grid gap-3 md:grid-cols-3">
+                      <div className="rounded-lg border border-border bg-background-secondary p-3">
+                        <p className="text-xs text-muted">命宫</p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">{ziweiChart.earthlyBranchOfSoulPalace}</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-background-secondary p-3">
+                        <p className="text-xs text-muted">身宫</p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">{ziweiChart.earthlyBranchOfBodyPalace}</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-background-secondary p-3">
+                        <p className="text-xs text-muted">干支纪年</p>
+                        <p className="mt-1 text-sm font-semibold text-foreground">{ziweiChart.chineseDate}</p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                      {ziweiChart.palaces.map((palace) => {
+                        const starText = palace.majorStars.length
+                          ? palace.majorStars.map((star) => `${star.name}${star.brightness ? `(${star.brightness})` : ""}${star.mutagen ? `化${star.mutagen}` : ""}`).join("、")
+                          : "无主星";
+                        return (
+                          <div key={`${palace.index}-${palace.name}`} className="rounded-lg border border-border px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-semibold text-foreground">
+                                {palace.name}
+                                {palace.isBodyPalace ? <span className="ml-1 text-[10px] text-accent">身宫</span> : null}
+                              </p>
+                              <span className="text-[11px] text-muted">{palace.heavenlyStem}{palace.earthlyBranch}</span>
+                            </div>
+                            <p className="mt-1 text-xs leading-5 text-muted">{starText}</p>
+                            <p className="mt-1 text-[11px] text-muted">
+                              大限 {palace.decadal.range[0]}-{palace.decadal.range[1]} · {palace.changsheng12}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {zhouyiChart && (
+                  <div className="rounded-lg border border-border p-4">
+                    <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">周易时间卦</h3>
+                        <p className="mt-1 text-xs text-muted">
+                          {zhouyiChart.calculationBasis.ruleSet} · {zhouyiChart.inputs.lunar.text} · {zhouyiChart.inputs.hourBranch}时
+                        </p>
+                      </div>
+                      <span className="rounded bg-background-secondary px-2 py-1 text-xs text-muted">
+                        动爻：第 {zhouyiChart.movingLine} 爻
+                      </span>
+                    </div>
+
+                    <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
+                      <div className="rounded-lg border border-border bg-background-secondary p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-xs text-muted">本卦</p>
+                            <div className="mt-1 flex items-baseline gap-2">
+                              <span className="text-3xl font-black text-foreground">{zhouyiChart.primaryHexagram.symbol}</span>
+                              <span className="text-lg font-bold text-foreground">{zhouyiChart.primaryHexagram.name}</span>
+                            </div>
+                            <p className="mt-1 text-xs text-muted">
+                              第 {zhouyiChart.primaryHexagram.kingWenNumber} 卦 · 上{zhouyiChart.upperTrigram.name}下{zhouyiChart.lowerTrigram.name}
+                            </p>
+                          </div>
+                          <div className="w-24 space-y-1">
+                            {[...zhouyiChart.primaryHexagram.lines].reverse().map((isYang, index) => {
+                              const lineNumber = 6 - index;
+                              return (
+                                <div key={lineNumber} className="flex h-4 items-center gap-1">
+                                  {isYang ? (
+                                    <span className="h-1.5 w-full rounded bg-foreground" />
+                                  ) : (
+                                    <>
+                                      <span className="h-1.5 flex-1 rounded bg-muted" />
+                                      <span className="h-1.5 flex-1 rounded bg-muted" />
+                                    </>
+                                  )}
+                                  {zhouyiChart.movingLine === lineNumber && <span className="h-2 w-2 shrink-0 rounded-full bg-accent" />}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                        {[
+                          ["互卦", zhouyiChart.mutualHexagram],
+                          ["变卦", zhouyiChart.changedHexagram],
+                        ].map(([label, hexagram]) => (
+                          <div key={label as string} className="rounded-lg border border-border px-3 py-2">
+                            <p className="text-xs text-muted">{label as string}</p>
+                            <p className="mt-1 text-sm font-semibold text-foreground">
+                              {(hexagram as ZhouyiTimeChart["primaryHexagram"]).symbol} {(hexagram as ZhouyiTimeChart["primaryHexagram"]).name}
+                            </p>
+                            <p className="mt-1 text-[11px] text-muted">
+                              第 {(hexagram as ZhouyiTimeChart["primaryHexagram"]).kingWenNumber} 卦
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {tarotChart && (
+                  <div className="rounded-lg border border-border p-4">
+                    <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">塔罗牌阵</h3>
+                        <p className="mt-1 text-xs text-muted">
+                          {tarotChart.spread.name} · {tarotChart.calculationBasis.ruleSet} · seed {tarotChart.calculationBasis.seed}
+                        </p>
+                      </div>
+                      <span className="rounded bg-background-secondary px-2 py-1 text-xs text-muted">
+                        {tarotChart.calculationBasis.deck}
+                      </span>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-3">
+                      {tarotChart.cards.map((drawn) => (
+                        <div key={`${drawn.position.id}-${drawn.card.id}`} className="rounded-lg border border-border bg-background-secondary p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-xs text-muted">{drawn.position.name}</p>
+                              <h4 className="mt-1 text-base font-bold text-foreground">{drawn.card.name}</h4>
+                            </div>
+                            <span className="rounded bg-card px-2 py-1 text-[11px] text-muted">
+                              {drawn.orientation === "upright" ? "正位" : "逆位"}
+                            </span>
+                          </div>
+                          <p className="mt-3 text-[11px] leading-5 text-muted">{drawn.position.focus}</p>
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {drawn.meaning.slice(0, 4).map((keyword) => (
+                              <span key={keyword} className="rounded bg-accent/10 px-2 py-1 text-[11px] text-accent">
+                                {keyword}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
+                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Sparkles className="h-4 w-4 text-accent" />
+                    AI 解读
+                  </h3>
+                  <div className="whitespace-pre-wrap text-sm leading-7 text-foreground">{interpretation}</div>
+                </div>
+
+                <div className="rounded-lg border border-border bg-background-secondary p-3 text-[11px] leading-5 text-muted">
+                  本功能用于传统文化、娱乐和个人反思参考。格局、旺衰、用神、神煞存在流派差异，不应用作医疗、法律、投资、婚恋等重大决策依据。
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}

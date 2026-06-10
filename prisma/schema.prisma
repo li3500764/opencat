@@ -44,6 +44,7 @@ model User {
   projects      Project[]
   memories      Memory[]
   usageLogs     UsageLog[]
+  fortuneReadings FortuneReading[]
   organization  Organization?
 }
 
@@ -316,6 +317,35 @@ model UsageLog {
   totalTokens    Int
   cost           Float    @default(0) // 按模型单价折算的美元费用
   createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+// ==================== 四柱算命历史记录 ====================
+
+model FortuneReading {
+  id              String   @id @default(cuid())
+  userId          String
+  profileName     String
+  gender          String
+  birthCalendar   String   @default("gregorian")
+  birthDateTime   DateTime
+  queryDateTime   DateTime
+  locationName    String
+  longitude       Float
+  latitude        Float
+  timezone        String
+  useTrueSolarTime Boolean @default(false)
+  model           String
+  chart           Json
+  interpretation  String   @db.Text
+  promptTokens    Int      @default(0)
+  completionTokens Int     @default(0)
+  totalTokens     Int      @default(0)
+  cost            Float    @default(0)
+  createdAt       DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

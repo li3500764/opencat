@@ -78,8 +78,23 @@ function formatTaskStatus(task: ImageGenerationTask, t: ReturnType<typeof useTra
   return t("imageGeneration.pending");
 }
 
+function getTaskListSignature(tasks: ImageGenerationTask[]) {
+  return tasks
+    .map((task) =>
+      [
+        task.id,
+        task.status,
+        task.progress,
+        task.updatedAt,
+        task.details?.imageUrl || "",
+        task.details?.error || "",
+      ].join(":")
+    )
+    .join("|");
+}
+
 export default function ImageGenerationPage() {
-  const { t, locale } = useTranslation();
+  const { t } = useTranslation();
   const defaultPrompt = t("imageGeneration.defaultPrompt");
   const failedToLoadKeysText = t("imageGeneration.failedToLoadKeys");
   const failedToLoadTasksText = t("imageGeneration.failedToLoadTasks");
@@ -176,7 +191,12 @@ export default function ImageGenerationPage() {
       const res = await fetch("/api/images/generate", { cache: "no-store" });
       if (!res.ok) throw new Error(failedToLoadTasksText);
       const data = (await res.json()) as ImageGenerationTask[];
-      setTasks(data);
+      setTasks((currentTasks) => {
+        if (getTaskListSignature(currentTasks) === getTaskListSignature(data)) {
+          return currentTasks;
+        }
+        return data;
+      });
       setBrokenImageUrls((current) => {
         const next = { ...current };
         const activeImageUrls = new Set(
@@ -211,7 +231,7 @@ export default function ImageGenerationPage() {
   useEffect(() => {
     void fetchKeys();
     void fetchTasks();
-  }, [fetchKeys, fetchTasks, locale]);
+  }, [fetchKeys, fetchTasks]);
 
   useEffect(() => {
     setPrompt((current) =>
@@ -605,7 +625,7 @@ export default function ImageGenerationPage() {
             </div>
 
             <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-border bg-card p-4">
-              {isLoadingTasks ? (
+              {isLoadingTasks && tasks.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 text-muted">
                   <Loader2 className="h-8 w-8 animate-spin text-accent" />
                   <p className="text-sm">{t("common.loading")}</p>

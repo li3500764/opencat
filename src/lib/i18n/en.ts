@@ -25,6 +25,7 @@ const en = {
     dashboard: "Dashboard",
     smartWorkspace: "Smart Workspace",
     imageGeneration: "AI Images",
+    fortune: "Fortune",
     agentSandbox: "Agent Sandbox",
     noConversations: "No conversations yet",
     agents: "Agents",

@@ -95,10 +95,21 @@ func (d *Dispatcher) Start(ctx context.Context) error {
 			}
 
 			if msg == nil {
-				// 没有新任务，释放插槽，并稍微等待
-				<-d.sem
-				time.Sleep(200 * time.Millisecond)
-				continue
+				// 没有新任务时，尝试接管部署重启或旧消费者崩溃后遗留的 pending 消息。
+				claimedMsg, claimErr := d.queue.ClaimStaleTask(ctx, d.hostname, 2*time.Minute)
+				if claimErr != nil {
+					slog.Error("接管超时 pending 任务失败", "err", claimErr)
+					<-d.sem
+					time.Sleep(2 * time.Second)
+					continue
+				}
+				if claimedMsg == nil {
+					<-d.sem
+					time.Sleep(200 * time.Millisecond)
+					continue
+				}
+				msg = claimedMsg
+				slog.Info("已接管超时 pending 后台任务", "msgId", msg.ID, "taskId", msg.Fields["taskId"])
 			}
 
 			// 3. 读到任务，启动 goroutine 异步处理
@@ -154,6 +165,11 @@ func (d *Dispatcher) processTaskMessage(ctx context.Context, msg *queue.TaskMess
 	task, err := d.db.GetTask(ctx, taskId)
 	if err != nil {
 		slog.Error("从数据库读取任务记录失败", "taskId", taskId, "err", err)
+		_ = d.queue.AckTask(ctx, msg.ID)
+		return
+	}
+	if task.Status == "completed" || task.Status == "failed" {
+		slog.Info("后台任务已经结束，确认并跳过队列消息", "taskId", taskId, "status", task.Status, "msgId", msg.ID)
 		_ = d.queue.AckTask(ctx, msg.ID)
 		return
 	}

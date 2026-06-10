@@ -57,8 +57,8 @@ func (rq *RedisQueue) CreateConsumerGroupIfNotExist(ctx context.Context) error {
 
 // TaskMessage 代表从 Redis Stream 读取出来的原始任务数据
 type TaskMessage struct {
-	ID      string            // Redis 消息 ID (例如 "162626262-0")
-	Fields  map[string]string // 消息字段
+	ID     string            // Redis 消息 ID (例如 "162626262-0")
+	Fields map[string]string // 消息字段
 }
 
 // ReadTask 阻塞式地从 Redis Stream 中读取一个新任务
@@ -86,6 +86,42 @@ func (rq *RedisQueue) ReadTask(ctx context.Context, consumerName string) (*TaskM
 
 	msg := streams[0].Messages[0]
 	// 将 map[string]interface{} 转换为 map[string]string
+	fields := make(map[string]string)
+	for k, v := range msg.Values {
+		if strVal, ok := v.(string); ok {
+			fields[k] = strVal
+		} else {
+			fields[k] = fmt.Sprintf("%v", v)
+		}
+	}
+
+	return &TaskMessage{
+		ID:     msg.ID,
+		Fields: fields,
+	}, nil
+}
+
+// ClaimStaleTask 接管长时间没有被原消费者确认的 pending 消息。
+func (rq *RedisQueue) ClaimStaleTask(ctx context.Context, consumerName string, minIdle time.Duration) (*TaskMessage, error) {
+	streams, _, err := rq.Client.XAutoClaim(ctx, &redis.XAutoClaimArgs{
+		Stream:   rq.StreamName,
+		Group:    rq.GroupName,
+		Consumer: consumerName,
+		MinIdle:  minIdle,
+		Start:    "0-0",
+		Count:    1,
+	}).Result()
+	if err != nil {
+		if err == redis.Nil {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("接管 Redis Stream pending 任务失败: %w", err)
+	}
+	if len(streams) == 0 {
+		return nil, nil
+	}
+
+	msg := streams[0]
 	fields := make(map[string]string)
 	for k, v := range msg.Values {
 		if strVal, ok := v.(string); ok {

@@ -47,6 +47,7 @@ import { embed, embedMany } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { db } from "@/server/db";
 import { decrypt } from "@/lib/crypto";
+import { normalizeOpenAIBaseUrl } from "@/lib/llm";
 
 // ============================================================
 // Embedding 配置（从环境变量读取，有默认值兜底）
@@ -95,7 +96,7 @@ const EMBEDDING_PROVIDER = process.env.EMBEDDING_PROVIDER || "openai";
 // 只要兼容这个格式，传入 baseURL 就能用。
 //
 function getEmbeddingModel(apiKey: string, baseUrl?: string, modelId: string = EMBEDDING_MODEL) {
-  const activeBaseUrl = EMBEDDING_BASE_URL || baseUrl;
+  const activeBaseUrl = normalizeOpenAIBaseUrl(EMBEDDING_BASE_URL || baseUrl);
   const openai = createOpenAI({
     apiKey,
     // 如果配了自定义 baseURL，走代理/私有端点
@@ -201,7 +202,7 @@ async function resolveEmbeddingModel(userId: string) {
 
   const openai = createOpenAI({
     apiKey,
-    ...(userBaseUrl ? { baseURL: userBaseUrl } : {}),
+    ...(userBaseUrl ? { baseURL: normalizeOpenAIBaseUrl(userBaseUrl) } : {}),
   });
 
   return openai.textEmbeddingModel(modelId);

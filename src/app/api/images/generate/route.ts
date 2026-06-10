@@ -23,11 +23,22 @@ import { serializeImageGenerationTask } from "@/lib/images/task-serialization";
 
 type SerializableImageTask = Parameters<typeof serializeImageGenerationTask>[0];
 
-const backgroundTaskDb = db as typeof db & {
-  backgroundTask: {
-    findMany: (args: unknown) => Promise<unknown[]>;
-  };
-};
+export const dynamic = "force-dynamic";
+
+const timedLogThresholdMs = 1000;
+
+function nowMs() {
+  return Date.now();
+}
+
+function logSlowImageTaskListTimings(timings: Record<string, number>, taskCount: number) {
+  if (timings.total < timedLogThresholdMs) return;
+
+  console.warn("[images/generate:GET] slow task list", {
+    ...timings,
+    taskCount,
+  });
+}
 
 const generateImageSchema = z.object({
   apiKeyId: z.string().trim().min(1),
@@ -178,24 +189,50 @@ export async function POST(req: Request) {
 }
 
 export async function GET() {
+  const startedAt = nowMs();
   const session = await auth();
+  const authFinishedAt = nowMs();
   if (!session?.user?.id) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
-    const tasks = (await backgroundTaskDb.backgroundTask.findMany({
-      where: {
-        type: "image-generation",
-        project: {
-          userId: session.user.id,
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 30,
-    })) as SerializableImageTask[];
+    const tasks = (await db.$queryRaw`
+      SELECT
+        bt.id,
+        bt.name,
+        bt.type,
+        bt.status,
+        bt.progress,
+        bt."createdAt",
+        bt."updatedAt",
+        bt.logs,
+        CASE
+          WHEN bt.details IS NULL THEN NULL
+          ELSE (bt.details::jsonb - 'remoteImageUrl')::text
+        END AS details
+      FROM "BackgroundTask" bt
+      INNER JOIN "Project" p ON p.id = bt."projectId"
+      WHERE bt.type = 'image-generation'
+        AND p."userId" = ${session.user.id}
+      ORDER BY bt."createdAt" DESC
+      LIMIT 30
+    `) as SerializableImageTask[];
+    const queryFinishedAt = nowMs();
 
-    return Response.json(tasks.map(serializeImageGenerationTask));
+    const serializedTasks = tasks.map(serializeImageGenerationTask);
+    const serializedAt = nowMs();
+    logSlowImageTaskListTimings(
+      {
+        auth: authFinishedAt - startedAt,
+        query: queryFinishedAt - authFinishedAt,
+        serialize: serializedAt - queryFinishedAt,
+        total: serializedAt - startedAt,
+      },
+      serializedTasks.length
+    );
+
+    return Response.json(serializedTasks);
   } catch (error) {
     const databaseError = classifyDatabaseError(error);
     if (databaseError) {

@@ -332,7 +332,11 @@ async function handleChatRequest(req: Request) {
     providerId,
     format: keyFormat as ApiFormat | undefined,
   });
-  const modelMessages = await convertToModelMessages(messages);
+  const cleanMessages = messages.filter((message) => {
+    if (message.role !== "assistant") return true;
+    return extractTextFromParts(message.parts).trim().length > 0;
+  });
+  const modelMessages = await convertToModelMessages(cleanMessages);
 
   // ---- 9. 使用 Agent Engine 创建流式响应 ----
   const defaultTools = ["memory_save", "memory_search"];
@@ -394,7 +398,7 @@ async function handleChatRequest(req: Request) {
   // ---- 10. 返回 SSE 流，并在流结束时保存助手消息 ----
   return result.toUIMessageStreamResponse({
     headers: { "X-Conversation-Id": activeConversationId },
-    originalMessages: messages,
+    originalMessages: cleanMessages,
     onFinish: async ({ responseMessage }) => {
       try {
         const text = extractTextFromParts(responseMessage.parts);

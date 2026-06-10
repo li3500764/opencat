@@ -461,7 +461,7 @@ export async function runImageGenerationTask(taskId: string, userId: string) {
     const completedDetails: ImageTaskDetails = {
       ...details,
       imageUrl: persistedImageUrl,
-      remoteImageUrl: normalized.url,
+      remoteImageUrl: normalized.url.startsWith("data:") ? undefined : normalized.url,
       revisedPrompt: normalized.revised_prompt || undefined,
     };
 

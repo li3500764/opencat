@@ -27,6 +27,7 @@ const zh: TranslationKeys = {
     dashboard: "仪表盘",
     smartWorkspace: "智能工作台",
     imageGeneration: "AI 生图",
+    fortune: "算命",
     agentSandbox: "Agent 调试沙箱",
     noConversations: "暂无对话",
     agents: "Agent 管理",

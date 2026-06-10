@@ -42,6 +42,17 @@ export function getModelInfo(modelId: string): ModelInfo | null {
   return ALL_MODELS.find((m) => m.id === modelId) ?? null;
 }
 
+export function normalizeOpenAIBaseUrl(baseUrl?: string): string | undefined {
+  const trimmed = baseUrl?.trim();
+  if (!trimmed) return undefined;
+
+  const cleanBaseUrl = trimmed.replace(/\/+$/, "");
+  if (cleanBaseUrl.endsWith("/v1") || cleanBaseUrl.includes("/v1/")) {
+    return cleanBaseUrl;
+  }
+  return `${cleanBaseUrl}/v1`;
+}
+
 // ============================================================
 // 仅支持 OpenAI 兼容格式的通用模型创建工厂
 // ============================================================
@@ -74,8 +85,10 @@ export function createModel(
     format = optionsOrFormat.format;
   }
 
+  const normalizedBaseUrl = normalizeOpenAIBaseUrl(baseUrl);
+
   // 统一通过 @ai-sdk/openai 构建 OpenAI 兼容模型实例
-  const client = createOpenAI({ apiKey, baseURL: baseUrl });
+  const client = createOpenAI({ apiKey, baseURL: normalizedBaseUrl });
   return format === "openai-responses"
     ? client.responses(modelId)
     : client.chat(modelId);

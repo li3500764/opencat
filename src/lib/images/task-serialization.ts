@@ -26,14 +26,27 @@ export interface ImageGenerationTaskSummary {
   } | null;
 }
 
+type ImageGenerationTaskDetails = NonNullable<ImageGenerationTaskSummary["details"]>;
+
 function parseLogs(logs: unknown): string[] {
   return Array.isArray(logs) ? logs.filter((item): item is string => typeof item === "string") : [];
+}
+
+function removeHeavyImagePayload(details: ImageGenerationTaskDetails | null) {
+  if (!details) return null;
+
+  const sanitized = { ...details };
+  if (sanitized.remoteImageUrl?.startsWith("data:")) {
+    delete sanitized.remoteImageUrl;
+  }
+
+  return sanitized;
 }
 
 function parseDetails(details: string | null | undefined) {
   if (!details) return null;
   try {
-    return JSON.parse(details) as ImageGenerationTaskSummary["details"];
+    return removeHeavyImagePayload(JSON.parse(details) as ImageGenerationTaskDetails);
   } catch {
     return null;
   }
