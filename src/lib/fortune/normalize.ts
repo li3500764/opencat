@@ -35,6 +35,10 @@ export function extractFortuneCharts(rawChart: unknown): ExtractedFortuneCharts 
     return { bazi: null };
   }
 
+  if (isRecord(rawChart.chart)) {
+    return extractFortuneCharts(rawChart.chart);
+  }
+
   const composite = rawChart as Partial<FortuneCompositeChart>;
   if (isBaziChart(composite.bazi)) {
     return {
@@ -49,9 +53,30 @@ export function extractFortuneCharts(rawChart: unknown): ExtractedFortuneCharts 
     return { bazi: rawChart };
   }
 
+  if (isZhouyiTimeChart(rawChart)) {
+    return { bazi: null, zhouyi: rawChart };
+  }
+
+  if (isZiweiChart(rawChart)) {
+    return { bazi: null, ziwei: rawChart };
+  }
+
+  if (isTarotChart(rawChart)) {
+    return { bazi: null, tarot: rawChart };
+  }
+
   return { bazi: null };
 }
 
 export function getFortuneDayPillar(rawChart: unknown) {
   return extractFortuneCharts(rawChart).bazi?.pillars.day.stemBranch || "";
+}
+
+export function getFortuneChartSummary(rawChart: unknown) {
+  const charts = extractFortuneCharts(rawChart);
+  if (charts.bazi) return charts.bazi.pillars.day.stemBranch;
+  if (charts.ziwei) return `命宫${charts.ziwei.earthlyBranchOfSoulPalace}`;
+  if (charts.zhouyi) return charts.zhouyi.primaryHexagram.name;
+  if (charts.tarot) return charts.tarot.cards.map((card) => card.card.name).join(" / ");
+  return "";
 }

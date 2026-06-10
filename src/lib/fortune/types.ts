@@ -4,6 +4,7 @@ import type { ZiweiChart } from "./ziwei";
 
 export type FortuneGender = "male" | "female" | "other";
 export type FortuneCalendar = "gregorian";
+export type FortuneMethod = "bazi" | "ziwei" | "zhouyi" | "tarot";
 export type YinYang = "yang" | "yin";
 export type FiveElement = "wood" | "fire" | "earth" | "metal" | "water";
 export type LuckDirection = "forward" | "backward";
@@ -17,6 +18,7 @@ export interface FortuneLocation {
 }
 
 export interface FortuneInput {
+  method: FortuneMethod;
   profileName: string;
   gender: FortuneGender;
   birthCalendar: FortuneCalendar;

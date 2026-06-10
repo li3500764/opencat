@@ -16,7 +16,7 @@ import {
 import { ModelSelector } from "@/components/chat/model-selector";
 import { FORTUNE_LOCATIONS } from "@/lib/fortune/locations";
 import { extractFortuneCharts } from "@/lib/fortune/normalize";
-import type { BaziChart, FortuneGender, FortuneLocation } from "@/lib/fortune/types";
+import type { BaziChart, FortuneGender, FortuneLocation, FortuneMethod } from "@/lib/fortune/types";
 import type { TarotChart } from "@/lib/fortune/tarot";
 import type { ZiweiChart } from "@/lib/fortune/ziwei";
 import type { ZhouyiTimeChart } from "@/lib/fortune/zhouyi";
@@ -31,12 +31,15 @@ interface FortuneReadingListItem {
   useTrueSolarTime: boolean;
   model: string;
   dayPillar: string;
+  method?: FortuneMethod;
+  summary?: string;
   createdAt: string;
 }
 
 interface FortuneReadingDetail {
   id: string;
   chart: unknown;
+  method?: FortuneMethod;
   baziChart?: BaziChart | null;
   zhouyiChart?: ZhouyiTimeChart;
   ziweiChart?: ZiweiChart;
@@ -48,6 +51,7 @@ interface FortuneReadingDetail {
 
 interface FortuneResponse {
   readingId: string;
+  method: FortuneMethod;
   chart: unknown;
   baziChart?: BaziChart;
   zhouyiChart?: ZhouyiTimeChart;
@@ -57,6 +61,12 @@ interface FortuneResponse {
 }
 
 const DEFAULT_LOCATION = FORTUNE_LOCATIONS.find((location) => location.id === "cn-beijing") || FORTUNE_LOCATIONS[0];
+const FORTUNE_METHODS: { value: FortuneMethod; label: string; description: string }[] = [
+  { value: "bazi", label: "四柱八字", description: "按四柱、十神、五行、大运流年解读" },
+  { value: "ziwei", label: "紫微斗数", description: "按十二宫、命身宫、星曜结构解读" },
+  { value: "zhouyi", label: "周易时间卦", description: "按本卦、动爻、互卦、变卦解读" },
+  { value: "tarot", label: "塔罗牌阵", description: "按三张牌牌位与正逆位解读" },
+];
 
 function nowLocalInputValue() {
   const date = new Date();
@@ -88,6 +98,10 @@ function elementLabel(element: string) {
   return labels[element] || element;
 }
 
+function methodLabel(method?: FortuneMethod) {
+  return FORTUNE_METHODS.find((item) => item.value === method)?.label || "四柱八字";
+}
+
 function readChartsFromPayload(payload: { chart?: unknown; baziChart?: BaziChart | null; zhouyiChart?: ZhouyiTimeChart; ziweiChart?: ZiweiChart; tarotChart?: TarotChart }) {
   if (payload.baziChart) {
     return {
@@ -106,7 +120,25 @@ function readChartsFromPayload(payload: { chart?: unknown; baziChart?: BaziChart
   };
 }
 
+async function readErrorMessage(res: Response, fallback: string) {
+  try {
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      if (res.status === 524) return "模型解读超时，请换用更快的模型或稍后重试";
+      if (res.status === 504) return "模型解读超时，请换用更快的模型或稍后重试";
+      return `${fallback}（服务器返回了非 JSON 响应，HTTP ${res.status}）`;
+    }
+    const data = (await res.json()) as { error?: unknown; code?: unknown };
+    const message = typeof data.error === "string" ? data.error : fallback;
+    const code = typeof data.code === "string" ? data.code : "";
+    return code ? `${message} (${code})` : message;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function FortunePage() {
+  const [method, setMethod] = useState<FortuneMethod>("bazi");
   const [profileName, setProfileName] = useState("");
   const [gender, setGender] = useState<FortuneGender>("male");
   const [birthDateTimeLocal, setBirthDateTimeLocal] = useState("1990-05-17T08:30");
@@ -131,6 +163,7 @@ export default function FortunePage() {
   const [tarotChart, setTarotChart] = useState<TarotChart | null>(null);
   const [interpretation, setInterpretation] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const hasResult = Boolean(chart || zhouyiChart || ziweiChart || tarotChart);
 
   const selectedLocation = useMemo(
     () => FORTUNE_LOCATIONS.find((location) => location.id === locationId) || DEFAULT_LOCATION,
@@ -142,7 +175,9 @@ export default function FortunePage() {
     setIsLoadingHistory(true);
     try {
       const res = await fetch("/api/fortune/readings", { cache: "no-store" });
-      if (!res.ok) throw new Error("加载历史记录失败");
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "加载历史记录失败"));
+      }
       setHistory(await res.json());
     } catch (err) {
       setError(err instanceof Error ? err.message : "加载历史记录失败");
@@ -163,6 +198,7 @@ export default function FortunePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          method,
           profileName,
           gender,
           birthCalendar: "gregorian",
@@ -173,13 +209,13 @@ export default function FortunePage() {
           modelId,
         }),
       });
-      const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "生成命盘失败");
+        throw new Error(await readErrorMessage(res, "生成测算失败"));
       }
+      const data = await res.json();
       const result = data as FortuneResponse;
       const charts = readChartsFromPayload(result);
-      if (!charts.bazi) throw new Error("命盘数据格式无效");
+      if (!charts.bazi && !charts.ziwei && !charts.zhouyi && !charts.tarot) throw new Error("测算数据格式无效");
       setChart(charts.bazi);
       setZhouyiChart(charts.zhouyi || null);
       setZiweiChart(charts.ziwei || null);
@@ -188,7 +224,7 @@ export default function FortunePage() {
       setActiveReading(null);
       await fetchHistory();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "生成命盘失败");
+      setError(err instanceof Error ? err.message : "生成测算失败");
     } finally {
       setIsSubmitting(false);
     }
@@ -198,10 +234,12 @@ export default function FortunePage() {
     setError(null);
     try {
       const res = await fetch(`/api/fortune/readings/${id}`, { cache: "no-store" });
-      if (!res.ok) throw new Error("读取历史命盘失败");
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "读取历史测算失败"));
+      }
       const detail = (await res.json()) as FortuneReadingDetail;
       const charts = readChartsFromPayload(detail);
-      if (!charts.bazi) throw new Error("历史命盘数据格式无效");
+      if (!charts.bazi && !charts.ziwei && !charts.zhouyi && !charts.tarot) throw new Error("历史测算数据格式无效");
       setActiveReading(detail);
       setChart(charts.bazi);
       setZhouyiChart(charts.zhouyi || null);
@@ -209,7 +247,7 @@ export default function FortunePage() {
       setTarotChart(charts.tarot || null);
       setInterpretation(detail.interpretation);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "读取历史命盘失败");
+      setError(err instanceof Error ? err.message : "读取历史测算失败");
     }
   };
 
@@ -220,11 +258,11 @@ export default function FortunePage() {
           <div>
             <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-accent">
               <Compass className="h-3.5 w-3.5" />
-              四柱八字 · 程序排盘
+              术数测算 · 程序排盘
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">算命</h1>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-muted">
-              先由代码严谨排出四柱、十神、五行、大运与流年，再让模型基于结构化命盘解读。AI 不参与排盘。
+              选择一种测算方法，系统先用代码生成该体系的基础盘面，再交给模型解读。AI 不跨体系混算。
             </p>
           </div>
           <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
@@ -246,12 +284,30 @@ export default function FortunePage() {
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold text-foreground">输入信息</h2>
-                  <p className="text-xs text-muted">首版默认公历出生时间</p>
+                  <p className="text-xs text-muted">单一体系独立测算</p>
                 </div>
                 <ModelSelector value={modelId} onChange={setModelId} />
               </div>
 
               <div className="space-y-3">
+                <label className="block text-xs font-medium text-muted">
+                  测算方法
+                  <select
+                    value={method}
+                    onChange={(event) => setMethod(event.target.value as FortuneMethod)}
+                    className="mt-1 w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm text-foreground outline-none focus:border-accent/60"
+                  >
+                    {FORTUNE_METHODS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="mt-1 block text-[11px] leading-5 text-muted">
+                    {FORTUNE_METHODS.find((item) => item.value === method)?.description}
+                  </span>
+                </label>
+
                 <label className="block text-xs font-medium text-muted">
                   姓名
                   <input
@@ -378,7 +434,7 @@ export default function FortunePage() {
                   className="flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  {isSubmitting ? "正在排盘并解读..." : "生成综合命盘"}
+                  {isSubmitting ? "正在测算并解读..." : "生成测算"}
                 </button>
               </div>
             </div>
@@ -398,7 +454,7 @@ export default function FortunePage() {
                   <Loader2 className="h-4 w-4 animate-spin text-muted" />
                 </div>
               ) : history.length === 0 ? (
-                <p className="py-6 text-center text-xs text-muted">暂无历史命盘</p>
+                <p className="py-6 text-center text-xs text-muted">暂无历史测算</p>
               ) : (
                 <div className="space-y-2">
                   {history.map((item) => (
@@ -409,11 +465,11 @@ export default function FortunePage() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-medium text-foreground">{item.profileName}</span>
-                        <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">{item.dayPillar || "日柱"}</span>
+                        <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">{methodLabel(item.method)}</span>
                       </div>
                       <div className="mt-1 flex items-center gap-1 text-[11px] text-muted">
                         <MapPin className="h-3 w-3" />
-                        {item.locationName} · {formatDisplayDate(item.createdAt)}
+                        {item.locationName} · {item.summary || item.dayPillar || "摘要"} · {formatDisplayDate(item.createdAt)}
                       </div>
                     </button>
                   ))}
@@ -423,14 +479,14 @@ export default function FortunePage() {
           </section>
 
           <section className="min-h-[620px] rounded-lg border border-border bg-card shadow-sm">
-            {!chart ? (
+            {!hasResult ? (
               <div className="flex h-full min-h-[620px] flex-col items-center justify-center px-8 text-center">
                 <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 text-accent">
                   <ScrollText className="h-7 w-7" />
                 </div>
-                <h2 className="text-lg font-semibold text-foreground">等待生成命盘</h2>
+                <h2 className="text-lg font-semibold text-foreground">等待生成测算</h2>
                 <p className="mt-2 max-w-md text-sm leading-6 text-muted">
-                  填写左侧信息后，系统会先输出程序排盘结果，再生成模型解读。命盘基础不会交给 AI 猜。
+                  填写左侧信息并选择测算方法后，系统会先输出该体系的程序结果，再生成模型解读。不同体系不会混在一起。
                 </p>
               </div>
             ) : (
@@ -439,131 +495,141 @@ export default function FortunePage() {
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-accent">Programmatic Chart</p>
                     <h2 className="mt-1 text-xl font-bold text-foreground">
-                      {chart.profileName} · 日主 {chart.pillars.day.stem}
+                      {chart
+                        ? `${chart.profileName} · 日主 ${chart.pillars.day.stem}`
+                        : ziweiChart
+                          ? `${ziweiChart.profileName} · ${methodLabel("ziwei")}`
+                          : methodLabel(zhouyiChart ? "zhouyi" : "tarot")}
                     </h2>
                     <p className="mt-1 text-xs text-muted">
                       {activeReading ? `历史记录 · ${formatDisplayDate(activeReading.createdAt)}` : "最新生成"}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-border px-3 py-2 text-xs text-muted">
-                    {chart.calculationBasis.timeBasis === "trueSolar" ? "真太阳时" : "标准时间"} · {chart.calculationBasis.locationName}
-                  </div>
+                  {chart && (
+                    <div className="rounded-lg border border-border px-3 py-2 text-xs text-muted">
+                      {chart.calculationBasis.timeBasis === "trueSolar" ? "真太阳时" : "标准时间"} · {chart.calculationBasis.locationName}
+                    </div>
+                  )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                  {(["year", "month", "day", "hour"] as const).map((key) => {
-                    const pillar = chart.pillars[key];
-                    const title = { year: "年柱", month: "月柱", day: "日柱", hour: "时柱" }[key];
-                    return (
-                      <div key={key} className="rounded-lg border border-border bg-background-secondary p-4">
-                        <p className="text-xs text-muted">{title}</p>
-                        <div className="mt-2 text-2xl font-black tracking-wide text-foreground">{pillar.stemBranch}</div>
-                        <p className="mt-1 text-xs text-muted">
-                          {pillar.tenGod} · {pillar.naYin}
-                        </p>
-                        <p className="mt-2 text-[11px] text-muted">
-                          藏干：{pillar.hiddenStems.map((stem) => `${stem.stem}${stem.tenGod}`).join(" / ")}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
+                {chart && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                      {(["year", "month", "day", "hour"] as const).map((key) => {
+                        const pillar = chart.pillars[key];
+                        const title = { year: "年柱", month: "月柱", day: "日柱", hour: "时柱" }[key];
+                        return (
+                          <div key={key} className="rounded-lg border border-border bg-background-secondary p-4">
+                            <p className="text-xs text-muted">{title}</p>
+                            <div className="mt-2 text-2xl font-black tracking-wide text-foreground">{pillar.stemBranch}</div>
+                            <p className="mt-1 text-xs text-muted">
+                              {pillar.tenGod} · {pillar.naYin}
+                            </p>
+                            <p className="mt-2 text-[11px] text-muted">
+                              藏干：{pillar.hiddenStems.map((stem) => `${stem.stem}${stem.tenGod}`).join(" / ")}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
 
-                <div className="grid gap-3 lg:grid-cols-3">
-                  <div className="rounded-lg border border-border p-4">
-                    <h3 className="mb-3 text-sm font-semibold text-foreground">五行分布</h3>
-                    {(["wood", "fire", "earth", "metal", "water"] as const).map((element) => (
-                      <div key={element} className="mb-2 last:mb-0">
-                        <div className="mb-1 flex justify-between text-xs text-muted">
-                          <span>{elementLabel(element)}</span>
-                          <span>{chart.fiveElementBalance[element]}</span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-border">
-                          <div
-                            className="h-full rounded-full bg-accent"
-                            style={{ width: `${(chart.fiveElementBalance[element] / chart.fiveElementBalance.total) * 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="rounded-lg border border-border p-4">
-                    <h3 className="mb-3 text-sm font-semibold text-foreground">格局与旺衰</h3>
-                    <p className="text-sm font-semibold text-foreground">{chart.pattern.name}</p>
-                    <p className="mt-2 text-xs leading-5 text-muted">{chart.dayMasterStrength.explanation}</p>
-                    <p className="mt-2 text-xs text-muted">建议元素：{chart.pattern.usefulElements.map(elementLabel).join("、")}</p>
-                  </div>
-
-                  <div className="rounded-lg border border-border p-4">
-                    <h3 className="mb-3 text-sm font-semibold text-foreground">节气口径</h3>
-                    <p className="text-xs text-muted">上一节气：{chart.solarTerms.previous.name}</p>
-                    <p className="mt-1 text-xs text-muted">下一节气：{chart.solarTerms.next.name}</p>
-                    <p className="mt-1 text-xs text-muted">月令边界：{chart.solarTerms.monthBoundaryUsed.name}</p>
-                    <p className="mt-3 text-[11px] leading-5 text-muted">
-                      修正时间：{chart.calculationBasis.effectiveBirthDateTimeLocal}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-border p-4">
-                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <CalendarClock className="h-4 w-4 text-muted" />
-                    大运与流年
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[720px] text-left text-xs">
-                      <thead className="text-muted">
-                        <tr className="border-b border-border">
-                          <th className="py-2">序</th>
-                          <th>大运</th>
-                          <th>年龄</th>
-                          <th>年份</th>
-                          <th>方向</th>
-                          <th>十神</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {chart.luckCycles.slice(0, 8).map((cycle) => (
-                          <tr key={cycle.index} className="border-b border-border/60 last:border-0">
-                            <td className="py-2 text-muted">{cycle.index}</td>
-                            <td className="font-semibold text-foreground">{cycle.pillar.stemBranch}</td>
-                            <td className="text-muted">{cycle.startAge}-{cycle.endAge}</td>
-                            <td className="text-muted">{cycle.startYear}-{cycle.endYear}</td>
-                            <td className="text-muted">{cycle.direction === "forward" ? "顺行" : "逆行"}</td>
-                            <td className="text-muted">{cycle.pillar.tenGod}</td>
-                          </tr>
+                    <div className="grid gap-3 lg:grid-cols-3">
+                      <div className="rounded-lg border border-border p-4">
+                        <h3 className="mb-3 text-sm font-semibold text-foreground">五行分布</h3>
+                        {(["wood", "fire", "earth", "metal", "water"] as const).map((element) => (
+                          <div key={element} className="mb-2 last:mb-0">
+                            <div className="mb-1 flex justify-between text-xs text-muted">
+                              <span>{elementLabel(element)}</span>
+                              <span>{chart.fiveElementBalance[element]}</span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-border">
+                              <div
+                                className="h-full rounded-full bg-accent"
+                                style={{ width: `${(chart.fiveElementBalance[element] / chart.fiveElementBalance.total) * 100}%` }}
+                              />
+                            </div>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="mt-3 rounded-lg bg-background-secondary px-3 py-2 text-xs text-muted">
-                    当前流年：{chart.annualFortune.year} · {chart.annualFortune.pillar.stemBranch} · {chart.annualFortune.relationToDayMaster}
-                  </div>
-                </div>
+                      </div>
 
-                <div className="grid gap-3 lg:grid-cols-2">
-                  <div className="rounded-lg border border-border p-4">
-                    <h3 className="mb-2 text-sm font-semibold text-foreground">合冲刑害破</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {(chart.relations.length ? chart.relations : ["无明显合冲"]).map((item) => (
-                        <span key={item} className="rounded bg-background-secondary px-2 py-1 text-xs text-muted">
-                          {item}
-                        </span>
-                      ))}
+                      <div className="rounded-lg border border-border p-4">
+                        <h3 className="mb-3 text-sm font-semibold text-foreground">格局与旺衰</h3>
+                        <p className="text-sm font-semibold text-foreground">{chart.pattern.name}</p>
+                        <p className="mt-2 text-xs leading-5 text-muted">{chart.dayMasterStrength.explanation}</p>
+                        <p className="mt-2 text-xs text-muted">建议元素：{chart.pattern.usefulElements.map(elementLabel).join("、")}</p>
+                      </div>
+
+                      <div className="rounded-lg border border-border p-4">
+                        <h3 className="mb-3 text-sm font-semibold text-foreground">节气口径</h3>
+                        <p className="text-xs text-muted">上一节气：{chart.solarTerms.previous.name}</p>
+                        <p className="mt-1 text-xs text-muted">下一节气：{chart.solarTerms.next.name}</p>
+                        <p className="mt-1 text-xs text-muted">月令边界：{chart.solarTerms.monthBoundaryUsed.name}</p>
+                        <p className="mt-3 text-[11px] leading-5 text-muted">
+                          修正时间：{chart.calculationBasis.effectiveBirthDateTimeLocal}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="rounded-lg border border-border p-4">
-                    <h3 className="mb-2 text-sm font-semibold text-foreground">神煞</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {chart.shenSha.map((item) => (
-                        <span key={item} className="rounded bg-accent/10 px-2 py-1 text-xs text-accent">
-                          {item}
-                        </span>
-                      ))}
+
+                    <div className="rounded-lg border border-border p-4">
+                      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <CalendarClock className="h-4 w-4 text-muted" />
+                        大运与流年
+                      </h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[720px] text-left text-xs">
+                          <thead className="text-muted">
+                            <tr className="border-b border-border">
+                              <th className="py-2">序</th>
+                              <th>大运</th>
+                              <th>年龄</th>
+                              <th>年份</th>
+                              <th>方向</th>
+                              <th>十神</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {chart.luckCycles.slice(0, 8).map((cycle) => (
+                              <tr key={cycle.index} className="border-b border-border/60 last:border-0">
+                                <td className="py-2 text-muted">{cycle.index}</td>
+                                <td className="font-semibold text-foreground">{cycle.pillar.stemBranch}</td>
+                                <td className="text-muted">{cycle.startAge}-{cycle.endAge}</td>
+                                <td className="text-muted">{cycle.startYear}-{cycle.endYear}</td>
+                                <td className="text-muted">{cycle.direction === "forward" ? "顺行" : "逆行"}</td>
+                                <td className="text-muted">{cycle.pillar.tenGod}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mt-3 rounded-lg bg-background-secondary px-3 py-2 text-xs text-muted">
+                        当前流年：{chart.annualFortune.year} · {chart.annualFortune.pillar.stemBranch} · {chart.annualFortune.relationToDayMaster}
+                      </div>
                     </div>
-                  </div>
-                </div>
+
+                    <div className="grid gap-3 lg:grid-cols-2">
+                      <div className="rounded-lg border border-border p-4">
+                        <h3 className="mb-2 text-sm font-semibold text-foreground">合冲刑害破</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {(chart.relations.length ? chart.relations : ["无明显合冲"]).map((item) => (
+                            <span key={item} className="rounded bg-background-secondary px-2 py-1 text-xs text-muted">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-border p-4">
+                        <h3 className="mb-2 text-sm font-semibold text-foreground">神煞</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {chart.shenSha.map((item) => (
+                            <span key={item} className="rounded bg-accent/10 px-2 py-1 text-xs text-accent">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {ziweiChart && (
                   <div className="rounded-lg border border-border p-4">

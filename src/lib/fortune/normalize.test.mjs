@@ -50,3 +50,22 @@ test("extractFortuneCharts reads composite fortune chart records", () => {
   assert.equal(extracted.ziwei, ziwei);
   assert.equal(extracted.tarot, tarot);
 });
+
+test("extractFortuneCharts reads single-method chart records", () => {
+  const zhouyi = {
+    method: "meihua-time",
+    primaryHexagram: { name: "雷火丰" },
+  };
+  const tarot = {
+    method: "tarot-deterministic-draw",
+    cards: [{ card: { name: "太阳" } }],
+  };
+  const ziwei = {
+    method: "ziwei-astrolabe",
+    palaces: [{ name: "命宫" }],
+  };
+
+  assert.deepEqual(extractFortuneCharts(zhouyi), { bazi: null, zhouyi });
+  assert.deepEqual(extractFortuneCharts(tarot), { bazi: null, tarot });
+  assert.deepEqual(extractFortuneCharts(ziwei), { bazi: null, ziwei });
+});
