@@ -5,6 +5,7 @@ import { createFortuneApiErrorResponse } from "@/lib/fortune/api-errors";
 import { isEncryptionConfigError } from "@/lib/crypto";
 import { classifyDatabaseError } from "@/server/db/errors";
 import { buildBaziChart, FortuneValidationError } from "@/lib/fortune/chart";
+import { getStoredFortuneMethod, storeFortuneChart } from "@/lib/fortune/method";
 import { getFortuneChartSummary } from "@/lib/fortune/normalize";
 import { FortuneInterpretationTimeoutError, generateFortuneInterpretation } from "@/lib/fortune/reader";
 import { buildTarotChart } from "@/lib/fortune/tarot";
@@ -214,13 +215,6 @@ function buildSelectedFortuneChart(input: FortuneInput) {
   }
 }
 
-function storeFortuneChart(method: FortuneMethod, chart: unknown) {
-  return {
-    method,
-    chart,
-  } as object;
-}
-
 function methodChartPayload(method: FortuneMethod, chart: unknown) {
   switch (method) {
     case "bazi":
@@ -232,23 +226,6 @@ function methodChartPayload(method: FortuneMethod, chart: unknown) {
     case "tarot":
       return { tarotChart: chart };
   }
-}
-
-function getStoredFortuneMethod(rawChart: unknown): FortuneMethod {
-  if (rawChart && typeof rawChart === "object" && "method" in rawChart) {
-    const method = (rawChart as { method?: unknown }).method;
-    if (method === "bazi" || method === "ziwei" || method === "zhouyi" || method === "tarot") {
-      return method;
-    }
-  }
-  if (rawChart && typeof rawChart === "object" && "chart" in rawChart) {
-    return getStoredFortuneMethod((rawChart as { chart?: unknown }).chart);
-  }
-  if (rawChart && typeof rawChart === "object" && "bazi" in rawChart) return "bazi";
-  if (rawChart && typeof rawChart === "object" && "palaces" in rawChart) return "ziwei";
-  if (rawChart && typeof rawChart === "object" && "primaryHexagram" in rawChart) return "zhouyi";
-  if (rawChart && typeof rawChart === "object" && "cards" in rawChart) return "tarot";
-  return "bazi";
 }
 
 function getCalculationBasis(chart: unknown) {

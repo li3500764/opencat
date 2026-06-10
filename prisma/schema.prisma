@@ -45,6 +45,7 @@ model User {
   memories      Memory[]
   usageLogs     UsageLog[]
   fortuneReadings FortuneReading[]
+  fortuneConsultSessions FortuneConsultSession[]
   organization  Organization?
 }
 
@@ -348,8 +349,40 @@ model FortuneReading {
   createdAt       DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  consultSessions FortuneConsultSession[]
 
   @@index([userId, createdAt])
+}
+
+model FortuneConsultSession {
+  id            String   @id @default(cuid())
+  readingId     String
+  userId        String
+  summary       String?  @db.Text
+  summaryTokens Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  reading  FortuneReading @relation(fields: [readingId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages FortuneConsultMessage[]
+
+  @@unique([readingId, userId])
+  @@index([userId, updatedAt])
+}
+
+model FortuneConsultMessage {
+  id         String   @id @default(cuid())
+  sessionId  String
+  role       String
+  content    String   @db.Text
+  model      String?
+  tokenCount Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  session FortuneConsultSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
 }
 
 // ============================================================

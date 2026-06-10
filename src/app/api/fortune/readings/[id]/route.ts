@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth";
 import { createFortuneApiErrorResponse } from "@/lib/fortune/api-errors";
+import { getStoredFortuneMethod } from "@/lib/fortune/method";
 import { extractFortuneCharts } from "@/lib/fortune/normalize";
-import type { FortuneMethod } from "@/lib/fortune/types";
 import { db } from "@/server/db";
 
 export async function GET(
@@ -64,21 +64,4 @@ export async function GET(
       logLabel: "[fortune.readings.id.GET]",
     });
   }
-}
-
-function getStoredFortuneMethod(rawChart: unknown): FortuneMethod {
-  if (rawChart && typeof rawChart === "object" && "method" in rawChart) {
-    const method = (rawChart as { method?: unknown }).method;
-    if (method === "bazi" || method === "ziwei" || method === "zhouyi" || method === "tarot") {
-      return method;
-    }
-  }
-  if (rawChart && typeof rawChart === "object" && "chart" in rawChart) {
-    return getStoredFortuneMethod((rawChart as { chart?: unknown }).chart);
-  }
-  if (rawChart && typeof rawChart === "object" && "bazi" in rawChart) return "bazi";
-  if (rawChart && typeof rawChart === "object" && "palaces" in rawChart) return "ziwei";
-  if (rawChart && typeof rawChart === "object" && "primaryHexagram" in rawChart) return "zhouyi";
-  if (rawChart && typeof rawChart === "object" && "cards" in rawChart) return "tarot";
-  return "bazi";
 }

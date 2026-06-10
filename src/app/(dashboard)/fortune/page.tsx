@@ -7,9 +7,11 @@ import {
   Compass,
   History,
   Loader2,
+  MessageCircle,
   MapPin,
   RefreshCw,
   ScrollText,
+  Send,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -58,6 +60,14 @@ interface FortuneResponse {
   ziweiChart?: ZiweiChart;
   tarotChart?: TarotChart;
   interpretation: string;
+}
+
+interface FortuneConsultMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  model?: string | null;
+  createdAt: string;
 }
 
 const DEFAULT_LOCATION = FORTUNE_LOCATIONS.find((location) => location.id === "cn-beijing") || FORTUNE_LOCATIONS[0];
@@ -163,6 +173,12 @@ export default function FortunePage() {
   const [tarotChart, setTarotChart] = useState<TarotChart | null>(null);
   const [interpretation, setInterpretation] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [currentReadingId, setCurrentReadingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"chart" | "consult">("chart");
+  const [consultMessages, setConsultMessages] = useState<FortuneConsultMessage[]>([]);
+  const [consultInput, setConsultInput] = useState("");
+  const [isLoadingConsult, setIsLoadingConsult] = useState(false);
+  const [isAskingMaster, setIsAskingMaster] = useState(false);
   const hasResult = Boolean(chart || zhouyiChart || ziweiChart || tarotChart);
 
   const selectedLocation = useMemo(
@@ -189,6 +205,22 @@ export default function FortunePage() {
   useEffect(() => {
     void fetchHistory();
   }, [fetchHistory]);
+
+  const fetchConsult = useCallback(async (readingId: string) => {
+    setIsLoadingConsult(true);
+    try {
+      const res = await fetch(`/api/fortune/readings/${readingId}/consult`, { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "读取咨询记录失败"));
+      }
+      const data = (await res.json()) as { messages?: FortuneConsultMessage[] };
+      setConsultMessages(data.messages || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "读取咨询记录失败");
+    } finally {
+      setIsLoadingConsult(false);
+    }
+  }, []);
 
   const submitReading = async () => {
     setError(null);
@@ -222,6 +254,9 @@ export default function FortunePage() {
       setTarotChart(charts.tarot || null);
       setInterpretation(result.interpretation);
       setActiveReading(null);
+      setCurrentReadingId(result.readingId);
+      setConsultMessages([]);
+      setActiveTab("chart");
       await fetchHistory();
     } catch (err) {
       setError(err instanceof Error ? err.message : "生成测算失败");
@@ -246,14 +281,53 @@ export default function FortunePage() {
       setZiweiChart(charts.ziwei || null);
       setTarotChart(charts.tarot || null);
       setInterpretation(detail.interpretation);
+      setCurrentReadingId(detail.id);
+      setActiveTab("chart");
+      await fetchConsult(detail.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "读取历史测算失败");
     }
   };
 
+  const askMaster = async () => {
+    if (!currentReadingId || !consultInput.trim() || !modelId || isAskingMaster) return;
+    const userMessage: FortuneConsultMessage = {
+      id: `local-${Date.now()}`,
+      role: "user",
+      content: consultInput.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    setConsultInput("");
+    setConsultMessages((messages) => [...messages, userMessage]);
+    setIsAskingMaster(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/fortune/readings/${currentReadingId}/consult`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userMessage.content,
+          modelId,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "咨询大师失败"));
+      }
+      const data = (await res.json()) as { message: FortuneConsultMessage };
+      setConsultMessages((messages) =>
+        messages.filter((message) => message.id !== userMessage.id).concat(userMessage, data.message)
+      );
+    } catch (err) {
+      setConsultMessages((messages) => messages.filter((message) => message.id !== userMessage.id));
+      setError(err instanceof Error ? err.message : "咨询大师失败");
+    } finally {
+      setIsAskingMaster(false);
+    }
+  };
+
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-background">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-5 py-6">
+    <div className="flex h-[calc(100vh-88px)] min-h-0 flex-col overflow-hidden bg-background">
+      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-5 px-5 py-6">
         <header className="flex flex-col gap-3 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-accent">
@@ -278,8 +352,8 @@ export default function FortunePage() {
           </div>
         )}
 
-        <div className="grid gap-5 xl:grid-cols-[390px_1fr]">
-          <section className="space-y-4">
+        <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[390px_1fr]">
+          <section className="min-h-0 space-y-4 overflow-y-auto pr-1">
             <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
                 <div>
@@ -478,7 +552,7 @@ export default function FortunePage() {
             </div>
           </section>
 
-          <section className="min-h-[620px] rounded-lg border border-border bg-card shadow-sm">
+          <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
             {!hasResult ? (
               <div className="flex h-full min-h-[620px] flex-col items-center justify-center px-8 text-center">
                 <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 text-accent">
@@ -490,8 +564,8 @@ export default function FortunePage() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-5 p-5">
-                <div className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="flex flex-col gap-3 border-b border-border p-5 pb-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-accent">Programmatic Chart</p>
                     <h2 className="mt-1 text-xl font-bold text-foreground">
@@ -512,6 +586,106 @@ export default function FortunePage() {
                   )}
                 </div>
 
+                <div className="flex gap-2 border-b border-border px-5 pt-3">
+                  {[
+                    ["chart", "排盘结果", ScrollText],
+                    ["consult", "咨询大师", MessageCircle],
+                  ].map(([value, label, Icon]) => {
+                    const TabIcon = Icon as typeof ScrollText;
+                    return (
+                      <button
+                        key={value as string}
+                        onClick={() => setActiveTab(value as "chart" | "consult")}
+                        className={`flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium ${
+                          activeTab === value
+                            ? "border-accent text-accent"
+                            : "border-transparent text-muted hover:text-foreground"
+                        }`}
+                      >
+                        <TabIcon className="h-4 w-4" />
+                        {label as string}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                  {activeTab === "consult" ? (
+                    <div className="flex min-h-full flex-col gap-4">
+                      <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-5 text-muted">
+                        咨询只基于当前这条{methodLabel(activeReading?.method || method)}测算和程序盘面，不进入普通聊天记忆，也不跨体系混算。
+                      </div>
+
+                      <div className="min-h-[360px] flex-1 space-y-3 rounded-lg border border-border bg-background-secondary p-4">
+                        {isLoadingConsult ? (
+                          <div className="flex justify-center py-8">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted" />
+                          </div>
+                        ) : consultMessages.length === 0 ? (
+                          <div className="flex min-h-[280px] flex-col items-center justify-center text-center">
+                            <MessageCircle className="mb-3 h-8 w-8 text-muted" />
+                            <p className="text-sm font-medium text-foreground">可以开始问大师了</p>
+                            <p className="mt-1 max-w-sm text-xs leading-5 text-muted">
+                              例如：接下来三年事业要注意什么？这段关系应该怎么看？当前卦象最提醒我的是什么？
+                            </p>
+                          </div>
+                        ) : (
+                          consultMessages.map((message) => (
+                            <div
+                              key={message.id}
+                              className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+                            >
+                              <div
+                                className={`max-w-[82%] rounded-lg px-3 py-2 text-sm leading-6 ${
+                                  message.role === "user"
+                                    ? "bg-foreground text-background"
+                                    : "border border-border bg-card text-foreground"
+                                }`}
+                              >
+                                <div className="whitespace-pre-wrap">{message.content}</div>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                        {isAskingMaster && (
+                          <div className="flex justify-start">
+                            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm text-muted">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              大师正在看盘...
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-lg border border-border bg-card p-3">
+                        <textarea
+                          value={consultInput}
+                          onChange={(event) => setConsultInput(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                              event.preventDefault();
+                              void askMaster();
+                            }
+                          }}
+                          className="min-h-20 w-full resize-none rounded-lg border border-border bg-input-bg px-3 py-2 text-sm text-foreground outline-none focus:border-accent/60"
+                          placeholder={currentReadingId ? "基于当前排盘继续提问..." : "请先生成或打开一条测算"}
+                          disabled={!currentReadingId || isAskingMaster}
+                        />
+                        <div className="mt-2 flex items-center justify-between gap-3">
+                          <span className="text-[11px] text-muted">Cmd/Ctrl + Enter 发送</span>
+                          <button
+                            onClick={askMaster}
+                            disabled={!currentReadingId || !consultInput.trim() || !modelId || isAskingMaster}
+                            className="flex items-center gap-2 rounded-lg bg-foreground px-3 py-2 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {isAskingMaster ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                            发送
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-5">
                 {chart && (
                   <>
                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -803,6 +977,9 @@ export default function FortunePage() {
 
                 <div className="rounded-lg border border-border bg-background-secondary p-3 text-[11px] leading-5 text-muted">
                   本功能用于传统文化、娱乐和个人反思参考。格局、旺衰、用神、神煞存在流派差异，不应用作医疗、法律、投资、婚恋等重大决策依据。
+                </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
