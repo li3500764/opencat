@@ -69,6 +69,7 @@ services:
         condition: service_healthy
     volumes:
       - ./public/downloads:/app/public/downloads
+      - ./public/generated-images:/app/public/generated-images
     networks:
       - internal
     restart: unless-stopped
@@ -96,6 +97,7 @@ services:
         condition: service_healthy
     volumes:
       - ./public/downloads:/app/public/downloads
+      - ./public/generated-images:/app/public/generated-images
     networks:
       - internal
     restart: unless-stopped
