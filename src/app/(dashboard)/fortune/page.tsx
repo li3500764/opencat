@@ -71,6 +71,7 @@ interface FortuneConsultMessage {
 }
 
 const DEFAULT_LOCATION = FORTUNE_LOCATIONS.find((location) => location.id === "cn-beijing") || FORTUNE_LOCATIONS[0];
+const FORTUNE_MODEL_STORAGE_KEY = "opencat_fortune_last_model";
 const FORTUNE_METHODS: { value: FortuneMethod; label: string; description: string }[] = [
   { value: "bazi", label: "四柱八字", description: "按四柱、十神、五行、大运流年解读" },
   { value: "ziwei", label: "紫微斗数", description: "按十二宫、命身宫、星曜结构解读" },
@@ -205,6 +206,26 @@ export default function FortunePage() {
   useEffect(() => {
     void fetchHistory();
   }, [fetchHistory]);
+
+  useEffect(() => {
+    try {
+      const savedModelId = localStorage.getItem(FORTUNE_MODEL_STORAGE_KEY);
+      if (savedModelId) setModelId(savedModelId);
+    } catch {
+      // localStorage may be unavailable in private or restricted browser modes.
+    }
+  }, []);
+
+  const handleModelChange = useCallback((nextModelId: string) => {
+    setModelId(nextModelId);
+    try {
+      if (nextModelId) {
+        localStorage.setItem(FORTUNE_MODEL_STORAGE_KEY, nextModelId);
+      }
+    } catch {
+      // Ignore persistence failures; the selected model still works for this session.
+    }
+  }, []);
 
   const fetchConsult = useCallback(async (readingId: string) => {
     setIsLoadingConsult(true);
@@ -360,7 +381,7 @@ export default function FortunePage() {
                   <h2 className="text-sm font-semibold text-foreground">输入信息</h2>
                   <p className="text-xs text-muted">单一体系独立测算</p>
                 </div>
-                <ModelSelector value={modelId} onChange={setModelId} />
+                <ModelSelector value={modelId} onChange={handleModelChange} />
               </div>
 
               <div className="space-y-3">
