@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   CalendarClock,
@@ -68,6 +68,15 @@ interface FortuneConsultMessage {
   content: string;
   model?: string | null;
   createdAt: string;
+}
+
+interface FortuneAddressResult extends FortuneLocation {
+  id: string;
+  adcode: string;
+  province?: string;
+  city?: string;
+  district?: string;
+  level: "province" | "city" | "district" | "street";
 }
 
 const DEFAULT_LOCATION = FORTUNE_LOCATIONS.find((location) => location.id === "cn-beijing") || FORTUNE_LOCATIONS[0];
@@ -154,7 +163,11 @@ export default function FortunePage() {
   const [gender, setGender] = useState<FortuneGender>("male");
   const [birthDateTimeLocal, setBirthDateTimeLocal] = useState("1990-05-17T08:30");
   const [queryDateTimeLocal, setQueryDateTimeLocal] = useState(nowLocalInputValue());
-  const [locationId, setLocationId] = useState(DEFAULT_LOCATION.id || "");
+  const [selectedAddressLocation, setSelectedAddressLocation] = useState<FortuneLocation>(DEFAULT_LOCATION);
+  const [locationQuery, setLocationQuery] = useState(DEFAULT_LOCATION.name);
+  const [locationResults, setLocationResults] = useState<FortuneAddressResult[]>([]);
+  const [isSearchingLocations, setIsSearchingLocations] = useState(false);
+  const [locationSearchError, setLocationSearchError] = useState<string | null>(null);
   const [customLocation, setCustomLocation] = useState<FortuneLocation>({
     name: "",
     longitude: 116.4074,
@@ -182,11 +195,7 @@ export default function FortunePage() {
   const [isAskingMaster, setIsAskingMaster] = useState(false);
   const hasResult = Boolean(chart || zhouyiChart || ziweiChart || tarotChart);
 
-  const selectedLocation = useMemo(
-    () => FORTUNE_LOCATIONS.find((location) => location.id === locationId) || DEFAULT_LOCATION,
-    [locationId]
-  );
-  const birthLocation = useCustomLocation ? customLocation : selectedLocation;
+  const birthLocation = useCustomLocation ? customLocation : selectedAddressLocation;
 
   const fetchHistory = useCallback(async () => {
     setIsLoadingHistory(true);
@@ -215,6 +224,42 @@ export default function FortunePage() {
       // localStorage may be unavailable in private or restricted browser modes.
     }
   }, []);
+
+  useEffect(() => {
+    if (useCustomLocation) return;
+
+    const controller = new AbortController();
+    const query = locationQuery.trim();
+    const timer = window.setTimeout(async () => {
+      setIsSearchingLocations(true);
+      setLocationSearchError(null);
+      try {
+        const params = new URLSearchParams();
+        if (query) params.set("q", query);
+        params.set("limit", "20");
+        const res = await fetch(`/api/fortune/locations?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          throw new Error(await readErrorMessage(res, "搜索出生地区失败"));
+        }
+        const data = (await res.json()) as { locations?: FortuneAddressResult[] };
+        setLocationResults(data.locations || []);
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setLocationResults([]);
+        setLocationSearchError(err instanceof Error ? err.message : "搜索出生地区失败");
+      } finally {
+        if (!controller.signal.aborted) setIsSearchingLocations(false);
+      }
+    }, 260);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [locationQuery, useCustomLocation]);
 
   const handleModelChange = useCallback((nextModelId: string) => {
     setModelId(nextModelId);
@@ -494,17 +539,57 @@ export default function FortunePage() {
                       />
                     </div>
                   ) : (
-                    <select
-                      value={locationId}
-                      onChange={(event) => setLocationId(event.target.value)}
-                      className="w-full rounded-lg border border-border bg-input-bg px-3 py-2 text-sm text-foreground outline-none focus:border-accent/60"
-                    >
-                      {FORTUNE_LOCATIONS.map((location) => (
-                        <option key={location.id} value={location.id}>
-                          {location.name} · {location.longitude.toFixed(2)}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="space-y-2">
+                      <div className="relative">
+                        <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+                        <input
+                          value={locationQuery}
+                          onChange={(event) => setLocationQuery(event.target.value)}
+                          className="w-full rounded-lg border border-border bg-input-bg py-2 pl-9 pr-9 text-sm text-foreground outline-none focus:border-accent/60"
+                          placeholder="搜索省 / 市 / 区，例如 河南洛阳新安"
+                        />
+                        {isSearchingLocations && (
+                          <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted" />
+                        )}
+                      </div>
+
+                      {locationSearchError && <p className="text-[11px] leading-5 text-danger">{locationSearchError}</p>}
+
+                      <div className="max-h-44 overflow-y-auto rounded-lg border border-border bg-background">
+                        {locationResults.length === 0 ? (
+                          <p className="px-3 py-3 text-xs text-muted">
+                            {isSearchingLocations ? "正在搜索地区..." : "没有匹配地区，可切换手动经纬度"}
+                          </p>
+                        ) : (
+                          locationResults.map((location) => {
+                            const isSelected = selectedAddressLocation.id === location.id;
+                            return (
+                              <button
+                                key={location.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedAddressLocation(location);
+                                  setLocationQuery(location.name);
+                                }}
+                                className={`block w-full border-b border-border px-3 py-2 text-left last:border-b-0 ${
+                                  isSelected ? "bg-accent/10" : "hover:bg-[var(--sidebar-hover)]"
+                                }`}
+                              >
+                                <span className="block text-sm font-medium text-foreground">{location.name}</span>
+                                <span className="mt-0.5 block text-[11px] text-muted">
+                                  {location.level} · {location.longitude.toFixed(4)}, {location.latitude.toFixed(4)} · {location.timezone}
+                                </span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      <div className="rounded-lg bg-[var(--sidebar-hover)] px-3 py-2 text-[11px] leading-5 text-muted">
+                        已选：{selectedAddressLocation.name} · {selectedAddressLocation.longitude.toFixed(4)},{" "}
+                        {selectedAddressLocation.latitude.toFixed(4)} · {selectedAddressLocation.timezone}
+                      </div>
+                    </div>
                   )}
                 </div>
 
