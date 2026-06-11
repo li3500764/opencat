@@ -119,10 +119,12 @@ function formatDisplayDate(value: string) {
 }
 
 function toDateTimeLocalInputValue(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value.slice(0, 16);
-  const offset = date.getTimezoneOffset();
-  return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{4})[-/](\d{2})[-/](\d{2})[T\s](\d{2}:\d{2})/);
+  if (match) {
+    return `${match[1]}-${match[2]}-${match[3]}T${match[4]}`;
+  }
+  return trimmed.slice(0, 16).replace(" ", "T");
 }
 
 function elementLabel(element: string) {
@@ -156,6 +158,23 @@ function readChartsFromPayload(payload: { chart?: unknown; baziChart?: BaziChart
     ziwei: payload.ziweiChart || extracted.ziwei,
     tarot: payload.tarotChart || extracted.tarot,
   };
+}
+
+function restoredBirthDateTimeForForm(detail: FortuneReadingDetail, charts: ReturnType<typeof readChartsFromPayload>) {
+  return (
+    charts.bazi?.calculationBasis.originalBirthDateTimeLocal ||
+    charts.ziwei?.calculationBasis.originalBirthDateTimeLocal ||
+    detail.birthDateTime
+  );
+}
+
+function restoredQueryDateTimeForForm(detail: FortuneReadingDetail, charts: ReturnType<typeof readChartsFromPayload>) {
+  return (
+    charts.bazi?.calculationBasis.queryDateTimeLocal ||
+    charts.zhouyi?.inputs.queryDateTimeLocal ||
+    charts.tarot?.calculationBasis.queryDateTimeLocal ||
+    detail.queryDateTime
+  );
 }
 
 async function readErrorMessage(res: Response, fallback: string) {
@@ -371,8 +390,8 @@ export default function FortunePage() {
       setMethod(detail.method || "bazi");
       setProfileName(detail.profileName);
       setGender(detail.gender);
-      setBirthDateTimeLocal(toDateTimeLocalInputValue(detail.birthDateTime));
-      setQueryDateTimeLocal(toDateTimeLocalInputValue(detail.queryDateTime));
+      setBirthDateTimeLocal(toDateTimeLocalInputValue(restoredBirthDateTimeForForm(detail, charts)));
+      setQueryDateTimeLocal(toDateTimeLocalInputValue(restoredQueryDateTimeForForm(detail, charts)));
       setSelectedAddressLocation(restoredLocation);
       setLocationQuery(detail.locationName);
       setCustomLocation(restoredLocation);
