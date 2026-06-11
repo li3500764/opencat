@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Sidebar } from "./sidebar";
@@ -26,10 +26,13 @@ interface DashboardLayoutClientProps {
 export function DashboardLayoutClient({ user, children }: DashboardLayoutClientProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const previousPathnameRef = useRef(pathname);
 
   // 监听路由改变，在窄屏下跳转后自动折叠侧边栏
   useEffect(() => {
-    setIsOpen(false);
+    if (previousPathnameRef.current === pathname) return;
+    previousPathnameRef.current = pathname;
+    window.setTimeout(() => setIsOpen(false), 0);
   }, [pathname]);
 
   // 防止侧边栏打开时，背景页面产生多余的滚动
@@ -45,7 +48,7 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
   }, [isOpen]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background">
+    <div className="flex h-dvh w-screen overflow-hidden bg-background">
       {/* 1. 移动端遮罩层 Backdrop (仅在抽屉打开时显示) */}
       {isOpen && (
         <div
@@ -64,7 +67,7 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
       </div>
 
       {/* 3. 右侧主内容与移动端 Header 结合区 */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         {/* 移动端顶栏 Header (仅在 md 以下可见) */}
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background-secondary px-4 md:hidden">
           <div className="flex items-center gap-3">
@@ -89,7 +92,7 @@ export function DashboardLayoutClient({ user, children }: DashboardLayoutClientP
         </header>
 
         {/* 页面主视图容器，在移动端扣除 56px 高度以保证独立滚动 */}
-        <main className="flex-1 overflow-hidden relative">
+        <main className="relative min-h-0 flex-1 overflow-y-auto md:overflow-hidden">
           {children}
         </main>
       </div>

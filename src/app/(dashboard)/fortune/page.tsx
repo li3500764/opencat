@@ -392,9 +392,9 @@ export default function FortunePage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-88px)] min-h-0 flex-col overflow-hidden bg-background">
-      <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col gap-5 px-5 py-6">
-        <header className="flex flex-col gap-3 border-b border-border pb-5 lg:flex-row lg:items-end lg:justify-between">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto bg-background xl:h-[calc(100vh-88px)] xl:overflow-hidden">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-5 sm:gap-5 sm:px-5 sm:py-6 xl:min-h-0 xl:flex-1">
+        <header className="flex shrink-0 flex-col gap-3 border-b border-border pb-4 sm:pb-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-accent">
               <Compass className="h-3.5 w-3.5" />
@@ -418,8 +418,8 @@ export default function FortunePage() {
           </div>
         )}
 
-        <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[390px_1fr]">
-          <section className="min-h-0 space-y-4 overflow-y-auto pr-1">
+        <div className="grid gap-4 sm:gap-5 xl:min-h-0 xl:flex-1 xl:grid-cols-[390px_1fr]">
+          <section className="space-y-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1">
             <div className="rounded-lg border border-border bg-card p-4 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
                 <div>
@@ -636,7 +636,7 @@ export default function FortunePage() {
               ) : history.length === 0 ? (
                 <p className="py-6 text-center text-xs text-muted">暂无历史测算</p>
               ) : (
-                <div className="space-y-2">
+                <div className="max-h-72 space-y-2 overflow-y-auto pr-1 xl:max-h-none xl:overflow-visible xl:pr-0">
                   {history.map((item) => (
                     <button
                       key={item.id}
@@ -647,9 +647,11 @@ export default function FortunePage() {
                         <span className="truncate text-sm font-medium text-foreground">{item.profileName}</span>
                         <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">{methodLabel(item.method)}</span>
                       </div>
-                      <div className="mt-1 flex items-center gap-1 text-[11px] text-muted">
-                        <MapPin className="h-3 w-3" />
-                        {item.locationName} · {item.summary || item.dayPillar || "摘要"} · {formatDisplayDate(item.createdAt)}
+                      <div className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-muted">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="truncate">
+                          {item.locationName} · {item.summary || item.dayPillar || "摘要"} · {formatDisplayDate(item.createdAt)}
+                        </span>
                       </div>
                     </button>
                   ))}
@@ -658,9 +660,9 @@ export default function FortunePage() {
             </div>
           </section>
 
-          <section className="min-h-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+          <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm xl:min-h-0">
             {!hasResult ? (
-              <div className="flex h-full min-h-[620px] flex-col items-center justify-center px-8 text-center">
+              <div className="flex min-h-[280px] flex-col items-center justify-center px-6 py-10 text-center sm:min-h-[420px] xl:h-full xl:min-h-[620px]">
                 <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 text-accent">
                   <ScrollText className="h-7 w-7" />
                 </div>
@@ -670,9 +672,9 @@ export default function FortunePage() {
                 </p>
               </div>
             ) : (
-              <div className="flex h-full min-h-0 flex-col">
-                <div className="flex flex-col gap-3 border-b border-border p-5 pb-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
+              <div className="flex min-h-0 flex-col xl:h-full">
+                <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-start lg:justify-between xl:p-5 xl:pb-4">
+                  <div className="min-w-0">
                     <p className="text-xs font-semibold uppercase tracking-wider text-accent">Programmatic Chart</p>
                     <h2 className="mt-1 text-xl font-bold text-foreground">
                       {chart
@@ -692,7 +694,7 @@ export default function FortunePage() {
                   )}
                 </div>
 
-                <div className="flex gap-2 border-b border-border px-5 pt-3">
+                <div className="flex gap-2 overflow-x-auto border-b border-border px-4 pt-2 xl:px-5 xl:pt-3">
                   {[
                     ["chart", "排盘结果", ScrollText],
                     ["consult", "咨询大师", MessageCircle],
@@ -715,14 +717,14 @@ export default function FortunePage() {
                   })}
                 </div>
 
-                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                <div className="p-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:p-5">
                   {activeTab === "consult" ? (
-                    <div className="flex min-h-full flex-col gap-4">
+                    <div className="flex flex-col gap-4 xl:min-h-full">
                       <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-5 text-muted">
                         咨询只基于当前这条{methodLabel(activeReading?.method || method)}测算和程序盘面，不进入普通聊天记忆，也不跨体系混算。
                       </div>
 
-                      <div className="min-h-[360px] flex-1 space-y-3 rounded-lg border border-border bg-background-secondary p-4">
+                      <div className="min-h-[240px] flex-1 space-y-3 rounded-lg border border-border bg-background-secondary p-3 sm:min-h-[320px] sm:p-4">
                         {isLoadingConsult ? (
                           <div className="flex justify-center py-8">
                             <Loader2 className="h-4 w-4 animate-spin text-muted" />
@@ -742,13 +744,13 @@ export default function FortunePage() {
                               className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
                             >
                               <div
-                                className={`max-w-[82%] rounded-lg px-3 py-2 text-sm leading-6 ${
+                                className={`max-w-[88%] rounded-lg px-3 py-2 text-sm leading-6 sm:max-w-[82%] ${
                                   message.role === "user"
                                     ? "bg-foreground text-background"
                                     : "border border-border bg-card text-foreground"
                                 }`}
                               >
-                                <div className="whitespace-pre-wrap">{message.content}</div>
+                                <div className="whitespace-pre-wrap break-words">{message.content}</div>
                               </div>
                             </div>
                           ))
@@ -791,10 +793,10 @@ export default function FortunePage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-5">
+                    <div className="space-y-4 sm:space-y-5">
                 {chart && (
                   <>
-                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                       {(["year", "month", "day", "hour"] as const).map((key) => {
                         const pillar = chart.pillars[key];
                         const title = { year: "年柱", month: "月柱", day: "日柱", hour: "时柱" }[key];
@@ -1078,7 +1080,7 @@ export default function FortunePage() {
                     <Sparkles className="h-4 w-4 text-accent" />
                     AI 解读
                   </h3>
-                  <div className="whitespace-pre-wrap text-sm leading-7 text-foreground">{interpretation}</div>
+                  <div className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{interpretation}</div>
                 </div>
 
                 <div className="rounded-lg border border-border bg-background-secondary p-3 text-[11px] leading-5 text-muted">
