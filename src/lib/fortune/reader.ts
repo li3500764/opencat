@@ -1,8 +1,8 @@
-import { generateText } from "ai";
 import type { ApiKey } from "@prisma/client";
 import { decrypt } from "../crypto";
 import { calculateCost, createModel, getProviderForModel, type ApiFormat, type ModelInfo } from "../llm";
 import { db } from "../../server/db";
+import { generateCompleteFortuneText } from "./complete-text";
 import type { FortuneInput, FortuneMethod } from "./types";
 
 export interface FortuneModelConfig {
@@ -179,14 +179,16 @@ export async function generateFortuneInterpretation(
     providerId: config.providerId,
     format: config.format,
   });
-  let result: Awaited<ReturnType<typeof generateText>>;
+  let result: Awaited<ReturnType<typeof generateCompleteFortuneText>>;
   try {
-    result = await generateText({
+    result = await generateCompleteFortuneText({
       model,
       system: buildFortuneSystemPrompt(),
       prompt: buildFortuneUserPrompt(input, method, chart),
-      maxOutputTokens: 1800,
-      timeout: { totalMs: 80_000 },
+      maxOutputTokens: 4200,
+      continuationMaxOutputTokens: 2600,
+      maxContinuations: 2,
+      timeoutMs: 120_000,
     });
   } catch (error) {
     if (isAbortError(error)) {
@@ -194,9 +196,9 @@ export async function generateFortuneInterpretation(
     }
     throw error;
   }
-  const inputTokens = result.usage?.inputTokens ?? 0;
-  const outputTokens = result.usage?.outputTokens ?? 0;
-  const totalTokens = result.usage?.totalTokens ?? inputTokens + outputTokens;
+  const inputTokens = result.promptTokens;
+  const outputTokens = result.completionTokens;
+  const totalTokens = result.totalTokens;
   return {
     text: result.text.trim(),
     modelId: config.modelId,

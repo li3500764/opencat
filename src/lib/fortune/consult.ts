@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 import { calculateCost, createModel } from "../llm";
+import { generateCompleteFortuneText } from "./complete-text";
 import { getFortuneMethodName } from "./method";
 import { FortuneInterpretationTimeoutError, resolveFortuneModelConfig } from "./reader";
 import type { FortuneMethod } from "./types";
@@ -132,16 +133,19 @@ export async function generateFortuneConsultAnswer(input: {
   });
 
   try {
-    const result = await generateText({
+    const prompt = buildFortuneConsultPrompt(input);
+    const result = await generateCompleteFortuneText({
       model,
       system: buildFortuneConsultSystemPrompt(input.method),
-      prompt: buildFortuneConsultPrompt(input),
-      maxOutputTokens: 1400,
-      timeout: { totalMs: 80_000 },
+      prompt,
+      maxOutputTokens: 3200,
+      continuationMaxOutputTokens: 2200,
+      maxContinuations: 2,
+      timeoutMs: 120_000,
     });
-    const promptTokens = result.usage?.inputTokens ?? estimateTokens(buildFortuneConsultPrompt(input));
-    const completionTokens = result.usage?.outputTokens ?? estimateTokens(result.text);
-    const totalTokens = result.usage?.totalTokens ?? promptTokens + completionTokens;
+    const promptTokens = result.promptTokens || estimateTokens(prompt);
+    const completionTokens = result.completionTokens || estimateTokens(result.text);
+    const totalTokens = result.totalTokens || promptTokens + completionTokens;
     return {
       text: result.text.trim(),
       modelId: config.modelId,
