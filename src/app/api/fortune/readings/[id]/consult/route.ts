@@ -64,6 +64,51 @@ export async function GET(
   }
 }
 
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const reading = await db.fortuneReading.findFirst({
+      where: { id, userId: session.user.id },
+      select: { id: true },
+    });
+    if (!reading) {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const consultSession = await db.fortuneConsultSession.findUnique({
+      where: { readingId_userId: { readingId: id, userId: session.user.id } },
+      select: { id: true },
+    });
+
+    if (consultSession) {
+      await db.$transaction([
+        db.fortuneConsultMessage.deleteMany({
+          where: { sessionId: consultSession.id },
+        }),
+        db.fortuneConsultSession.delete({
+          where: { id: consultSession.id },
+        }),
+      ]);
+    }
+
+    return Response.json({ ok: true });
+  } catch (error) {
+    return createFortuneApiErrorResponse(error, {
+      fallbackMessage: "Failed to clear fortune consultation",
+      fallbackCode: "FORTUNE_CONSULT_CLEAR_FAILED",
+      logLabel: "[fortune.consult.DELETE]",
+    });
+  }
+}
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }

@@ -14,6 +14,7 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { ModelSelector } from "@/components/chat/model-selector";
 import { FORTUNE_LOCATIONS } from "@/lib/fortune/locations";
@@ -40,6 +41,16 @@ interface FortuneReadingListItem {
 
 interface FortuneReadingDetail {
   id: string;
+  profileName: string;
+  gender: FortuneGender;
+  birthCalendar: "gregorian";
+  birthDateTime: string;
+  queryDateTime: string;
+  locationName: string;
+  longitude: number;
+  latitude: number;
+  timezone: string;
+  useTrueSolarTime: boolean;
   chart: unknown;
   method?: FortuneMethod;
   baziChart?: BaziChart | null;
@@ -105,6 +116,13 @@ function formatDisplayDate(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function toDateTimeLocalInputValue(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 16);
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
 }
 
 function elementLabel(element: string) {
@@ -193,6 +211,8 @@ export default function FortunePage() {
   const [consultInput, setConsultInput] = useState("");
   const [isLoadingConsult, setIsLoadingConsult] = useState(false);
   const [isAskingMaster, setIsAskingMaster] = useState(false);
+  const [deletingReadingId, setDeletingReadingId] = useState<string | null>(null);
+  const [isClearingConsult, setIsClearingConsult] = useState(false);
   const hasResult = Boolean(chart || zhouyiChart || ziweiChart || tarotChart);
 
   const birthLocation = useCustomLocation ? customLocation : selectedAddressLocation;
@@ -341,6 +361,24 @@ export default function FortunePage() {
       const detail = (await res.json()) as FortuneReadingDetail;
       const charts = readChartsFromPayload(detail);
       if (!charts.bazi && !charts.ziwei && !charts.zhouyi && !charts.tarot) throw new Error("历史测算数据格式无效");
+      const restoredLocation: FortuneLocation = {
+        id: detail.id,
+        name: detail.locationName,
+        longitude: detail.longitude,
+        latitude: detail.latitude,
+        timezone: detail.timezone,
+      };
+      setMethod(detail.method || "bazi");
+      setProfileName(detail.profileName);
+      setGender(detail.gender);
+      setBirthDateTimeLocal(toDateTimeLocalInputValue(detail.birthDateTime));
+      setQueryDateTimeLocal(toDateTimeLocalInputValue(detail.queryDateTime));
+      setSelectedAddressLocation(restoredLocation);
+      setLocationQuery(detail.locationName);
+      setCustomLocation(restoredLocation);
+      setUseCustomLocation(false);
+      setUseTrueSolarTime(detail.useTrueSolarTime);
+      setModelId(detail.model);
       setActiveReading(detail);
       setChart(charts.bazi);
       setZhouyiChart(charts.zhouyi || null);
@@ -352,6 +390,57 @@ export default function FortunePage() {
       await fetchConsult(detail.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "读取历史测算失败");
+    }
+  };
+
+  const deleteReading = async (id: string) => {
+    if (deletingReadingId) return;
+    if (!confirm("确定要删除这条历史测算吗？排盘结果、AI 解读和大师对话都会删除。")) return;
+
+    setError(null);
+    setDeletingReadingId(id);
+    try {
+      const res = await fetch(`/api/fortune/readings/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "删除历史测算失败"));
+      }
+      setHistory((items) => items.filter((item) => item.id !== id));
+      if (currentReadingId === id) {
+        setActiveReading(null);
+        setCurrentReadingId(null);
+        setChart(null);
+        setZhouyiChart(null);
+        setZiweiChart(null);
+        setTarotChart(null);
+        setInterpretation("");
+        setConsultMessages([]);
+        setConsultInput("");
+        setActiveTab("chart");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "删除历史测算失败");
+    } finally {
+      setDeletingReadingId(null);
+    }
+  };
+
+  const clearConsult = async () => {
+    if (!currentReadingId || isClearingConsult || isAskingMaster || consultMessages.length === 0) return;
+    if (!confirm("确定清空当前这条测算的大师对话吗？排盘结果和 AI 解读会保留。")) return;
+
+    setError(null);
+    setIsClearingConsult(true);
+    try {
+      const res = await fetch(`/api/fortune/readings/${currentReadingId}/consult`, { method: "DELETE" });
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "清空大师对话失败"));
+      }
+      setConsultMessages([]);
+      setConsultInput("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "清空大师对话失败");
+    } finally {
+      setIsClearingConsult(false);
     }
   };
 
@@ -638,22 +727,35 @@ export default function FortunePage() {
               ) : (
                 <div className="max-h-72 space-y-2 overflow-y-auto pr-1 xl:max-h-none xl:overflow-visible xl:pr-0">
                   {history.map((item) => (
-                    <button
+                    <div
                       key={item.id}
-                      onClick={() => loadReading(item.id)}
-                      className="w-full rounded-lg border border-border px-3 py-2 text-left transition-colors hover:bg-[var(--sidebar-hover)]"
+                      className="group flex items-stretch rounded-lg border border-border transition-colors hover:bg-[var(--sidebar-hover)]"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-medium text-foreground">{item.profileName}</span>
-                        <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">{methodLabel(item.method)}</span>
-                      </div>
-                      <div className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-muted">
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        <span className="truncate">
-                          {item.locationName} · {item.summary || item.dayPillar || "摘要"} · {formatDisplayDate(item.createdAt)}
-                        </span>
-                      </div>
-                    </button>
+                      <button
+                        onClick={() => loadReading(item.id)}
+                        className="min-w-0 flex-1 px-3 py-2 text-left"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-medium text-foreground">{item.profileName}</span>
+                          <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] text-accent">{methodLabel(item.method)}</span>
+                        </div>
+                        <div className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-muted">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          <span className="truncate">
+                            {item.locationName} · {item.summary || item.dayPillar || "摘要"} · {formatDisplayDate(item.createdAt)}
+                          </span>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteReading(item.id)}
+                        disabled={deletingReadingId === item.id}
+                        className="flex w-10 shrink-0 items-center justify-center border-l border-border text-muted opacity-100 transition-colors hover:text-danger disabled:cursor-not-allowed disabled:opacity-40 xl:opacity-0 xl:group-hover:opacity-100"
+                        title="删除历史测算"
+                      >
+                        {deletingReadingId === item.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
@@ -720,8 +822,19 @@ export default function FortunePage() {
                 <div className="p-4 xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:p-5">
                   {activeTab === "consult" ? (
                     <div className="flex flex-col gap-4 xl:min-h-full">
-                      <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-5 text-muted">
-                        咨询只基于当前这条{methodLabel(activeReading?.method || method)}测算和程序盘面，不进入普通聊天记忆，也不跨体系混算。
+                      <div className="flex flex-col gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-5 text-muted sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                          咨询只基于当前这条{methodLabel(activeReading?.method || method)}测算和程序盘面，不进入普通聊天记忆，也不跨体系混算。
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => void clearConsult()}
+                          disabled={!currentReadingId || consultMessages.length === 0 || isClearingConsult || isAskingMaster}
+                          className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-amber-500/20 bg-card px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:text-danger disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {isClearingConsult ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          清空对话
+                        </button>
                       </div>
 
                       <div className="min-h-[240px] flex-1 space-y-3 rounded-lg border border-border bg-background-secondary p-3 sm:min-h-[320px] sm:p-4">

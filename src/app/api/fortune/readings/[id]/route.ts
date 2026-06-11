@@ -65,3 +65,51 @@ export async function GET(
     });
   }
 }
+
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const reading = await db.fortuneReading.findFirst({
+      where: { id, userId: session.user.id },
+      select: { id: true },
+    });
+
+    if (!reading) {
+      return Response.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const consultSessions = await db.fortuneConsultSession.findMany({
+      where: { readingId: reading.id, userId: session.user.id },
+      select: { id: true },
+    });
+    const consultSessionIds = consultSessions.map((consultSession) => consultSession.id);
+
+    await db.$transaction([
+      db.fortuneConsultMessage.deleteMany({
+        where: { sessionId: { in: consultSessionIds } },
+      }),
+      db.fortuneConsultSession.deleteMany({
+        where: { id: { in: consultSessionIds }, userId: session.user.id },
+      }),
+      db.fortuneReading.delete({
+        where: { id: reading.id },
+      }),
+    ]);
+
+    return Response.json({ ok: true });
+  } catch (error) {
+    return createFortuneApiErrorResponse(error, {
+      fallbackMessage: "Failed to delete fortune reading",
+      fallbackCode: "FORTUNE_READING_DELETE_FAILED",
+      logLabel: "[fortune.readings.id.DELETE]",
+    });
+  }
+}
