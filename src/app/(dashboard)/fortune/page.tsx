@@ -15,7 +15,9 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
+  Share2,
 } from "lucide-react";
+import { ShareModal } from "@/components/fortune/share-modal";
 import { ModelSelector } from "@/components/chat/model-selector";
 import { FORTUNE_LOCATIONS } from "@/lib/fortune/locations";
 import { extractFortuneCharts } from "@/lib/fortune/normalize";
@@ -232,6 +234,7 @@ export default function FortunePage() {
   const [isAskingMaster, setIsAskingMaster] = useState(false);
   const [deletingReadingId, setDeletingReadingId] = useState<string | null>(null);
   const [isClearingConsult, setIsClearingConsult] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const hasResult = Boolean(chart || zhouyiChart || ziweiChart || tarotChart);
 
   const birthLocation = useCustomLocation ? customLocation : selectedAddressLocation;
@@ -783,14 +786,22 @@ export default function FortunePage() {
 
           <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm xl:min-h-0">
             {!hasResult ? (
-              <div className="flex min-h-[280px] flex-col items-center justify-center px-6 py-10 text-center sm:min-h-[420px] xl:h-full xl:min-h-[620px]">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 text-accent">
-                  <ScrollText className="h-7 w-7" />
+              <div className="relative flex min-h-[280px] flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-background to-accent/5 px-6 py-10 text-center sm:min-h-[420px] xl:h-full xl:min-h-[620px]">
+                {/* Background effects */}
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10" />
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-64 w-64 rounded-full bg-accent/20 blur-[80px]" />
+                
+                <div className="relative z-10 flex flex-col items-center">
+                  <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-accent/10 text-accent shadow-[0_0_30px_rgba(245,158,11,0.2)]">
+                    <Sparkles className="h-10 w-10 animate-pulse" />
+                  </div>
+                  <h2 className="text-2xl font-bold tracking-tight text-foreground bg-clip-text text-transparent bg-gradient-to-r from-accent to-amber-300">
+                    赛博玄学引擎 OpenCat Astro
+                  </h2>
+                  <p className="mt-4 max-w-sm text-sm leading-6 text-muted">
+                    填写左侧信息，召唤专属你的赛博算命师。<br/>用代码解构命运，用 AI 破译灵魂。
+                  </p>
                 </div>
-                <h2 className="text-lg font-semibold text-foreground">等待生成测算</h2>
-                <p className="mt-2 max-w-md text-sm leading-6 text-muted">
-                  填写左侧信息并选择测算方法后，系统会先输出该体系的程序结果，再生成模型解读。不同体系不会混在一起。
-                </p>
               </div>
             ) : (
               <div className="flex min-h-0 flex-col xl:h-full">
@@ -808,11 +819,20 @@ export default function FortunePage() {
                       {activeReading ? `历史记录 · ${formatDisplayDate(activeReading.createdAt)}` : "最新生成"}
                     </p>
                   </div>
-                  {chart && (
-                    <div className="rounded-lg border border-border px-3 py-2 text-xs text-muted">
-                      {chart.calculationBasis.timeBasis === "trueSolar" ? "真太阳时" : "标准时间"} · {chart.calculationBasis.locationName}
-                    </div>
-                  )}
+                  <div className="flex flex-col items-end gap-2">
+                    {chart && (
+                      <div className="rounded-lg border border-border px-3 py-2 text-xs text-muted">
+                        {chart.calculationBasis.timeBasis === "trueSolar" ? "真太阳时" : "标准时间"} · {chart.calculationBasis.locationName}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setIsShareModalOpen(true)}
+                      className="flex items-center gap-1.5 rounded-lg bg-accent/10 px-3 py-1.5 text-xs font-medium text-accent transition-colors hover:bg-accent hover:text-white"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      生成分享卡片
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex gap-2 overflow-x-auto border-b border-border px-4 pt-2 xl:px-5 xl:pt-3">
@@ -1207,12 +1227,24 @@ export default function FortunePage() {
                   </div>
                 )}
 
-                <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
-                  <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-                    <Sparkles className="h-4 w-4 text-accent" />
-                    AI 解读
+                <div className="relative overflow-hidden rounded-xl border border-accent/30 bg-gradient-to-br from-accent/10 to-background p-5 shadow-lg shadow-accent/5">
+                  <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-accent/20 blur-[40px]" />
+                  <h3 className="relative mb-4 flex items-center gap-2 text-base font-bold text-foreground">
+                    <Sparkles className="h-5 w-5 text-accent" />
+                    专属赛博判词
                   </h3>
-                  <div className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{interpretation}</div>
+                  <div className="relative whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90 backdrop-blur-sm">
+                    {interpretation.split('\n').map((line, i) => {
+                      if (line.includes('✨') || line.includes('专属赛博判词') || line.includes('分享金句')) {
+                        return (
+                          <div key={i} className="mt-4 rounded-lg bg-accent/10 p-3 border-l-4 border-accent text-accent font-medium">
+                            {line.replace(/^.*?[：:]\s*/, '')}
+                          </div>
+                        );
+                      }
+                      return <p key={i} className="mb-2 last:mb-0">{line}</p>;
+                    })}
+                  </div>
                 </div>
 
                 <div className="rounded-lg border border-border bg-background-secondary p-3 text-[11px] leading-5 text-muted">
@@ -1226,6 +1258,15 @@ export default function FortunePage() {
           </section>
         </div>
       </div>
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        profileName={chart?.profileName || ziweiChart?.profileName || profileName || "未知"}
+        methodLabel={methodLabel(activeReading?.method || method)}
+        interpretation={interpretation}
+        dayPillar={chart?.pillars.day.stem}
+        soul={ziweiChart?.soul}
+      />
     </div>
   );
 }
