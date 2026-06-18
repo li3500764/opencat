@@ -1233,17 +1233,51 @@ export default function FortunePage() {
                     <Sparkles className="h-5 w-5 text-accent" />
                     专属赛博判词
                   </h3>
-                  <div className="relative whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/90 backdrop-blur-sm">
-                    {interpretation.split('\n').map((line, i) => {
-                      if (line.includes('✨') || line.includes('专属赛博判词') || line.includes('分享金句')) {
-                        return (
-                          <div key={i} className="mt-4 rounded-lg bg-accent/10 p-3 border-l-4 border-accent text-accent font-medium">
-                            {line.replace(/^.*?[：:]\s*/, '')}
-                          </div>
-                        );
-                      }
-                      return <p key={i} className="mb-2 last:mb-0">{line}</p>;
-                    })}
+                  <div className="relative break-words text-sm leading-relaxed text-foreground/90 backdrop-blur-sm">
+                    {(() => {
+                       const lines = interpretation.split('\n').map(l => l.trim()).filter(Boolean);
+                       const verdictIndex = lines.findIndex(l => l.includes('✨') || l.includes('专属赛博判词') || l.includes('分享金句'));
+                       
+                       const mainLines = verdictIndex === -1 ? lines : lines.slice(0, verdictIndex);
+                       const verdictLines = verdictIndex === -1 ? [] : lines.slice(verdictIndex);
+                       
+                       return (
+                         <>
+                           <div className="space-y-4">
+                             {mainLines.map((line, i) => {
+                               // 清洗所有加粗星号和井号
+                               const cleanLine = line.replace(/\*\*/g, '').replace(/#/g, '');
+                               // 对于标题行加粗处理
+                               if (/^一、|^二、|^三、|^四、|^五、|^六、|^七、|^八、/.test(cleanLine)) {
+                                 return (
+                                   <h4 key={`m-${i}`} className="mt-6 mb-2 text-base font-bold text-foreground flex items-center gap-2">
+                                     <div className="w-1.5 h-4 bg-accent rounded-full" />
+                                     {cleanLine}
+                                   </h4>
+                                 );
+                               }
+                               return <p key={`m-${i}`} className="text-muted-foreground">{cleanLine}</p>;
+                             })}
+                           </div>
+                           
+                           {verdictLines.length > 0 && (
+                             <div className="mt-8 rounded-xl bg-accent/10 p-5 border-l-4 border-accent shadow-sm relative overflow-hidden">
+                               <div className="absolute -top-4 -right-4 p-4 opacity-10">
+                                  <Sparkles className="w-24 h-24 text-accent" />
+                               </div>
+                               {verdictLines.map((line, i) => {
+                                 const cleanLine = line.replace(/\*\*/g, '').replace(/^.*?[：:]\s*/, '').replace(/#/g, '');
+                                 if (i === 0 && (line.includes('✨') || line.includes('判词'))) {
+                                    return <p key={`v-${i}`} className="text-accent font-bold mb-3 flex items-center gap-2">✨ 专属赛博判词</p>;
+                                 }
+                                 if (!cleanLine) return null;
+                                 return <p key={`v-${i}`} className="text-accent/90 text-base font-medium leading-relaxed italic mt-2 relative z-10">{cleanLine}</p>;
+                               })}
+                             </div>
+                           )}
+                         </>
+                       );
+                    })()}
                   </div>
                 </div>
 
