@@ -786,22 +786,14 @@ export default function FortunePage() {
 
           <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm xl:min-h-0">
             {!hasResult ? (
-              <div className="relative flex min-h-[280px] flex-col items-center justify-center overflow-hidden bg-gradient-to-b from-background to-accent/5 px-6 py-10 text-center sm:min-h-[420px] xl:h-full xl:min-h-[620px]">
-                {/* Background effects */}
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-10" />
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-64 w-64 rounded-full bg-accent/20 blur-[80px]" />
-                
-                <div className="relative z-10 flex flex-col items-center">
-                  <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-accent/10 text-accent shadow-[0_0_30px_rgba(245,158,11,0.2)]">
-                    <Sparkles className="h-10 w-10 animate-pulse" />
-                  </div>
-                  <h2 className="text-2xl font-bold tracking-tight text-foreground bg-clip-text text-transparent bg-gradient-to-r from-accent to-amber-300">
-                    赛博玄学引擎 OpenCat Astro
-                  </h2>
-                  <p className="mt-4 max-w-sm text-sm leading-6 text-muted">
-                    填写左侧信息，召唤专属你的赛博算命师。<br/>用代码解构命运，用 AI 破译灵魂。
-                  </p>
+              <div className="flex min-h-[280px] flex-col items-center justify-center px-6 py-10 text-center sm:min-h-[420px] xl:h-full xl:min-h-[620px]">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                  <Compass className="h-7 w-7" />
                 </div>
+                <h2 className="text-lg font-semibold text-foreground">等待生成测算</h2>
+                <p className="mt-2 max-w-md text-sm leading-6 text-muted">
+                  填写左侧信息并选择测算方法后，系统会先输出该体系的程序结果，再生成专业的模型解读。不同体系不会混在一起。
+                </p>
               </div>
             ) : (
               <div className="flex min-h-0 flex-col xl:h-full">
@@ -1227,16 +1219,15 @@ export default function FortunePage() {
                   </div>
                 )}
 
-                <div className="relative overflow-hidden rounded-xl border border-accent/30 bg-gradient-to-br from-accent/10 to-background p-5 shadow-lg shadow-accent/5">
-                  <div className="absolute right-0 top-0 -mr-6 -mt-6 h-32 w-32 rounded-full bg-accent/20 blur-[40px]" />
-                  <h3 className="relative mb-4 flex items-center gap-2 text-base font-bold text-foreground">
-                    <Sparkles className="h-5 w-5 text-accent" />
-                    专属赛博判词
+                <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+                  <h3 className="mb-4 flex items-center gap-2 text-base font-bold text-foreground">
+                    <Compass className="h-5 w-5 text-muted-foreground" />
+                    AI 解读
                   </h3>
                   <div className="relative break-words text-sm leading-relaxed text-foreground/90 backdrop-blur-sm">
                     {(() => {
                        const lines = interpretation.split('\n').map(l => l.trim()).filter(Boolean);
-                       const verdictIndex = lines.findIndex(l => l.includes('✨') || l.includes('专属赛博判词') || l.includes('分享金句'));
+                       const verdictIndex = lines.findIndex(l => l.includes('✨') || l.includes('核心批言') || l.includes('分享金句'));
                        
                        const mainLines = verdictIndex === -1 ? lines : lines.slice(0, verdictIndex);
                        const verdictLines = verdictIndex === -1 ? [] : lines.slice(verdictIndex);
@@ -1250,8 +1241,7 @@ export default function FortunePage() {
                                // 对于标题行加粗处理
                                if (/^一、|^二、|^三、|^四、|^五、|^六、|^七、|^八、/.test(cleanLine)) {
                                  return (
-                                   <h4 key={`m-${i}`} className="mt-6 mb-2 text-base font-bold text-foreground flex items-center gap-2">
-                                     <div className="w-1.5 h-4 bg-accent rounded-full" />
+                                   <h4 key={`m-${i}`} className="mt-6 mb-2 text-base font-bold text-foreground">
                                      {cleanLine}
                                    </h4>
                                  );
@@ -1261,17 +1251,14 @@ export default function FortunePage() {
                            </div>
                            
                            {verdictLines.length > 0 && (
-                             <div className="mt-8 rounded-xl bg-accent/10 p-5 border-l-4 border-accent shadow-sm relative overflow-hidden">
-                               <div className="absolute -top-4 -right-4 p-4 opacity-10">
-                                  <Sparkles className="w-24 h-24 text-accent" />
-                               </div>
+                             <div className="mt-8 rounded-lg bg-muted/50 p-5 border-l-4 border-muted-foreground shadow-sm">
                                {verdictLines.map((line, i) => {
                                  const cleanLine = line.replace(/\*\*/g, '').replace(/^.*?[：:]\s*/, '').replace(/#/g, '');
-                                 if (i === 0 && (line.includes('✨') || line.includes('判词'))) {
-                                    return <p key={`v-${i}`} className="text-accent font-bold mb-3 flex items-center gap-2">✨ 专属赛博判词</p>;
+                                 if (i === 0 && (line.includes('✨') || line.includes('批言'))) {
+                                    return <p key={`v-${i}`} className="text-foreground font-bold mb-3 flex items-center gap-2">核心批言</p>;
                                  }
                                  if (!cleanLine) return null;
-                                 return <p key={`v-${i}`} className="text-accent/90 text-base font-medium leading-relaxed italic mt-2 relative z-10">{cleanLine}</p>;
+                                 return <p key={`v-${i}`} className="text-foreground/90 text-base font-medium leading-relaxed mt-2">{cleanLine}</p>;
                                })}
                              </div>
                            )}
