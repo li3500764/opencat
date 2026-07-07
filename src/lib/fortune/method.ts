@@ -6,6 +6,7 @@ export function getFortuneMethodName(method: FortuneMethod) {
     ziwei: "紫微斗数",
     zhouyi: "周易时间卦",
     tarot: "塔罗牌阵",
+    xiaoliuren: "小六壬",
   };
   return names[method];
 }
@@ -13,7 +14,7 @@ export function getFortuneMethodName(method: FortuneMethod) {
 export function getStoredFortuneMethod(rawChart: unknown): FortuneMethod {
   if (rawChart && typeof rawChart === "object" && "method" in rawChart) {
     const method = (rawChart as { method?: unknown }).method;
-    if (method === "bazi" || method === "ziwei" || method === "zhouyi" || method === "tarot") {
+    if (method === "bazi" || method === "ziwei" || method === "zhouyi" || method === "tarot" || method === "xiaoliuren") {
       return method;
     }
   }
@@ -24,6 +25,7 @@ export function getStoredFortuneMethod(rawChart: unknown): FortuneMethod {
   if (rawChart && typeof rawChart === "object" && "palaces" in rawChart) return "ziwei";
   if (rawChart && typeof rawChart === "object" && "primaryHexagram" in rawChart) return "zhouyi";
   if (rawChart && typeof rawChart === "object" && "cards" in rawChart) return "tarot";
+  if (rawChart && typeof rawChart === "object" && "monthResult" in rawChart && "hourResult" in rawChart) return "xiaoliuren";
   return "bazi";
 }
 

@@ -1,0 +1,261 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: zh-CN
+branch: main
+nodes_managed: true
+exported_at: "2026-07-07T16:43:25Z"
+modules:
+    "":
+        dir_name: OpenCat 多端 AI 工作台（根编排）
+        title: OpenCat 多端 AI 工作台（根编排）
+        scope:
+            - README.md
+            - README_CN.md
+            - AGENTS.md
+            - .gitignore
+            - .npmrc
+            - .pnpmrc.json
+            - Dockerfile
+            - docker-compose.yml
+            - docker-compose.prod.yml
+            - next.config.ts
+            - prisma.config.ts
+            - tsconfig.json
+            - package.json
+            - pnpm-lock.yaml
+            - .dockerignore
+            - CLAUDE.md
+            - INTERVIEW_QA.md
+            - eslint.config.mjs
+            - pnpm-workspace.yaml
+            - postcss.config.mjs
+            - test-db.ts
+            - test-stats.ts
+        source_files: []
+        children:
+            - docs_and_scripts
+            - nextjs_app
+            - shared_libs
+            - tauri_desktop
+            - worker_service
+        depends_on: []
+        related_to: []
+    docs_and_scripts:
+        dir_name: 文档、运维脚本与数据库种子
+        title: 文档、运维脚本与数据库种子
+        scope:
+            - docs/
+            - scripts/
+            - prisma/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    nextjs_app:
+        dir_name: Next.js AI 仪表盘应用（App Router）
+        title: Next.js AI 仪表盘应用（App Router）
+        scope:
+            - src/app/
+            - src/components/
+            - src/stores/
+        source_files: []
+        children:
+            - nextjs_app/auth_pages_and_routes
+            - nextjs_app/dashboard_chat
+            - nextjs_app/dashboard_customers
+            - nextjs_app/dashboard_settings
+            - nextjs_app/dashboard_shared
+            - nextjs_app/fortune_v2_feature
+            - nextjs_app/shared_layout_theme
+            - nextjs_app/shared_ui_components
+        depends_on: []
+        related_to: []
+    nextjs_app/auth_pages_and_routes:
+        dir_name: 认证页面与认证 API 路由
+        title: 认证页面与认证 API 路由
+        scope:
+            - src/app/(auth)/
+            - src/app/api/auth/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    nextjs_app/dashboard_chat:
+        dir_name: 聊天对话与流式推理路由
+        title: 聊天对话与流式推理路由
+        scope:
+            - src/app/(dashboard)/chat/
+            - src/app/api/chat/
+            - src/app/api/conversations/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    nextjs_app/dashboard_customers:
+        dir_name: 客户与线索 CRM 管理（Dashboard 入口 + API）
+        title: 客户与线索 CRM 管理（Dashboard 入口 + API）
+        scope:
+            - src/app/(dashboard)/customers/
+            - src/app/api/customers/
+            - src/app/api/leads/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    nextjs_app/dashboard_settings:
+        dir_name: 设置中心（API Key _ Agent _ 知识库管理）
+        title: 设置中心（API Key / Agent / 知识库管理）
+        scope:
+            - src/app/(dashboard)/settings/
+            - src/app/api/agents/
+            - src/app/api/knowledge/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    nextjs_app/dashboard_shared:
+        dir_name: 仪表盘共享布局与个人用量大盘页面
+        title: 仪表盘共享布局与个人用量大盘页面
+        scope:
+            - src/app/(dashboard)/dashboard/
+            - src/app/(dashboard)/layout.tsx
+            - src/app/layout.tsx
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    nextjs_app/fortune_v2_feature:
+        dir_name: 命理测算前端入口与 API 路由聚合
+        title: 命理测算前端入口与 API 路由聚合
+        scope:
+            - src/app/(dashboard)/fortune/
+            - src/app/fortune-v2/
+            - src/app/api/fortune/
+        source_files: []
+        children:
+            - nextjs_app/fortune_v2_feature/fortune_api
+        depends_on: []
+        related_to: []
+    nextjs_app/fortune_v2_feature/fortune_api:
+        dir_name: 命理测算 API 路由层
+        title: 命理测算 API 路由层
+        scope:
+            - src/app/api/fortune/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    nextjs_app/shared_layout_theme:
+        dir_name: 仪表盘布局与主题状态管理
+        title: 仪表盘布局与主题状态管理
+        scope:
+            - src/components/layout/
+            - src/stores/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    nextjs_app/shared_ui_components:
+        dir_name: 聊天与仪表盘共享 UI 组件
+        title: 聊天与仪表盘共享 UI 组件
+        scope:
+            - src/components/chat/
+            - src/components/dashboard/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    shared_libs:
+        dir_name: 共享库与数据库层（shared_libs）
+        title: 共享库与数据库层（shared_libs）
+        scope:
+            - src/lib/
+            - src/server/db/
+        source_files: []
+        children:
+            - shared_libs/agent_llm
+            - shared_libs/db_layer
+            - shared_libs/i18n_images
+            - shared_libs/shared_helpers
+            - shared_libs/tools_registry
+        depends_on: []
+        related_to: []
+    shared_libs/agent_llm:
+        dir_name: Agent-LLM 推理编排层
+        title: Agent-LLM 推理编排层
+        scope:
+            - src/lib/agent/
+            - src/lib/llm/
+        source_files: []
+        children:
+            - shared_libs/agent_llm/llm_providers
+        depends_on: []
+        related_to: []
+    shared_libs/agent_llm/llm_providers:
+        dir_name: LLM Provider 注册表与 OpenAI 兼容模型工厂
+        title: LLM Provider 注册表与 OpenAI 兼容模型工厂
+        scope:
+            - src/lib/llm/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    shared_libs/db_layer:
+        dir_name: 数据库连接与错误分类层
+        title: 数据库连接与错误分类层
+        scope:
+            - src/server/db/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    shared_libs/i18n_images:
+        dir_name: 国际化与图片生成后台任务
+        title: 国际化与图片生成后台任务
+        scope:
+            - src/lib/i18n/
+            - src/lib/images/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    shared_libs/shared_helpers:
+        dir_name: 共享工具库（加密、认证、API 响应与缓存）
+        title: 共享工具库（加密、认证、API 响应与缓存）
+        scope:
+            - src/lib/crypto.ts
+            - src/lib/auth.ts
+            - src/lib/utils.ts
+            - src/lib/api-utils.ts
+            - src/lib/redis.ts
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    shared_libs/tools_registry:
+        dir_name: 工具注册中心与内置工具集
+        title: 工具注册中心与内置工具集
+        scope:
+            - src/lib/tools/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    tauri_desktop:
+        dir_name: OpenCat Tauri 桌面端应用壳
+        title: OpenCat Tauri 桌面端应用壳
+        scope:
+            - src-tauri/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    worker_service:
+        dir_name: OpenCat 后台任务 Worker 服务
+        title: OpenCat 后台任务 Worker 服务
+        scope:
+            - worker/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

@@ -11,6 +11,7 @@ import { FortuneInterpretationTimeoutError, generateFortuneInterpretation } from
 import { buildTarotChart } from "@/lib/fortune/tarot";
 import { buildZiweiChart } from "@/lib/fortune/ziwei";
 import { buildZhouyiTimeChart } from "@/lib/fortune/zhouyi";
+import { buildXiaoliurenChart } from "@/lib/fortune/xiaoliuren";
 import type { FortuneInput, FortuneMethod } from "@/lib/fortune/types";
 
 const fortuneLocationSchema = z.object({
@@ -22,7 +23,7 @@ const fortuneLocationSchema = z.object({
 });
 
 const fortuneInputSchema = z.object({
-  method: z.enum(["bazi", "ziwei", "zhouyi", "tarot"]).default("bazi"),
+  method: z.enum(["bazi", "ziwei", "zhouyi", "tarot", "xiaoliuren"]).default("bazi"),
   profileName: z.string().trim().min(1).max(80),
   gender: z.enum(["male", "female", "other"]),
   birthCalendar: z.literal("gregorian"),
@@ -212,6 +213,11 @@ function buildSelectedFortuneChart(input: FortuneInput) {
         queryDateTimeLocal: input.queryDateTimeLocal,
         question: `${input.profileName} 的塔罗三张牌测算`,
       });
+    case "xiaoliuren":
+      return buildXiaoliurenChart({
+        profileName: input.profileName,
+        queryDateTimeLocal: input.queryDateTimeLocal,
+      });
   }
 }
 
@@ -225,6 +231,8 @@ function methodChartPayload(method: FortuneMethod, chart: unknown) {
       return { zhouyiChart: chart };
     case "tarot":
       return { tarotChart: chart };
+    case "xiaoliuren":
+      return { xiaoliurenChart: chart };
   }
 }
 

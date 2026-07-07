@@ -1,10 +1,11 @@
 import type { ZhouyiTimeChart } from "./zhouyi";
 import type { TarotChart } from "./tarot";
 import type { ZiweiChart } from "./ziwei";
+import type { XiaoliurenChart } from "./xiaoliuren";
 
 export type FortuneGender = "male" | "female" | "other";
 export type FortuneCalendar = "gregorian";
-export type FortuneMethod = "bazi" | "ziwei" | "zhouyi" | "tarot";
+export type FortuneMethod = "bazi" | "ziwei" | "zhouyi" | "tarot" | "xiaoliuren";
 export type YinYang = "yang" | "yin";
 export type FiveElement = "wood" | "fire" | "earth" | "metal" | "water";
 export type LuckDirection = "forward" | "backward";
@@ -141,4 +142,5 @@ export interface FortuneCompositeChart {
   zhouyi?: ZhouyiTimeChart;
   ziwei?: ZiweiChart;
   tarot?: TarotChart;
+  xiaoliuren?: XiaoliurenChart;
 }

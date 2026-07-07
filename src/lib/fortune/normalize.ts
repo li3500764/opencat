@@ -2,12 +2,14 @@ import type { BaziChart, FortuneCompositeChart } from "./types";
 import type { ZhouyiTimeChart } from "./zhouyi";
 import type { TarotChart } from "./tarot";
 import type { ZiweiChart } from "./ziwei";
+import type { XiaoliurenChart } from "./xiaoliuren";
 
 export interface ExtractedFortuneCharts {
   bazi: BaziChart | null;
   zhouyi?: ZhouyiTimeChart;
   ziwei?: ZiweiChart;
   tarot?: TarotChart;
+  xiaoliuren?: XiaoliurenChart;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -30,6 +32,10 @@ function isZiweiChart(value: unknown): value is ZiweiChart {
   return isRecord(value) && value.method === "ziwei-astrolabe" && Array.isArray(value.palaces);
 }
 
+function isXiaoliurenChart(value: unknown): value is XiaoliurenChart {
+  return isRecord(value) && value.method === "xiaoliuren" && isRecord(value.monthResult) && isRecord(value.hourResult);
+}
+
 export function extractFortuneCharts(rawChart: unknown): ExtractedFortuneCharts {
   if (!isRecord(rawChart)) {
     return { bazi: null };
@@ -46,6 +52,7 @@ export function extractFortuneCharts(rawChart: unknown): ExtractedFortuneCharts 
       zhouyi: isZhouyiTimeChart(composite.zhouyi) ? composite.zhouyi : undefined,
       ziwei: isZiweiChart(composite.ziwei) ? composite.ziwei : undefined,
       tarot: isTarotChart(composite.tarot) ? composite.tarot : undefined,
+      xiaoliuren: isXiaoliurenChart(composite.xiaoliuren) ? composite.xiaoliuren : undefined,
     };
   }
 
@@ -65,6 +72,10 @@ export function extractFortuneCharts(rawChart: unknown): ExtractedFortuneCharts 
     return { bazi: null, tarot: rawChart };
   }
 
+  if (isXiaoliurenChart(rawChart)) {
+    return { bazi: null, xiaoliuren: rawChart };
+  }
+
   return { bazi: null };
 }
 
@@ -78,5 +89,6 @@ export function getFortuneChartSummary(rawChart: unknown) {
   if (charts.ziwei) return `命宫${charts.ziwei.earthlyBranchOfSoulPalace}`;
   if (charts.zhouyi) return charts.zhouyi.primaryHexagram.name;
   if (charts.tarot) return charts.tarot.cards.map((card) => card.card.name).join(" / ");
+  if (charts.xiaoliuren) return charts.xiaoliuren.hourResult.name;
   return "";
 }

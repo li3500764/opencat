@@ -104,3 +104,179 @@ body {
 [class*="transition-"] {
   transition-property: all;
 }
+
+/* ============================================================
+ * Fortune V2 - 沉浸式算命主题系统
+ * ============================================================ */
+
+/* 测算方法主题色 */
+:root,
+.dark {
+  --fortune-bazi: #d97706;
+  --fortune-bazi-glow: rgba(217, 119, 6, 0.4);
+  --fortune-bazi-bg: rgba(217, 119, 6, 0.08);
+  --fortune-ziwei: #8b5cf6;
+  --fortune-ziwei-glow: rgba(139, 92, 246, 0.4);
+  --fortune-ziwei-bg: rgba(139, 92, 246, 0.08);
+  --fortune-zhouyi: #10b981;
+  --fortune-zhouyi-glow: rgba(16, 185, 129, 0.4);
+  --fortune-zhouyi-bg: rgba(16, 185, 129, 0.08);
+  --fortune-tarot: #c084fc;
+  --fortune-tarot-glow: rgba(192, 132, 252, 0.4);
+  --fortune-tarot-bg: rgba(192, 132, 252, 0.08);
+  --fortune-xiaoliuren: #ef4444;
+  --fortune-xiaoliuren-glow: rgba(239, 68, 68, 0.4);
+  --fortune-xiaoliuren-bg: rgba(239, 68, 68, 0.08);
+  --fortune-bg: #0a0a0f;
+  --fortune-surface: rgba(255, 255, 255, 0.03);
+  --fortune-border: rgba(255, 255, 255, 0.08);
+  --fortune-text: #e2e8f0;
+  --fortune-text-muted: #94a3b8;
+}
+
+/* 发光脉冲 */
+@keyframes fortune-glow {
+  0%, 100% { box-shadow: 0 0 8px 2px var(--glow-color, rgba(217, 119, 6, 0.3)); opacity: 0.8; }
+  50% { box-shadow: 0 0 20px 6px var(--glow-color, rgba(217, 119, 6, 0.6)); opacity: 1; }
+}
+
+/* 缓慢旋转 (八卦/星盘) */
+@keyframes fortune-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 反向旋转 */
+@keyframes fortune-rotate-reverse {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
+}
+
+/* 浮动 */
+@keyframes fortune-float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-12px); }
+}
+
+/* 微光闪烁 */
+@keyframes fortune-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+/* 淡入上浮 */
+@keyframes fortune-fade-in-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 六神轮转 */
+@keyframes fortune-cycle {
+  0%, 14% { opacity: 1; }
+  16%, 100% { opacity: 0.3; }
+}
+
+/* 脉冲涟漪 */
+@keyframes fortune-ripple {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+/* 粒子飘散 */
+@keyframes fortune-particle {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-80px) scale(0); opacity: 0; }
+}
+
+/* 打字光标闪烁 */
+@keyframes fortune-cursor {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* 星空背景 */
+@keyframes fortune-twinkle {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.fortune-page {
+  background: var(--fortune-bg);
+  color: var(--fortune-text);
+  min-height: 100dvh;
+  position: relative;
+  overflow: hidden;
+}
+
+.fortune-star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: white;
+  animation: fortune-twinkle var(--duration, 3s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+.fortune-card {
+  background: var(--fortune-surface);
+  border: 1px solid var(--fortune-border);
+  border-radius: 16px;
+  backdrop-filter: blur(20px);
+  transition: all 0.3s ease;
+}
+
+.fortune-card:hover {
+  border-color: var(--card-accent, rgba(255, 255, 255, 0.2));
+  box-shadow: 0 0 30px -5px var(--card-glow, rgba(255, 255, 255, 0.1));
+}
+
+.fortune-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--fortune-border);
+  border-radius: 12px;
+  color: var(--fortune-text);
+  padding: 10px 14px;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.fortune-input:focus {
+  border-color: var(--active-accent, var(--fortune-bazi));
+  box-shadow: 0 0 0 3px var(--active-glow, var(--fortune-bazi-glow));
+}
+
+.fortune-btn-primary {
+  background: linear-gradient(135deg, var(--active-accent, var(--fortune-bazi)), var(--active-accent-hover, #b45309));
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 16px -4px var(--active-glow, var(--fortune-bazi-glow));
+}
+
+.fortune-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px -4px var(--active-glow, var(--fortune-bazi-glow));
+}
+
+.fortune-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.fortune-shimmer-text {
+  background: linear-gradient(90deg, var(--fortune-text-muted) 0%, white 50%, var(--fortune-text-muted) 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: fortune-shimmer 3s linear infinite;
+}

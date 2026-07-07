@@ -95,6 +95,7 @@ function methodName(method: FortuneMethod) {
     ziwei: "紫微斗数",
     zhouyi: "周易时间卦",
     tarot: "塔罗牌阵",
+    xiaoliuren: "小六壬",
   };
   return names[method];
 }
@@ -125,12 +126,18 @@ function methodRules(method: FortuneMethod) {
         sections: "一、牌阵摘要\n二、过去牌\n三、现在牌\n四、趋势牌\n五、三张牌之间的张力与提醒\n六、注意事项与免责声明\n七、核心批言（生成一句极简、深刻、直击本质的塔罗批注，不带任何废话）",
         ban: "不得引用四柱八字、紫微斗数、周易等其它体系。",
       };
+    case "xiaoliuren":
+      return {
+        basis: "起卦时间",
+        sections: "一、卦象摘要（农历时间、月/日/时三宫落点）\n二、月宫分析（月份落点与当前状态）\n三、日宫分析（日辰落点与事件进展）\n四、时宫分析（时辰落点与最终结果，为三宫之首）\n五、三宫综合判断（月日时三宫的相互作用与趋势）\n六、注意事项与免责声明\n七、核心批言（生成一句极简、深刻、直击本质的小六壬批注，不带任何废话）",
+        ban: "不得引用四柱八字、紫微斗数、周易、塔罗等其它体系。",
+      };
   }
 }
 
 export function buildFortuneUserPrompt(input: FortuneInput, method: FortuneMethod, chart: unknown) {
   const rules = methodRules(method);
-  const basisTime = method === "zhouyi" || method === "tarot" ? input.queryDateTimeLocal : input.birthDateTimeLocal;
+  const basisTime = method === "zhouyi" || method === "tarot" || method === "xiaoliuren" ? input.queryDateTimeLocal : input.birthDateTimeLocal;
   return `请基于以下由程序确定性生成的【${methodName(method)}】结果做解读。不要重新计算、重排、重抽，也不要跨体系混合解读。
 
 【硬性边界】

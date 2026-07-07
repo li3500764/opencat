@@ -16,7 +16,7 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useChatStore } from "@/stores/chat";
-import { Plus, MessageSquare, Trash2, Loader2, LogOut, Key, Bot, Database, BarChart3, Layers, Image as ImageIcon, Compass } from "lucide-react";
+import { Plus, MessageSquare, Trash2, Loader2, LogOut, Key, Bot, Database, BarChart3, Layers, Image as ImageIcon, Compass, Sparkles } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { ThemeToggle } from "./theme-toggle";
 import { useTranslation, useLocaleStore, useLocaleHydration } from "@/lib/i18n";
@@ -149,6 +149,18 @@ export function Sidebar({ user }: SidebarProps) {
         >
           <Compass className="h-3.5 w-3.5 shrink-0" />
           <span>{t("sidebar.fortune")}</span>
+        </button>
+
+        <button
+          onClick={() => router.push("/fortune-v2")}
+          className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors ${
+            pathname === "/fortune-v2"
+              ? "bg-[var(--sidebar-active)] font-medium text-foreground"
+              : "text-muted hover:bg-[var(--sidebar-hover)] hover:text-foreground"
+          }`}
+        >
+          <Sparkles className="h-3.5 w-3.5 shrink-0" />
+          <span>AI 算命</span>
         </button>
       </div>
 

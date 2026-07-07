@@ -26,7 +26,7 @@ export async function GET(
       return Response.json({ error: "Not found" }, { status: 404 });
     }
 
-    const { bazi, zhouyi, ziwei, tarot } = extractFortuneCharts(reading.chart);
+    const { bazi, zhouyi, ziwei, tarot, xiaoliuren } = extractFortuneCharts(reading.chart);
 
     return Response.json({
       id: reading.id,
@@ -47,6 +47,7 @@ export async function GET(
       zhouyiChart: zhouyi,
       ziweiChart: ziwei,
       tarotChart: tarot,
+      xiaoliurenChart: xiaoliuren,
       interpretation: reading.interpretation,
       usage: {
         promptTokens: reading.promptTokens,
