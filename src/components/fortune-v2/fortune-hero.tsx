@@ -99,16 +99,16 @@ export function FortuneHero({ onSelectMethod }: FortuneHeroProps) {
         <section className="fortune-hero-copy">
           <div className="fortune-hero-eyebrow">
             <span className="fortune-status-dot" />
-            OpenCat divination lab
+            OpenCat · 玄枢
           </div>
 
           <h1 className="fortune-hero-title">
-            算了么
-            <span>AI 命理工作台</span>
+            玄枢
+            <span>问卦、观盘、抽牌</span>
           </h1>
 
           <p className="fortune-hero-lede">
-            不是模板化的「玄学聊天」。先由程序排盘，再让模型围绕盘面、卦象或牌阵做解释，把传统术数变成一套可交互的数字占验界面。
+            四柱、周易、紫微、小六壬与塔罗并置。先定盘，再解象，把一刻的时间、一个问题，拆成可读的线索。
           </p>
 
           <div className="fortune-hero-actions">
