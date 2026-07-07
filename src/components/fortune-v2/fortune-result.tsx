@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { ArrowLeft, Share2, MessageCircle, Send, Loader2, Trash2 } from "lucide-react";
+import { ArrowLeft, Share2, MessageCircle, Send, Loader2 } from "lucide-react";
 import type { FortuneMethod } from "@/lib/fortune/types";
 import type { BaziChart } from "@/lib/fortune/types";
 import type { ZhouyiTimeChart } from "@/lib/fortune/zhouyi";
@@ -43,14 +43,15 @@ function elementLabel(e: string) {
 }
 
 function TypewriterText({ text, accent }: { text: string; accent: string }) {
+  return <TypewriterTextInner key={text} text={text} accent={accent} />;
+}
+
+function TypewriterTextInner({ text, accent }: { text: string; accent: string }) {
   const [displayed, setDisplayed] = useState("");
   const [done, setDone] = useState(false);
   const indexRef = useRef(0);
 
   useEffect(() => {
-    setDisplayed("");
-    setDone(false);
-    indexRef.current = 0;
     const timer = setInterval(() => {
       indexRef.current++;
       if (indexRef.current >= text.length) {

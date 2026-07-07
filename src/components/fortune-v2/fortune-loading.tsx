@@ -8,31 +8,31 @@ const THEMES: Record<FortuneMethod, { accent: string; glow: string; label: strin
     accent: "var(--fortune-bazi)",
     glow: "var(--fortune-bazi-glow)",
     label: "四柱八字",
-    phases: ["推算天干地支...", "排列五行生克...", "演算十神格局...", "AI 深度解读中..."],
+    phases: ["推算天干地支...", "排列五行生克...", "演算十神格局...", "命理师正在落笔..."],
   },
   ziwei: {
     accent: "var(--fortune-ziwei)",
     glow: "var(--fortune-ziwei-glow)",
     label: "紫微斗数",
-    phases: ["安放命宫身宫...", "布置十二宫位...", "星曜归位中...", "AI 深度解读中..."],
+    phases: ["安放命宫身宫...", "布置十二宫位...", "星曜归位中...", "命理师正在落笔..."],
   },
   zhouyi: {
     accent: "var(--fortune-zhouyi)",
     glow: "var(--fortune-zhouyi-glow)",
     label: "周易时间卦",
-    phases: ["起卦中...", "排列六爻...", "推演变卦...", "AI 深度解读中..."],
+    phases: ["起卦中...", "排列六爻...", "推演变卦...", "卦辞正在成形..."],
   },
   tarot: {
     accent: "var(--fortune-tarot)",
     glow: "var(--fortune-tarot-glow)",
     label: "塔罗牌阵",
-    phases: ["洗牌中...", "抽取牌阵...", "解读牌义...", "AI 深度解读中..."],
+    phases: ["洗牌中...", "抽取牌阵...", "解读牌义...", "牌面正在显影..."],
   },
   xiaoliuren: {
     accent: "var(--fortune-xiaoliuren)",
     glow: "var(--fortune-xiaoliuren-glow)",
     label: "小六壬",
-    phases: ["推算农历月日时...", "掐指轮转中...", "六神定位...", "AI 深度解读中..."],
+    phases: ["推算农历月日时...", "掐指轮转中...", "六神定位...", "断语正在成形..."],
   },
 };
 
@@ -241,9 +241,33 @@ export function FortuneLoading({ method }: FortuneLoadingProps) {
   }, [theme.phases.length]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4">
+    <div
+      className="fortune-loading-shell"
+      style={
+        {
+          "--active-accent": theme.accent,
+          "--active-glow": theme.glow,
+        } as React.CSSProperties
+      }
+    >
+      <div className="fortune-loading-runes" aria-hidden="true">
+        {SIX_GODS.map((god, index) => (
+          <span
+            key={god}
+            style={
+              {
+                "--rune-angle": `${index * 60}deg`,
+                "--rune-counter-angle": `${index * -60}deg`,
+              } as React.CSSProperties
+            }
+          >
+            {god}
+          </span>
+        ))}
+      </div>
+
       {/* Animation area */}
-      <div className="mb-12" style={{ animation: "fortune-fade-in-up 0.6s ease-out" }}>
+      <div className="fortune-loading-stage" style={{ animation: "fortune-fade-in-up 0.6s ease-out" }}>
         {method === "bazi" && <BaziAnimation accent={theme.accent} />}
         {method === "ziwei" && <ZiweiAnimation accent={theme.accent} />}
         {method === "zhouyi" && <ZhouyiAnimation accent={theme.accent} />}

@@ -17,6 +17,8 @@
 /.next/
 /out/
 
+/.qoder/
+
 # production
 /build
 

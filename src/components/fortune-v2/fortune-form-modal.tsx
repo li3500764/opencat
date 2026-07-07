@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { MapPin, X, Loader2, ChevronLeft } from "lucide-react";
 import { ModelSelector } from "@/components/chat/model-selector";
 import { FORTUNE_LOCATIONS } from "@/lib/fortune/locations";
+import type { FortuneReadingRequestDraft } from "@/lib/fortune/request";
 import type { FortuneGender, FortuneLocation, FortuneMethod } from "@/lib/fortune/types";
 
 const DEFAULT_LOCATION = FORTUNE_LOCATIONS.find((l) => l.id === "cn-beijing") || FORTUNE_LOCATIONS[0];
@@ -26,16 +27,7 @@ interface FortuneAddressResult extends FortuneLocation {
 interface FortuneFormModalProps {
   method: FortuneMethod;
   onClose: () => void;
-  onSubmit: (data: {
-    method: FortuneMethod;
-    profileName: string;
-    gender: FortuneGender;
-    birthDateTimeLocal: string;
-    queryDateTimeLocal: string;
-    birthLocation: FortuneLocation;
-    useTrueSolarTime: boolean;
-    modelId: string;
-  }) => void;
+  onSubmit: (data: FortuneReadingRequestDraft) => void;
   isSubmitting: boolean;
 }
 
@@ -103,7 +95,7 @@ export function FortuneFormModal({ method, onClose, onSubmit, isSubmitting }: Fo
   const handleSubmit = () => {
     if (!profileName.trim() || !modelId) return;
     onSubmit({
-      method, profileName, gender, birthDateTimeLocal, queryDateTimeLocal,
+      method, profileName, gender, birthCalendar: "gregorian", birthDateTimeLocal, queryDateTimeLocal,
       birthLocation, useTrueSolarTime, modelId,
     });
   };
@@ -117,14 +109,16 @@ export function FortuneFormModal({ method, onClose, onSubmit, isSubmitting }: Fo
 
       {/* Modal */}
       <div
-        className="relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border p-6"
+        className="fortune-modal-panel relative z-10 w-full max-w-lg max-h-[90vh] overflow-y-auto border p-6"
         style={{
-          background: "linear-gradient(145deg, rgba(15,15,25,0.95), rgba(10,10,18,0.98))",
           borderColor: `${theme.accent}22`,
           boxShadow: `0 0 60px -10px ${theme.glow}`,
           animation: "fortune-fade-in-up 0.3s ease-out",
+          ["--active-accent" as string]: theme.accent,
+          ["--active-glow" as string]: theme.glow,
         }}
       >
+        <div className="fortune-modal-rail" />
         {/* Header */}
         <div className="mb-6 flex items-center justify-between">
           <button onClick={onClose} className="flex items-center gap-2 text-sm text-[var(--fortune-text-muted)] hover:text-white transition-colors">
@@ -139,6 +133,11 @@ export function FortuneFormModal({ method, onClose, onSubmit, isSubmitting }: Fo
               <X className="h-5 w-5" />
             </button>
           </div>
+        </div>
+
+        <div className="mb-5 border-l px-3 py-2" style={{ borderColor: theme.accent }}>
+          <p className="text-sm font-semibold text-white">{theme.label}测算档案</p>
+          <p className="mt-1 text-xs leading-5 text-[var(--fortune-text-muted)]">资料只用于本次排盘和当前账户历史记录。</p>
         </div>
 
         <div className="space-y-4">

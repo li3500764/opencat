@@ -1,167 +1,284 @@
 "use client";
 
+import { useState } from "react";
 import type { FortuneMethod } from "@/lib/fortune/types";
 
 interface MethodCard {
   value: FortuneMethod;
   label: string;
+  kicker: string;
   description: string;
   icon: string;
   accent: string;
   glow: string;
+  bg: string;
+  glyphs: string[];
 }
 
 const METHODS: MethodCard[] = [
   {
     value: "bazi",
     label: "四柱八字",
-    description: "天干地支 · 五行十神 · 格局旺衰",
-    icon: "☰",
+    kicker: "干支五行",
+    description: "以出生年月日时排四柱，观察十神、旺衰、格局与流年。",
+    icon: "甲",
     accent: "var(--fortune-bazi)",
     glow: "var(--fortune-bazi-glow)",
+    bg: "var(--fortune-bazi-bg)",
+    glyphs: ["甲", "乙", "丙", "丁", "戊", "己", "庚", "辛", "壬", "癸", "子", "丑"],
   },
   {
     value: "ziwei",
     label: "紫微斗数",
-    description: "十二宫位 · 星曜四化 · 命身格局",
-    icon: "✦",
+    kicker: "星曜十二宫",
+    description: "安命宫身宫，排十四主星与四化，读人生结构的重心。",
+    icon: "紫",
     accent: "var(--fortune-ziwei)",
     glow: "var(--fortune-ziwei-glow)",
+    bg: "var(--fortune-ziwei-bg)",
+    glyphs: ["命", "兄", "夫", "子", "财", "疾", "迁", "奴", "官", "田", "福", "父"],
   },
   {
     value: "zhouyi",
     label: "周易时间卦",
-    description: "本卦动爻 · 互卦变卦 · 梅花易数",
-    icon: "☷",
+    kicker: "本卦互卦变卦",
+    description: "按测算时刻起卦，取动爻与变卦，看当下问题的势能。",
+    icon: "卦",
     accent: "var(--fortune-zhouyi)",
     glow: "var(--fortune-zhouyi-glow)",
+    bg: "var(--fortune-zhouyi-bg)",
+    glyphs: ["乾", "兑", "离", "震", "巽", "坎", "艮", "坤"],
   },
   {
     value: "tarot",
     label: "塔罗牌阵",
-    description: "三张牌阵 · 正逆位解读 · 过去现在未来",
-    icon: "🂠",
+    kicker: "三牌镜像",
+    description: "抽取过去、现在、未来三张牌，把问题拆成可感知的象征。",
+    icon: "T",
     accent: "var(--fortune-tarot)",
     glow: "var(--fortune-tarot-glow)",
+    bg: "var(--fortune-tarot-bg)",
+    glyphs: ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"],
   },
   {
     value: "xiaoliuren",
     label: "小六壬",
-    description: "大安留连 · 速喜赤口 · 小吉空亡",
-    icon: "☯",
+    kicker: "六神速断",
+    description: "按农历月、日、时轮转六宫，适合问即时吉凶与行动节奏。",
+    icon: "六",
     accent: "var(--fortune-xiaoliuren)",
     glow: "var(--fortune-xiaoliuren-glow)",
+    bg: "var(--fortune-xiaoliuren-bg)",
+    glyphs: ["大安", "留连", "速喜", "赤口", "小吉", "空亡"],
   },
 ];
+
+const BAGUA = ["乾", "兑", "离", "震", "巽", "坎", "艮", "坤"];
+const HEX_LINES = [true, false, true, true, false, false];
 
 interface FortuneHeroProps {
   onSelectMethod: (method: FortuneMethod) => void;
 }
 
 export function FortuneHero({ onSelectMethod }: FortuneHeroProps) {
+  const [activeMethod, setActiveMethod] = useState<FortuneMethod>("bazi");
+  const active = METHODS.find((method) => method.value === activeMethod) || METHODS[0];
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4 py-20">
-      {/* Decorative bagua ring */}
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.04]">
-        <div
-          className="h-[600px] w-[600px] rounded-full border border-white/20"
-          style={{ animation: "fortune-rotate 60s linear infinite" }}
-        >
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div
-              key={i}
-              className="absolute left-1/2 top-1/2 h-[300px] w-px origin-bottom -translate-x-1/2 -translate-y-full bg-white/30"
-              style={{ transform: `translate(-50%, -100%) rotate(${i * 45}deg)` }}
-            />
-          ))}
-        </div>
-        <div
-          className="absolute h-[400px] w-[400px] rounded-full border border-white/10"
-          style={{ animation: "fortune-rotate-reverse 45s linear infinite" }}
-        />
-      </div>
+    <main
+      className="fortune-hero-shell"
+      style={
+        {
+          "--active-accent": active.accent,
+          "--active-glow": active.glow,
+          "--active-bg": active.bg,
+        } as React.CSSProperties
+      }
+    >
+      <div className="fortune-hero-grid">
+        <section className="fortune-hero-copy">
+          <div className="fortune-hero-eyebrow">
+            <span className="fortune-status-dot" />
+            OpenCat divination lab
+          </div>
 
-      {/* Title */}
-      <div
-        className="relative z-10 mb-16 text-center"
-        style={{ animation: "fortune-fade-in-up 0.8s ease-out" }}
-      >
-        <p className="mb-4 text-xs font-semibold uppercase tracking-[0.3em] text-[var(--fortune-text-muted)]">
-          OpenCat · AI 命理引擎
-        </p>
-        <h1 className="mb-4 text-5xl font-black tracking-tight text-white sm:text-6xl">
-          天命可知
-        </h1>
-        <p className="mx-auto max-w-lg text-base leading-7 text-[var(--fortune-text-muted)]">
-          五种传统术数，程序精确排盘，AI 深度解读。
-          <br />
-          选择一种测算方法，窥探命运的纹理。
-        </p>
-      </div>
+          <h1 className="fortune-hero-title">
+            算了么
+            <span>AI 命理工作台</span>
+          </h1>
 
-      {/* Method cards */}
-      <div
-        className="relative z-10 grid w-full max-w-4xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-        style={{ animation: "fortune-fade-in-up 1s ease-out 0.2s both" }}
-      >
-        {METHODS.map((method, index) => (
-          <button
-            key={method.value}
-            onClick={() => onSelectMethod(method.value)}
-            className="fortune-card group relative overflow-hidden p-6 text-left"
+          <p className="fortune-hero-lede">
+            不是模板化的「玄学聊天」。先由程序排盘，再让模型围绕盘面、卦象或牌阵做解释，把传统术数变成一套可交互的数字占验界面。
+          </p>
+
+          <div className="fortune-hero-actions">
+            <button
+              type="button"
+              className="fortune-command-button"
+              onClick={() => onSelectMethod(active.value)}
+            >
+              <span>{active.icon}</span>
+              开始{active.label}
+            </button>
+            <div className="fortune-method-note">
+              当前校准：<strong>{active.kicker}</strong>
+            </div>
+          </div>
+
+          <div className="fortune-method-rail" aria-label="选择测算方式">
+            {METHODS.map((method) => {
+              const isActive = method.value === active.value;
+              return (
+                <button
+                  key={method.value}
+                  type="button"
+                  onMouseEnter={() => setActiveMethod(method.value)}
+                  onFocus={() => setActiveMethod(method.value)}
+                  onClick={() => onSelectMethod(method.value)}
+                  className={`fortune-method-row ${isActive ? "is-active" : ""}`}
+                  style={
+                    {
+                      "--row-accent": method.accent,
+                      "--row-bg": method.bg,
+                    } as React.CSSProperties
+                  }
+                >
+                  <span className="fortune-method-mark">{method.icon}</span>
+                  <span>
+                    <span className="fortune-method-label">{method.label}</span>
+                    <span className="fortune-method-desc">{method.description}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="fortune-oracle-zone" aria-label={`${active.label}动态预览`}>
+          <div className="fortune-oracle-frame">
+            <div className="fortune-oracle-scanline" />
+            <MethodOracle method={active} />
+          </div>
+          <div className="fortune-oracle-caption">
+            <span>{active.label}</span>
+            <span>{active.glyphs.slice(0, 4).join(" / ")}</span>
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function MethodOracle({ method }: { method: MethodCard }) {
+  if (method.value === "tarot") {
+    return (
+      <div className="fortune-tarot-oracle">
+        {[0, 1, 2].map((index) => (
+          <div
+            key={index}
+            className="fortune-tarot-card"
             style={
               {
-                "--card-accent": method.accent,
-                "--card-glow": method.glow,
-                animationDelay: `${0.1 * index}s`,
+                transform: `translateX(${(index - 1) * 72}px) rotate(${(index - 1) * 8}deg)`,
+                animationDelay: `${index * 0.18}s`,
               } as React.CSSProperties
             }
           >
-            {/* Glow orb behind icon */}
-            <div
-              className="absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-0 blur-3xl transition-opacity duration-500 group-hover:opacity-60"
-              style={{ background: method.accent }}
-            />
-
-            {/* Icon */}
-            <div
-              className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl text-2xl"
-              style={{
-                background: `linear-gradient(135deg, ${method.accent}22, ${method.accent}08)`,
-                border: `1px solid ${method.accent}33`,
-                color: method.accent,
-              }}
-            >
-              <span style={{ animation: "fortune-float 4s ease-in-out infinite", animationDelay: `${index * 0.5}s` }}>
-                {method.icon}
-              </span>
-            </div>
-
-            {/* Text */}
-            <h3 className="mb-1 text-lg font-bold text-white">{method.label}</h3>
-            <p className="text-sm leading-5 text-[var(--fortune-text-muted)]">
-              {method.description}
-            </p>
-
-            {/* Arrow hint */}
-            <div
-              className="mt-4 flex items-center gap-1 text-xs font-medium opacity-0 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-1"
-              style={{ color: method.accent }}
-            >
-              开始测算
-              <span className="text-base">→</span>
-            </div>
-          </button>
+            <span>{index === 1 ? "ORACLE" : method.glyphs[index]}</span>
+          </div>
         ))}
       </div>
+    );
+  }
 
-      {/* History hint */}
-      <p
-        className="relative z-10 mt-12 text-center text-xs text-[var(--fortune-text-muted)]"
-        style={{ animation: "fortune-fade-in-up 1s ease-out 0.6s both" }}
-      >
-        所有测算结果仅对当前账户可见 · 程序排盘 + AI 解读
-      </p>
+  if (method.value === "xiaoliuren") {
+    return (
+      <div className="fortune-six-oracle">
+        {method.glyphs.map((god, index) => (
+          <span key={god} style={{ "--six-delay": `${index * 0.18}s` } as React.CSSProperties}>
+            {god}
+          </span>
+        ))}
+        <div className="fortune-six-pointer" />
+      </div>
+    );
+  }
+
+  if (method.value === "zhouyi") {
+    return (
+      <div className="fortune-hex-oracle">
+        <div className="fortune-bagua-ring">
+          {BAGUA.map((name, index) => (
+            <span
+              key={name}
+              style={
+                {
+                  "--bagua-angle": `${index * 45}deg`,
+                  "--bagua-counter-angle": `${index * -45}deg`,
+                } as React.CSSProperties
+              }
+            >
+              {name}
+            </span>
+          ))}
+        </div>
+        <div className="fortune-hex-lines">
+          {[...HEX_LINES].reverse().map((isYang, index) => (
+            <span key={index} className={isYang ? "is-yang" : "is-yin"} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (method.value === "ziwei") {
+    return (
+      <div className="fortune-ziwei-oracle">
+        {method.glyphs.map((palace, index) => (
+          <span key={palace} style={{ "--palace-delay": `${index * 0.04}s` } as React.CSSProperties}>
+            {palace}
+          </span>
+        ))}
+        <div className="fortune-star-core">紫微</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fortune-bazi-oracle">
+      <div className="fortune-bagua-ring">
+        {BAGUA.map((name, index) => (
+          <span
+            key={name}
+            style={
+              {
+                "--bagua-angle": `${index * 45}deg`,
+                "--bagua-counter-angle": `${index * -45}deg`,
+              } as React.CSSProperties
+            }
+          >
+            {name}
+          </span>
+        ))}
+      </div>
+      <div className="fortune-stem-ring">
+        {method.glyphs.map((glyph, index) => (
+          <span
+            key={`${glyph}-${index}`}
+            style={
+              {
+                "--stem-angle": `${index * 30}deg`,
+                "--stem-counter-angle": `${index * -30}deg`,
+              } as React.CSSProperties
+            }
+          >
+            {glyph}
+          </span>
+        ))}
+      </div>
+      <div className="fortune-yinyang-core">
+        <span />
+      </div>
     </div>
   );
 }

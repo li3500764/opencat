@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowLeft, History, Loader2, Trash2 } from "lucide-react";
 import { FortuneHero } from "@/components/fortune-v2/fortune-hero";
 import { FortuneFormModal } from "@/components/fortune-v2/fortune-form-modal";
 import { FortuneLoading } from "@/components/fortune-v2/fortune-loading";
 import { FortuneResult } from "@/components/fortune-v2/fortune-result";
 import { extractFortuneCharts } from "@/lib/fortune/normalize";
-import type { BaziChart, FortuneGender, FortuneLocation, FortuneMethod } from "@/lib/fortune/types";
+import { buildFortuneReadingRequestBody, type FortuneReadingRequestDraft } from "@/lib/fortune/request";
+import type { BaziChart, FortuneGender, FortuneMethod } from "@/lib/fortune/types";
 import type { TarotChart } from "@/lib/fortune/tarot";
 import type { ZiweiChart } from "@/lib/fortune/ziwei";
 import type { ZhouyiTimeChart } from "@/lib/fortune/zhouyi";
@@ -56,13 +57,19 @@ interface FortuneResponse {
 
 // Star field generation
 function generateStars(count: number) {
+  let seed = 20260708;
+  const next = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
+
   return Array.from({ length: count }, (_, i) => ({
     id: i,
-    left: `${Math.random() * 100}%`,
-    top: `${Math.random() * 100}%`,
-    size: Math.random() * 2 + 1,
-    duration: `${Math.random() * 4 + 2}s`,
-    delay: `${Math.random() * 3}s`,
+    left: `${next() * 100}%`,
+    top: `${next() * 100}%`,
+    size: next() * 2 + 1,
+    duration: `${next() * 4 + 2}s`,
+    delay: `${next() * 3}s`,
   }));
 }
 
@@ -120,16 +127,7 @@ export default function FortuneV2Page() {
     setError(null);
   };
 
-  const handleSubmit = async (data: {
-    method: FortuneMethod;
-    profileName: string;
-    gender: FortuneGender;
-    birthDateTimeLocal: string;
-    queryDateTimeLocal: string;
-    birthLocation: FortuneLocation;
-    useTrueSolarTime: boolean;
-    modelId: string;
-  }) => {
+  const handleSubmit = async (data: FortuneReadingRequestDraft) => {
     setError(null);
     setIsSubmitting(true);
     setPhase("loading");
@@ -138,7 +136,7 @@ export default function FortuneV2Page() {
       const res = await fetch("/api/fortune/readings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify(buildFortuneReadingRequestBody(data)),
       });
       if (!res.ok) throw new Error(await readErrorMessage(res, "生成测算失败"));
       const result = (await res.json()) as FortuneResponse;
@@ -229,9 +227,6 @@ export default function FortuneV2Page() {
             }}
           />
         ))}
-        {/* Ambient gradient orbs */}
-        <div className="absolute left-1/4 top-1/4 h-96 w-96 rounded-full opacity-[0.03]" style={{ background: "radial-gradient(circle, #d97706, transparent)" }} />
-        <div className="absolute right-1/4 bottom-1/4 h-96 w-96 rounded-full opacity-[0.02]" style={{ background: "radial-gradient(circle, #8b5cf6, transparent)" }} />
       </div>
 
       {/* Error toast */}
@@ -249,7 +244,7 @@ export default function FortuneV2Page() {
             <div className="fixed right-4 top-4 z-20 flex gap-2">
               <button
                 onClick={() => { loadHistory(); setPhase("history"); }}
-                className="flex items-center gap-2 rounded-xl border border-[var(--fortune-border)] bg-black/40 px-4 py-2 text-sm text-[var(--fortune-text-muted)] backdrop-blur-xl transition-colors hover:text-white hover:border-white/20"
+                className="fortune-card flex items-center gap-2 px-4 py-2 text-sm text-[var(--fortune-text-muted)] transition-colors hover:text-white"
               >
                 <History className="h-4 w-4" />
                 历史记录

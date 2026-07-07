@@ -106,177 +106,806 @@ body {
 }
 
 /* ============================================================
- * Fortune V2 - 沉浸式算命主题系统
+ * Fortune V2 - 沉浸式命理主题系统
  * ============================================================ */
 
-/* 测算方法主题色 */
 :root,
 .dark {
-  --fortune-bazi: #d97706;
-  --fortune-bazi-glow: rgba(217, 119, 6, 0.4);
-  --fortune-bazi-bg: rgba(217, 119, 6, 0.08);
-  --fortune-ziwei: #8b5cf6;
-  --fortune-ziwei-glow: rgba(139, 92, 246, 0.4);
-  --fortune-ziwei-bg: rgba(139, 92, 246, 0.08);
-  --fortune-zhouyi: #10b981;
-  --fortune-zhouyi-glow: rgba(16, 185, 129, 0.4);
-  --fortune-zhouyi-bg: rgba(16, 185, 129, 0.08);
-  --fortune-tarot: #c084fc;
-  --fortune-tarot-glow: rgba(192, 132, 252, 0.4);
-  --fortune-tarot-bg: rgba(192, 132, 252, 0.08);
-  --fortune-xiaoliuren: #ef4444;
-  --fortune-xiaoliuren-glow: rgba(239, 68, 68, 0.4);
-  --fortune-xiaoliuren-bg: rgba(239, 68, 68, 0.08);
-  --fortune-bg: #0a0a0f;
-  --fortune-surface: rgba(255, 255, 255, 0.03);
-  --fortune-border: rgba(255, 255, 255, 0.08);
-  --fortune-text: #e2e8f0;
-  --fortune-text-muted: #94a3b8;
+  --fortune-bazi: #c7933d;
+  --fortune-bazi-glow: rgba(199, 147, 61, 0.42);
+  --fortune-bazi-bg: rgba(199, 147, 61, 0.11);
+  --fortune-ziwei: #a997ff;
+  --fortune-ziwei-glow: rgba(169, 151, 255, 0.36);
+  --fortune-ziwei-bg: rgba(169, 151, 255, 0.1);
+  --fortune-zhouyi: #62c7aa;
+  --fortune-zhouyi-glow: rgba(98, 199, 170, 0.32);
+  --fortune-zhouyi-bg: rgba(98, 199, 170, 0.1);
+  --fortune-tarot: #b996f0;
+  --fortune-tarot-glow: rgba(185, 150, 240, 0.34);
+  --fortune-tarot-bg: rgba(185, 150, 240, 0.1);
+  --fortune-xiaoliuren: #df6f64;
+  --fortune-xiaoliuren-glow: rgba(223, 111, 100, 0.36);
+  --fortune-xiaoliuren-bg: rgba(223, 111, 100, 0.1);
+  --fortune-bg: #080807;
+  --fortune-ink: #0e0e0c;
+  --fortune-panel: rgba(20, 20, 18, 0.78);
+  --fortune-surface: rgba(245, 239, 219, 0.045);
+  --fortune-surface-strong: rgba(245, 239, 219, 0.075);
+  --fortune-border: rgba(245, 239, 219, 0.13);
+  --fortune-border-strong: rgba(245, 239, 219, 0.22);
+  --fortune-text: #eee8d7;
+  --fortune-text-muted: #9d9686;
 }
 
-/* 发光脉冲 */
 @keyframes fortune-glow {
-  0%, 100% { box-shadow: 0 0 8px 2px var(--glow-color, rgba(217, 119, 6, 0.3)); opacity: 0.8; }
-  50% { box-shadow: 0 0 20px 6px var(--glow-color, rgba(217, 119, 6, 0.6)); opacity: 1; }
+  0%, 100% { box-shadow: 0 0 10px 1px var(--glow-color, rgba(199, 147, 61, 0.28)); opacity: 0.78; }
+  50% { box-shadow: 0 0 34px 7px var(--glow-color, rgba(199, 147, 61, 0.48)); opacity: 1; }
 }
 
-/* 缓慢旋转 (八卦/星盘) */
 @keyframes fortune-rotate {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
 
-/* 反向旋转 */
 @keyframes fortune-rotate-reverse {
   from { transform: rotate(360deg); }
   to { transform: rotate(0deg); }
 }
 
-/* 浮动 */
 @keyframes fortune-float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-12px); }
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -10px, 0); }
 }
 
-/* 微光闪烁 */
+@keyframes fortune-card-breathe {
+  0%, 100% { filter: brightness(0.96); opacity: 0.9; }
+  50% { filter: brightness(1.08); opacity: 1; }
+}
+
 @keyframes fortune-shimmer {
   0% { background-position: -200% center; }
   100% { background-position: 200% center; }
 }
 
-/* 淡入上浮 */
 @keyframes fortune-fade-in-up {
   from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* 六神轮转 */
-@keyframes fortune-cycle {
-  0%, 14% { opacity: 1; }
-  16%, 100% { opacity: 0.3; }
-}
-
-/* 脉冲涟漪 */
 @keyframes fortune-ripple {
-  0% { transform: scale(1); opacity: 0.6; }
-  100% { transform: scale(2.5); opacity: 0; }
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(2.6); opacity: 0; }
 }
 
-/* 粒子飘散 */
-@keyframes fortune-particle {
-  0% { transform: translateY(0) scale(1); opacity: 1; }
-  100% { transform: translateY(-80px) scale(0); opacity: 0; }
-}
-
-/* 打字光标闪烁 */
 @keyframes fortune-cursor {
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }
 }
 
-/* 星空背景 */
 @keyframes fortune-twinkle {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 1; }
+  0%, 100% { opacity: 0.18; transform: scale(0.75); }
+  50% { opacity: 0.82; transform: scale(1); }
+}
+
+@keyframes fortune-scan {
+  0% { transform: translateY(-120%); opacity: 0; }
+  12% { opacity: 0.48; }
+  58% { opacity: 0.22; }
+  100% { transform: translateY(120%); opacity: 0; }
+}
+
+@keyframes fortune-drift {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-72px, -72px, 0); }
 }
 
 .fortune-page {
-  background: var(--fortune-bg);
+  background:
+    radial-gradient(circle at 72% 34%, rgba(199, 147, 61, 0.08), transparent 29rem),
+    radial-gradient(circle at 18% 72%, rgba(98, 199, 170, 0.06), transparent 25rem),
+    linear-gradient(180deg, #050505 0%, var(--fortune-bg) 48%, #030303 100%);
   color: var(--fortune-text);
   min-height: 100dvh;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+}
+
+.fortune-page::before {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+  background:
+    linear-gradient(rgba(245, 239, 219, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245, 239, 219, 0.028) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(circle at center, black 0%, transparent 72%);
+  animation: fortune-drift 34s linear infinite;
+}
+
+.fortune-page::after {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+  opacity: 0.19;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,0.65) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 70% 65%, rgba(255,255,255,0.45) 0 1px, transparent 1.5px);
+  background-size: 180px 160px, 260px 220px;
+  mix-blend-mode: screen;
 }
 
 .fortune-star {
   position: absolute;
-  width: 2px;
-  height: 2px;
   border-radius: 50%;
-  background: white;
+  background: rgba(245, 239, 219, 0.92);
   animation: fortune-twinkle var(--duration, 3s) ease-in-out infinite;
   animation-delay: var(--delay, 0s);
 }
 
 .fortune-card {
-  background: var(--fortune-surface);
+  background:
+    linear-gradient(145deg, rgba(245, 239, 219, 0.066), rgba(245, 239, 219, 0.028)),
+    rgba(8, 8, 7, 0.6);
   border: 1px solid var(--fortune-border);
-  border-radius: 16px;
-  backdrop-filter: blur(20px);
-  transition: all 0.3s ease;
+  border-radius: 8px;
+  backdrop-filter: blur(22px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 18px 54px rgba(0, 0, 0, 0.22);
+  transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
 }
 
 .fortune-card:hover {
-  border-color: var(--card-accent, rgba(255, 255, 255, 0.2));
-  box-shadow: 0 0 30px -5px var(--card-glow, rgba(255, 255, 255, 0.1));
+  background:
+    linear-gradient(145deg, rgba(245, 239, 219, 0.086), rgba(245, 239, 219, 0.035)),
+    rgba(8, 8, 7, 0.72);
+  border-color: var(--card-accent, var(--fortune-border-strong));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 34px -10px var(--card-glow, rgba(245, 239, 219, 0.18));
+  transform: translateY(-2px);
 }
 
 .fortune-input {
-  background: rgba(255, 255, 255, 0.04);
+  width: 100%;
   border: 1px solid var(--fortune-border);
-  border-radius: 12px;
+  border-radius: 8px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.045);
   color: var(--fortune-text);
   padding: 10px 14px;
   font-size: 14px;
-  outline: none;
-  width: 100%;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .fortune-input:focus {
   border-color: var(--active-accent, var(--fortune-bazi));
+  background: rgba(255, 255, 255, 0.065);
   box-shadow: 0 0 0 3px var(--active-glow, var(--fortune-bazi-glow));
 }
 
+.fortune-modal-panel {
+  border-radius: 10px;
+  background:
+    linear-gradient(180deg, rgba(245, 239, 219, 0.07), rgba(245, 239, 219, 0.025)),
+    linear-gradient(145deg, rgba(13, 13, 12, 0.97), rgba(6, 6, 6, 0.98));
+  backdrop-filter: blur(24px);
+}
+
+.fortune-modal-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.fortune-modal-panel::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--active-accent) 42%, rgba(255,255,255,0.16));
+}
+
+.fortune-modal-rail {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  bottom: 18px;
+  width: 1px;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, var(--active-accent), transparent);
+  opacity: 0.42;
+}
+
 .fortune-btn-primary {
-  background: linear-gradient(135deg, var(--active-accent, var(--fortune-bazi)), var(--active-accent-hover, #b45309));
-  color: white;
-  border: none;
-  border-radius: 12px;
-  padding: 12px 24px;
-  font-weight: 600;
-  font-size: 15px;
+  border: 1px solid color-mix(in srgb, var(--active-accent, var(--fortune-bazi)) 58%, transparent);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--active-accent, var(--fortune-bazi)) 86%, white 12%), var(--active-accent, var(--fortune-bazi)));
+  color: #080807;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 16px -4px var(--active-glow, var(--fortune-bazi-glow));
+  padding: 12px 24px;
+  font-weight: 700;
+  font-size: 15px;
+  box-shadow: 0 18px 42px -24px var(--active-glow, var(--fortune-bazi-glow));
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
 }
 
 .fortune-btn-primary:hover {
+  filter: brightness(1.08);
   transform: translateY(-1px);
-  box-shadow: 0 8px 24px -4px var(--active-glow, var(--fortune-bazi-glow));
+  box-shadow: 0 24px 52px -24px var(--active-glow, var(--fortune-bazi-glow));
+}
+
+.fortune-btn-primary:active {
+  transform: translateY(1px) scale(0.99);
 }
 
 .fortune-btn-primary:disabled {
-  opacity: 0.5;
   cursor: not-allowed;
+  filter: grayscale(0.45);
+  opacity: 0.46;
   transform: none;
 }
 
 .fortune-shimmer-text {
-  background: linear-gradient(90deg, var(--fortune-text-muted) 0%, white 50%, var(--fortune-text-muted) 100%);
+  background: linear-gradient(90deg, var(--fortune-text-muted) 0%, var(--fortune-text) 50%, var(--fortune-text-muted) 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   animation: fortune-shimmer 3s linear infinite;
+}
+
+.fortune-hero-shell {
+  position: relative;
+  min-height: 100dvh;
+  padding: clamp(72px, 9vh, 104px) 24px 48px;
+  isolation: isolate;
+}
+
+.fortune-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(360px, 0.78fr);
+  gap: clamp(32px, 7vw, 104px);
+  align-items: center;
+  width: min(1180px, 100%);
+  min-height: calc(100dvh - 150px);
+  margin: 0 auto;
+}
+
+.fortune-hero-copy {
+  max-width: 660px;
+  animation: fortune-fade-in-up 0.7s ease both;
+}
+
+.fortune-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--fortune-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--fortune-text-muted);
+  padding: 7px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.fortune-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--active-accent);
+  box-shadow: 0 0 18px var(--active-glow);
+}
+
+.fortune-hero-title {
+  margin-top: 22px;
+  color: var(--fortune-text);
+  font-size: clamp(64px, 10vw, 132px);
+  font-weight: 500;
+  line-height: 0.86;
+  letter-spacing: 0;
+}
+
+.fortune-hero-title span {
+  display: block;
+  margin-top: 18px;
+  color: var(--fortune-text-muted);
+  font-size: clamp(19px, 2.7vw, 34px);
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.fortune-hero-lede {
+  max-width: 58ch;
+  margin-top: 28px;
+  color: var(--fortune-text-muted);
+  font-size: 16px;
+  line-height: 1.9;
+  text-wrap: pretty;
+}
+
+.fortune-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: center;
+  margin-top: 34px;
+}
+
+.fortune-command-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--active-accent) 62%, transparent);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--active-accent) 86%, white 10%), var(--active-accent));
+  color: #080807;
+  min-height: 48px;
+  padding: 0 18px;
+  font-weight: 800;
+  box-shadow: 0 22px 48px -26px var(--active-glow);
+  transition: transform 0.22s ease, filter 0.22s ease, box-shadow 0.22s ease;
+}
+
+.fortune-command-button span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(8, 8, 7, 0.17);
+  font-weight: 900;
+}
+
+.fortune-command-button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-2px);
+  box-shadow: 0 26px 58px -24px var(--active-glow);
+}
+
+.fortune-command-button:active {
+  transform: translateY(1px) scale(0.99);
+}
+
+.fortune-method-note {
+  color: var(--fortune-text-muted);
+  font-size: 13px;
+}
+
+.fortune-method-note strong {
+  color: var(--fortune-text);
+  font-weight: 700;
+}
+
+.fortune-method-rail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 38px;
+}
+
+.fortune-method-row {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 12px;
+  align-items: center;
+  min-height: 86px;
+  border: 1px solid var(--fortune-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--fortune-text);
+  padding: 13px;
+  text-align: left;
+  transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease, box-shadow 0.22s ease;
+}
+
+.fortune-method-row:hover,
+.fortune-method-row:focus-visible,
+.fortune-method-row.is-active {
+  border-color: color-mix(in srgb, var(--row-accent) 58%, transparent);
+  background: linear-gradient(135deg, var(--row-bg), rgba(255, 255, 255, 0.038));
+  box-shadow: 0 18px 44px -34px var(--row-accent);
+  transform: translateY(-2px);
+}
+
+.fortune-method-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid color-mix(in srgb, var(--row-accent) 42%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--row-accent) 13%, transparent);
+  color: var(--row-accent);
+  font-weight: 900;
+}
+
+.fortune-method-label,
+.fortune-method-desc {
+  display: block;
+}
+
+.fortune-method-label {
+  color: var(--fortune-text);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.fortune-method-desc {
+  margin-top: 5px;
+  color: var(--fortune-text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.fortune-oracle-zone {
+  position: relative;
+  animation: fortune-fade-in-up 0.7s ease 0.12s both;
+}
+
+.fortune-oracle-frame {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  width: min(470px, 100%);
+  margin-left: auto;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--active-accent) 28%, var(--fortune-border));
+  border-radius: 10px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025)),
+    radial-gradient(circle at center, var(--active-bg), transparent 58%),
+    rgba(8, 8, 7, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 32px 120px -62px var(--active-glow);
+}
+
+.fortune-oracle-frame::before,
+.fortune-oracle-frame::after {
+  position: absolute;
+  inset: 24px;
+  border: 1px solid color-mix(in srgb, var(--active-accent) 18%, transparent);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+
+.fortune-oracle-frame::after {
+  inset: 70px;
+  border-style: dashed;
+  animation: fortune-rotate-reverse 26s linear infinite;
+}
+
+.fortune-oracle-scanline {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--active-accent) 20%, transparent), transparent);
+  animation: fortune-scan 5.8s ease-in-out infinite;
+}
+
+.fortune-oracle-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: min(470px, 100%);
+  margin: 14px 0 0 auto;
+  color: var(--fortune-text-muted);
+  font-size: 12px;
+}
+
+.fortune-oracle-caption span:first-child {
+  color: var(--active-accent);
+  font-weight: 800;
+}
+
+.fortune-loading-shell {
+  position: relative;
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 48px 16px;
+  text-align: center;
+}
+
+.fortune-loading-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(420px, 90vw);
+  aspect-ratio: 1;
+  margin-bottom: 44px;
+  border: 1px solid color-mix(in srgb, var(--active-accent) 32%, var(--fortune-border));
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, color-mix(in srgb, var(--active-accent) 11%, transparent), transparent 60%),
+    rgba(8, 8, 7, 0.28);
+  box-shadow: inset 0 0 80px rgba(0,0,0,0.35), 0 0 120px -70px var(--active-glow);
+}
+
+.fortune-loading-stage::before,
+.fortune-loading-stage::after {
+  position: absolute;
+  inset: 28px;
+  border: 1px dashed color-mix(in srgb, var(--active-accent) 24%, transparent);
+  border-radius: 50%;
+  content: "";
+  animation: fortune-rotate 38s linear infinite;
+}
+
+.fortune-loading-stage::after {
+  inset: 68px;
+  border-style: solid;
+  animation-direction: reverse;
+  animation-duration: 24s;
+}
+
+.fortune-loading-runes {
+  position: absolute;
+  inset: 50%;
+  width: min(540px, 96vw);
+  height: min(540px, 96vw);
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: fortune-rotate-reverse 52s linear infinite;
+}
+
+.fortune-loading-runes span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  color: color-mix(in srgb, var(--active-accent) 44%, var(--fortune-text-muted));
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.44;
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--rune-angle))
+    translateY(-260px)
+    rotate(var(--rune-counter-angle));
+}
+
+.fortune-bazi-oracle,
+.fortune-hex-oracle,
+.fortune-ziwei-oracle,
+.fortune-six-oracle,
+.fortune-tarot-oracle {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 78%;
+  height: 78%;
+}
+
+.fortune-bagua-ring,
+.fortune-stem-ring {
+  position: absolute;
+  inset: 0;
+  border: 1px solid color-mix(in srgb, var(--active-accent) 28%, transparent);
+  border-radius: 50%;
+  animation: fortune-rotate 42s linear infinite;
+}
+
+.fortune-stem-ring {
+  inset: 46px;
+  border-style: dashed;
+  animation-duration: 28s;
+  animation-direction: reverse;
+}
+
+.fortune-bagua-ring span,
+.fortune-stem-ring span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  color: color-mix(in srgb, var(--active-accent) 88%, var(--fortune-text));
+  font-size: 13px;
+  font-weight: 800;
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--bagua-angle, var(--stem-angle)))
+    translateY(-149px)
+    rotate(var(--bagua-counter-angle, var(--stem-counter-angle)));
+}
+
+.fortune-stem-ring span {
+  color: var(--fortune-text-muted);
+  font-size: 12px;
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--stem-angle))
+    translateY(-103px)
+    rotate(var(--stem-counter-angle));
+}
+
+.fortune-yinyang-core,
+.fortune-star-core {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border: 1px solid color-mix(in srgb, var(--active-accent) 46%, transparent);
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--active-bg), rgba(0, 0, 0, 0.72));
+  color: var(--active-accent);
+  font-weight: 900;
+  box-shadow: 0 0 46px -18px var(--active-glow);
+}
+
+.fortune-yinyang-core span {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 25%, var(--active-accent) 0 8px, transparent 9px),
+    radial-gradient(circle at 50% 75%, #080807 0 8px, transparent 9px),
+    linear-gradient(90deg, var(--active-accent) 50%, #080807 50%);
+  animation: fortune-rotate 11s linear infinite;
+}
+
+.fortune-ziwei-oracle {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.fortune-ziwei-oracle span {
+  display: grid;
+  place-items: center;
+  min-width: 56px;
+  min-height: 44px;
+  border: 1px solid color-mix(in srgb, var(--active-accent) 26%, transparent);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fortune-text-muted);
+  font-size: 12px;
+}
+
+.fortune-star-core {
+  position: absolute;
+  width: 86px;
+  height: 86px;
+  font-size: 15px;
+}
+
+.fortune-hex-lines {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  width: 150px;
+}
+
+.fortune-hex-lines span {
+  display: flex;
+  height: 9px;
+  gap: 14px;
+}
+
+.fortune-hex-lines span::before,
+.fortune-hex-lines span::after {
+  display: block;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--active-accent);
+  box-shadow: 0 0 18px -4px var(--active-glow);
+  content: "";
+}
+
+.fortune-hex-lines .is-yang::after {
+  display: none;
+}
+
+.fortune-tarot-oracle {
+  width: 82%;
+}
+
+.fortune-tarot-card {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 172px;
+  border: 1px solid color-mix(in srgb, var(--active-accent) 38%, transparent);
+  border-radius: 10px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.035)),
+    radial-gradient(circle at center, var(--active-bg), rgba(0,0,0,0.74));
+  box-shadow: 0 24px 70px -40px var(--active-glow);
+  animation: fortune-card-breathe 4.2s ease-in-out infinite;
+}
+
+.fortune-tarot-card::before {
+  position: absolute;
+  inset: 13px;
+  border: 1px solid color-mix(in srgb, var(--active-accent) 28%, transparent);
+  border-radius: 7px;
+  content: "";
+}
+
+.fortune-tarot-card span {
+  color: var(--active-accent);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+}
+
+.fortune-six-oracle {
+  grid-template-columns: repeat(3, 74px);
+  grid-template-rows: repeat(2, 74px);
+  gap: 12px;
+}
+
+.fortune-six-oracle span {
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--active-accent) 34%, transparent);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fortune-text);
+  font-size: 14px;
+  font-weight: 800;
+  animation: fortune-glow 4s ease-in-out infinite;
+  animation-delay: var(--six-delay);
+  --glow-color: var(--active-glow);
+}
+
+.fortune-six-pointer {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--active-accent);
+  border-radius: 50%;
+  box-shadow: 0 0 22px var(--active-glow);
+  animation: fortune-rotate 3.8s steps(6) infinite;
+}
+
+@media (max-width: 980px) {
+  .fortune-hero-grid {
+    grid-template-columns: 1fr;
+    gap: 38px;
+  }
+
+  .fortune-oracle-frame,
+  .fortune-oracle-caption {
+    margin-right: auto;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .fortune-hero-shell {
+    padding: 72px 16px 38px;
+  }
+
+  .fortune-method-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .fortune-oracle-frame {
+    width: 100%;
+  }
+
+  .fortune-bagua-ring span {
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--bagua-angle))
+      translateY(-120px)
+      rotate(var(--bagua-counter-angle));
+  }
+
+  .fortune-stem-ring span {
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--stem-angle))
+      translateY(-82px)
+      rotate(var(--stem-counter-angle));
+  }
 }
