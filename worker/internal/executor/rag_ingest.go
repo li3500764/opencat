@@ -247,6 +247,10 @@ func splitTextIntoChunks(text string) []string {
 			chunks = append(chunks, chunkText)
 		}
 
+		if end == len(cleaned) {
+			break
+		}
+
 		start = end - chunkOverlap
 	}
 
