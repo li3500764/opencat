@@ -10,6 +10,7 @@ import {
   summarizeFortuneConsultHistory,
   type FortuneConsultMessageForPrompt,
 } from "@/lib/fortune/consult";
+import { buildDynamicConsultContext } from "@/lib/fortune/dynamic";
 import { getStoredFortuneMethod } from "@/lib/fortune/method";
 import { FortuneInterpretationTimeoutError } from "@/lib/fortune/reader";
 import { db } from "@/server/db";
@@ -152,6 +153,11 @@ export async function POST(
     })) satisfies FortuneConsultMessageForPrompt[];
 
     const method = getStoredFortuneMethod(reading.chart);
+    const dynamicResult = buildDynamicConsultContext({
+      method,
+      chart: reading.chart,
+      question: parsed.data.message,
+    });
     const answer = await generateFortuneConsultAnswer({
       userId: session.user.id,
       modelId: parsed.data.modelId,
@@ -161,6 +167,14 @@ export async function POST(
       summary: consultSession.summary,
       recentMessages,
       question: parsed.data.message,
+      dynamicContext: dynamicResult.status === "resolved"
+        ? {
+            targetRange: dynamicResult.targetRange,
+            requestedMonths: dynamicResult.requestedMonths,
+            contexts: dynamicResult.dynamicContexts,
+          }
+        : undefined,
+      clarification: dynamicResult.status === "clarification" ? dynamicResult.message : undefined,
     });
 
     const userTokenCount = estimateTokens(parsed.data.message);

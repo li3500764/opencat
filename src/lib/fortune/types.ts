@@ -81,10 +81,67 @@ export interface AnnualFortune {
   relationToDayMaster: string;
 }
 
+export interface DynamicTargetRange {
+  startLocalDateTime: string;
+  endLocalDateTime: string;
+  timezone: string;
+  granularity: "year" | "month" | "day";
+  sourceText?: string;
+}
+
+export interface BaziMonthSegment {
+  gregorianMonth: string;
+  startLocalDateTime: string;
+  endLocalDateTime: string;
+  solarTermBoundary?: SolarTermSnapshot;
+  pillar: BaziPillar;
+  relations: string[];
+}
+
+export interface BaziDynamicContext {
+  method: "bazi";
+  targetRange: DynamicTargetRange;
+  annualFortunes: AnnualFortune[];
+  currentLuckCycle: LuckCycle | null;
+  monthSegments: BaziMonthSegment[];
+}
+
+export interface ZiweiHoroscopeItem {
+  index: number;
+  name: string;
+  heavenlyStem: string;
+  earthlyBranch: string;
+  palaceNames: string[];
+  mutagen: string[];
+  stars: ZiweiStarPlacement[][];
+}
+
+export interface ZiweiStarPlacement {
+  name: string;
+  type: string;
+  scope: string;
+}
+
+export interface ZiweiDynamicContext {
+  method: "ziwei";
+  targetRange: DynamicTargetRange;
+  solarDate: string;
+  lunarDate: string;
+  decadal: ZiweiHoroscopeItem;
+  age: ZiweiHoroscopeItem & { nominalAge: number };
+  yearly: ZiweiHoroscopeItem & {
+    yearlyDecStar: { jiangqian12: string[]; suiqian12: string[] };
+  };
+  monthly: ZiweiHoroscopeItem;
+  daily: ZiweiHoroscopeItem;
+}
+
+export type FortuneDynamicContext = BaziDynamicContext | ZiweiDynamicContext;
+
 export interface CalculationBasis {
   library: string;
   libraryVersion: string;
-  ruleSet: "opencat-ziping-v1";
+  ruleSet: "opencat-ziping-v1" | "opencat-ziping-v2";
   birthCalendar: FortuneCalendar;
   timeBasis: "standard" | "trueSolar";
   originalBirthDateTimeLocal: string;
@@ -94,6 +151,12 @@ export interface CalculationBasis {
   longitude: number;
   latitude: number;
   trueSolarOffsetMinutes: number;
+  timezoneOffsetMinutes?: number;
+  standardMeridianLongitude?: number;
+  longitudeOffsetMinutes?: number;
+  equationOfTimeMinutes?: number;
+  yearBoundary?: "li-chun";
+  monthBoundary?: "solar-terms";
   locationName: string;
 }
 
@@ -134,6 +197,7 @@ export interface BaziChart {
   };
   luckCycles: LuckCycle[];
   annualFortune: AnnualFortune;
+  dynamicContext: BaziDynamicContext;
   calculationBasis: CalculationBasis;
 }
 

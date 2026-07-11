@@ -1,6 +1,7 @@
 import { astro } from "iztro";
 import { validateFortuneInput } from "./chart";
-import type { FortuneGender, FortuneInput } from "./types";
+import { addLocalMinutes, applyTrueSolarTime, formatPlainDateTime, parsePlainLocalDateTime, parseZonedLocalDateTime } from "./time";
+import type { FortuneGender, FortuneInput, ZiweiDynamicContext, ZiweiHoroscopeItem } from "./types";
 
 export interface ZiweiStar {
   name: string;
@@ -50,8 +51,9 @@ export interface ZiweiChart {
   body: string;
   fiveElementsClass: string;
   palaces: ZiweiPalace[];
+  dynamicContext: ZiweiDynamicContext;
   calculationBasis: {
-    ruleSet: "opencat-ziwei-v1";
+    ruleSet: "opencat-ziwei-v1" | "opencat-ziwei-v2";
     library: "iztro";
     libraryVersion: "2.5.8";
     language: "zh-CN";
@@ -59,7 +61,14 @@ export interface ZiweiChart {
     timeBasis: "standard" | "trueSolar";
     originalBirthDateTimeLocal: string;
     effectiveBirthDateTimeLocal: string;
+    queryDateTimeLocal: string;
     trueSolarOffsetMinutes: number;
+    timezoneOffsetMinutes?: number;
+    standardMeridianLongitude?: number;
+    longitudeOffsetMinutes?: number;
+    equationOfTimeMinutes?: number;
+    yearDivide?: "normal";
+    horoscopeDivide?: "normal";
     timeIndex: number;
     locationName: string;
     longitude: number;
@@ -72,15 +81,33 @@ type IztroAstrolabe = ReturnType<typeof astro.bySolar>;
 
 export function buildZiweiChart(rawInput: FortuneInput): ZiweiChart {
   const input = validateFortuneInput(rawInput);
-  const originalBirth = parseLocalDateTime(input.birthDateTimeLocal);
-  const trueSolarOffsetMinutes = input.useTrueSolarTime
-    ? Math.round((input.birthLocation.longitude - timezoneStandardLongitude(input.birthLocation.timezone)) * 4)
-    : 0;
-  const effectiveBirth = addMinutes(originalBirth, trueSolarOffsetMinutes);
-  const solarDate = `${effectiveBirth.getFullYear()}-${effectiveBirth.getMonth() + 1}-${effectiveBirth.getDate()}`;
-  const timeIndex = getIztroTimeIndex(effectiveBirth);
+  const originalBirth = parseZonedLocalDateTime(input.birthDateTimeLocal, input.birthLocation.timezone);
+  const solarCorrection = input.useTrueSolarTime
+    ? applyTrueSolarTime({
+        localDateTime: originalBirth.localDateTime,
+        timeZone: input.birthLocation.timezone,
+        longitude: input.birthLocation.longitude,
+      })
+    : {
+        originalLocalDateTime: originalBirth.localDateTime,
+        effectiveLocalDateTime: originalBirth.localDateTime,
+        timezoneOffsetMinutes: originalBirth.offsetMinutes,
+        standardMeridianLongitude: (originalBirth.offsetMinutes / 60) * 15,
+        longitudeOffsetMinutes: 0,
+        equationOfTimeMinutes: 0,
+        totalOffsetMinutes: 0,
+      };
+  const effectiveBirth = parsePlainLocalDateTime(solarCorrection.effectiveLocalDateTime);
+  const queryDate = parseZonedLocalDateTime(input.queryDateTimeLocal, input.birthLocation.timezone);
+  const solarDate = `${effectiveBirth.year}-${effectiveBirth.month}-${effectiveBirth.day}`;
+  const timeIndex = getIztroTimeIndex({ hour: effectiveBirth.hour });
   const gender = input.gender === "female" ? "女" : "男";
   const astrolabe = astro.bySolar(solarDate, timeIndex, gender, true, "zh-CN");
+  const dynamicContext = buildZiweiDynamicContext(
+    astrolabe,
+    queryDate.localDateTime,
+    input.birthLocation.timezone
+  );
 
   return {
     method: "ziwei-astrolabe",
@@ -100,22 +127,84 @@ export function buildZiweiChart(rawInput: FortuneInput): ZiweiChart {
     body: astrolabe.body,
     fiveElementsClass: astrolabe.fiveElementsClass,
     palaces: astrolabe.palaces.map(normalizePalace),
+    dynamicContext,
     calculationBasis: {
-      ruleSet: "opencat-ziwei-v1",
+      ruleSet: "opencat-ziwei-v2",
       library: "iztro",
       libraryVersion: "2.5.8",
       language: "zh-CN",
       fixLeap: true,
       timeBasis: input.useTrueSolarTime ? "trueSolar" : "standard",
-      originalBirthDateTimeLocal: formatLocalDateTime(originalBirth),
-      effectiveBirthDateTimeLocal: formatLocalDateTime(effectiveBirth),
-      trueSolarOffsetMinutes,
+      originalBirthDateTimeLocal: originalBirth.localDateTime,
+      effectiveBirthDateTimeLocal: formatPlainDateTime(effectiveBirth),
+      queryDateTimeLocal: queryDate.localDateTime,
+      trueSolarOffsetMinutes: solarCorrection.totalOffsetMinutes,
+      timezoneOffsetMinutes: solarCorrection.timezoneOffsetMinutes,
+      standardMeridianLongitude: solarCorrection.standardMeridianLongitude,
+      longitudeOffsetMinutes: solarCorrection.longitudeOffsetMinutes,
+      equationOfTimeMinutes: solarCorrection.equationOfTimeMinutes,
+      yearDivide: "normal",
+      horoscopeDivide: "normal",
       timeIndex,
       locationName: input.birthLocation.name,
       longitude: input.birthLocation.longitude,
       latitude: input.birthLocation.latitude,
       timezone: input.birthLocation.timezone,
     },
+  };
+}
+
+export function buildZiweiDynamicContext(
+  astrolabe: IztroAstrolabe,
+  targetLocalDateTime: string,
+  timezone: string
+): ZiweiDynamicContext {
+  const target = parsePlainLocalDateTime(targetLocalDateTime);
+  const targetDate = `${target.year}-${target.month}-${target.day}`;
+  const horoscope = astrolabe.horoscope(targetDate, getIztroTimeIndex({ hour: target.hour }));
+  return {
+    method: "ziwei",
+    targetRange: {
+      startLocalDateTime: `${target.year}-${parsePad(target.month)}-${parsePad(target.day)}T00:00`,
+      endLocalDateTime: addLocalMinutes(`${target.year}-${parsePad(target.month)}-${parsePad(target.day)}T00:00`, 1440),
+      timezone,
+      granularity: "day",
+    },
+    solarDate: horoscope.solarDate,
+    lunarDate: horoscope.lunarDate,
+    decadal: normalizeHoroscopeItem(horoscope.decadal),
+    age: { ...normalizeHoroscopeItem(horoscope.age), nominalAge: horoscope.age.nominalAge },
+    yearly: {
+      ...normalizeHoroscopeItem(horoscope.yearly),
+      yearlyDecStar: {
+        jiangqian12: [...horoscope.yearly.yearlyDecStar.jiangqian12],
+        suiqian12: [...horoscope.yearly.yearlyDecStar.suiqian12],
+      },
+    },
+    monthly: normalizeHoroscopeItem(horoscope.monthly),
+    daily: normalizeHoroscopeItem(horoscope.daily),
+  };
+}
+
+function normalizeHoroscopeItem(item: {
+  index: number;
+  name: string;
+  heavenlyStem: string;
+  earthlyBranch: string;
+  palaceNames: readonly string[];
+  mutagen: readonly string[];
+  stars?: readonly (readonly { name: string; type: string; scope: string }[])[];
+}): ZiweiHoroscopeItem {
+  return {
+    index: item.index,
+    name: item.name,
+    heavenlyStem: item.heavenlyStem,
+    earthlyBranch: item.earthlyBranch,
+    palaceNames: [...item.palaceNames],
+    mutagen: [...item.mutagen],
+    stars: Array.from({ length: 12 }, (_, index) =>
+      (item.stars?.[index] || []).map((star) => ({ name: star.name, type: star.type, scope: star.scope }))
+    ),
   };
 }
 
@@ -153,44 +242,13 @@ function normalizeStar(star: ZiweiStar): ZiweiStar {
   };
 }
 
-export function getIztroTimeIndex(date: Date) {
-  const hour = date.getHours();
+export function getIztroTimeIndex(date: Date | { hour: number }) {
+  const hour = date instanceof Date ? date.getHours() : date.hour;
   if (hour === 0) return 0;
   if (hour === 23) return 12;
   return Math.floor((hour + 1) / 2);
 }
 
-function parseLocalDateTime(value: string): Date {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
-    throw new Error("日期时间格式无效");
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) throw new Error("日期时间格式无效");
-  return date;
-}
-
-function timezoneStandardLongitude(timezone: string) {
-  const offsets: Record<string, number> = {
-    "Asia/Shanghai": 120,
-    "Asia/Hong_Kong": 120,
-    "Asia/Taipei": 120,
-    "Asia/Tokyo": 135,
-    "Asia/Singapore": 120,
-    "America/New_York": -75,
-    "America/Los_Angeles": -120,
-    "Europe/London": 0,
-  };
-  return offsets[timezone] ?? 120;
-}
-
-function addMinutes(date: Date, minutes: number) {
-  return new Date(date.getTime() + minutes * 60_000);
-}
-
 function parsePad(value: number) {
   return String(value).padStart(2, "0");
-}
-
-function formatLocalDateTime(date: Date) {
-  return `${date.getFullYear()}-${parsePad(date.getMonth() + 1)}-${parsePad(date.getDate())}T${parsePad(date.getHours())}:${parsePad(date.getMinutes())}`;
 }

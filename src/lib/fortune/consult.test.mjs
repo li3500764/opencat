@@ -24,13 +24,18 @@ test("fortune consult prompt is scoped to one method and chart", () => {
     summary: "用户关心事业。",
     recentMessages: [{ role: "user", content: "事业怎么看？" }],
     question: "明年适合换工作吗？",
+    dynamicContext: { requestedMonths: ["2027-01"], contexts: [{ annualFortunes: [{ year: 2027 }] }] },
   });
   const system = buildFortuneConsultSystemPrompt("bazi");
 
   assert.match(system, /四柱八字咨询大师/);
   assert.match(system, /不得跨体系混合解读/);
+  assert.match(system, /低、中、高/);
+  assert.match(system, /不得输出单点百分比/);
   assert.match(prompt, /辛巳/);
   assert.match(prompt, /明年适合换工作吗/);
+  assert.match(prompt, /2027-01/);
+  assert.match(prompt, /动态排盘 JSON/);
 });
 
 test("fortune consult history keeps recent messages and compresses older messages", () => {

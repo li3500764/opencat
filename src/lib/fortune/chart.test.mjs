@@ -27,7 +27,7 @@ test("buildBaziChart returns a stable full chart shape for a gregorian birth inp
     modelId: "gpt-4o-mini",
   });
 
-  assert.equal(chart.calculationBasis.ruleSet, "opencat-ziping-v1");
+  assert.equal(chart.calculationBasis.ruleSet, "opencat-ziping-v2");
   assert.equal(chart.calculationBasis.library, "lunar-typescript");
   assert.equal(chart.calculationBasis.timeBasis, "standard");
   assert.equal(chart.pillars.year.stemBranch, "庚午");
@@ -46,7 +46,49 @@ test("buildBaziChart returns a stable full chart shape for a gregorian birth inp
   assert.match(chart.luckCycles[2].pillar.tenGod, /当前大运/);
   assert.equal(chart.annualFortune.year, 2026);
   assert.equal(chart.annualFortune.pillar.stemBranch, "丙午");
+  assert.equal(chart.dynamicContext.method, "bazi");
+  assert.equal(chart.dynamicContext.annualFortunes[0].pillar.stemBranch, "丙午");
+  assert.equal(chart.dynamicContext.monthSegments.some((segment) => segment.gregorianMonth === "2026-07"), true);
+  assert.equal(chart.dynamicContext.monthSegments.filter((segment) => segment.gregorianMonth === "2026-07").length, 2);
   assert.equal(chart.shenSha.length > 0, true);
+});
+
+test("annual fortune changes at Li Chun instead of Gregorian new year", () => {
+  const chart = buildBaziChart({
+    profileName: "测试命主",
+    gender: "male",
+    birthCalendar: "gregorian",
+    birthDateTimeLocal: "1990-05-17T08:30",
+    birthLocation: getFortuneLocationById("cn-beijing"),
+    useTrueSolarTime: false,
+    queryDateTimeLocal: "2026-01-15T12:00",
+    modelId: "gpt-4o-mini",
+  });
+
+  assert.equal(chart.annualFortune.year, 2025);
+  assert.equal(chart.annualFortune.pillar.stemBranch, "乙巳");
+});
+
+test("monthly segments expose exact solar-term boundaries for July through December", () => {
+  const chart = buildBaziChart({
+    profileName: "测试命主",
+    gender: "female",
+    birthCalendar: "gregorian",
+    birthDateTimeLocal: "1990-05-17T08:30",
+    birthLocation: getFortuneLocationById("cn-shanghai"),
+    useTrueSolarTime: false,
+    queryDateTimeLocal: "2026-07-11T12:00",
+    modelId: "gpt-4o-mini",
+  });
+
+  for (const month of ["07", "08", "09", "10", "11", "12"]) {
+    const segments = chart.dynamicContext.monthSegments.filter(
+      (segment) => segment.gregorianMonth === `2026-${month}`
+    );
+    assert.equal(segments.length, 2);
+    assert.equal(segments.every((segment) => segment.pillar.stemBranch.length === 2), true);
+    assert.equal(segments.some((segment) => segment.solarTermBoundary), true);
+  }
 });
 
 test("true solar time records a corrected birth time based on longitude", () => {
@@ -79,6 +121,29 @@ test("true solar time records a corrected birth time based on longitude", () => 
     trueSolar.calculationBasis.effectiveBirthDateTimeLocal
   );
   assert.equal(trueSolar.calculationBasis.trueSolarOffsetMinutes < -100, true);
+  assert.equal(trueSolar.calculationBasis.longitudeOffsetMinutes < -120, true);
+  assert.equal(Math.abs(trueSolar.calculationBasis.equationOfTimeMinutes) > 10, true);
+});
+
+test("true solar time may cross a DST gap without treating solar wall time as civil time", () => {
+  assert.doesNotThrow(() =>
+    buildBaziChart({
+      method: "bazi",
+      profileName: "纽约命主",
+      gender: "female",
+      birthCalendar: "gregorian",
+      birthDateTimeLocal: "2026-03-08T03:30",
+      birthLocation: {
+        name: "New York",
+        longitude: -74.006,
+        latitude: 40.7128,
+        timezone: "America/New_York",
+      },
+      useTrueSolarTime: true,
+      queryDateTimeLocal: "2026-07-01T12:00",
+      modelId: "gpt-4o-mini",
+    })
+  );
 });
 
 test("luck cycle direction follows gender and year stem yin-yang rule", () => {
@@ -125,5 +190,23 @@ test("validateFortuneInput rejects future birth dates", () => {
     (error) =>
       error instanceof FortuneValidationError &&
       /出生时间不能晚于测算时间/.test(error.message)
+  );
+});
+
+test("validateFortuneInput rejects non-binary calculation gender for bazi", () => {
+  assert.throws(
+    () =>
+      validateFortuneInput({
+        method: "bazi",
+        profileName: "测试命主",
+        gender: "other",
+        birthCalendar: "gregorian",
+        birthDateTimeLocal: "1990-01-01T00:00",
+        birthLocation: getFortuneLocationById("cn-beijing"),
+        useTrueSolarTime: false,
+        queryDateTimeLocal: "2026-06-10T12:00",
+        modelId: "gpt-4o-mini",
+      }),
+    /排盘口径/
   );
 });

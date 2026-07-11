@@ -49,6 +49,10 @@ export async function GET(
       tarotChart: tarot,
       xiaoliurenChart: xiaoliuren,
       interpretation: reading.interpretation,
+      dynamicContext: bazi?.dynamicContext || ziwei?.dynamicContext || null,
+      isLegacyChart:
+        (bazi ? bazi.calculationBasis?.ruleSet !== "opencat-ziping-v2" : false) ||
+        (ziwei ? ziwei.calculationBasis?.ruleSet !== "opencat-ziwei-v2" : false),
       usage: {
         promptTokens: reading.promptTokens,
         completionTokens: reading.completionTokens,

@@ -49,7 +49,9 @@ export function buildFortuneConsultSystemPrompt(method: FortuneMethod) {
 2. 不得重新排盘、起卦或抽牌，不得修改 chart 字段。
 3. 不得跨体系混合解读；当前是${getFortuneMethodName(method)}，只能使用这个体系。
 4. 不得声称绝对准确，不得提供医疗、法律、投资、婚恋等重大决策指令。
-5. 回答要针对用户问题，引用盘面字段作为依据，语气克制具体。`;
+5. 回答要针对用户问题，逐项引用盘面 JSON 字段作为依据，语气克制具体。
+6. 涉及月份比较时，只能使用低、中、高相对风险，并同时给出支持依据、缓和因素、可信度与现实观察指标。
+7. 不得输出单点百分比或把术数判断包装成统计概率；必须说明它不是真实世界的统计预测。`;
 }
 
 export function buildFortuneConsultPrompt(input: {
@@ -59,6 +61,7 @@ export function buildFortuneConsultPrompt(input: {
   summary?: string | null;
   recentMessages: FortuneConsultMessageForPrompt[];
   question: string;
+  dynamicContext?: unknown;
 }) {
   const recent = input.recentMessages
     .map((message) => `${message.role === "user" ? "用户" : "大师"}：${message.content}`)
@@ -69,6 +72,9 @@ ${getFortuneMethodName(input.method)}
 
 【程序盘面 JSON】
 ${JSON.stringify(input.chart, null, 2)}
+
+【按用户问题确定性生成的动态排盘 JSON】
+${input.dynamicContext ? JSON.stringify(input.dynamicContext, null, 2) : "本题未识别到需要补算的明确时间范围"}
 
 【首次 AI 解读】
 ${input.initialInterpretation || "无"}
@@ -124,7 +130,20 @@ export async function generateFortuneConsultAnswer(input: {
   summary?: string | null;
   recentMessages: FortuneConsultMessageForPrompt[];
   question: string;
+  dynamicContext?: unknown;
+  clarification?: string;
 }): Promise<FortuneConsultGenerationResult> {
+  if (input.clarification) {
+    return {
+      text: input.clarification,
+      modelId: input.modelId,
+      providerId: "system",
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      cost: 0,
+    };
+  }
   const config = await resolveFortuneModelConfig(input.userId, input.modelId);
   const model = createModel(config.modelId, config.apiKey, {
     baseUrl: config.baseUrl,

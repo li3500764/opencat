@@ -1,8 +1,11 @@
 import { Solar, type DaYun, type EightChar, type JieQi, type Lunar } from "lunar-typescript";
 import { FORTUNE_LOCATIONS, getFortuneLocationById } from "./locations";
+import { applyTrueSolarTime, parseZonedLocalDateTime } from "./time";
 import type {
   AnnualFortune,
   BaziChart,
+  BaziDynamicContext,
+  BaziMonthSegment,
   BaziPillar,
   FiveElement,
   FiveElementBalance,
@@ -169,16 +172,19 @@ const SEASON_SUPPORT: Record<string, FiveElement[]> = {
 export function validateFortuneInput(input: FortuneInput): FortuneInput {
   if (!input.profileName?.trim()) throw new FortuneValidationError("请输入姓名");
   if (!["male", "female", "other"].includes(input.gender)) throw new FortuneValidationError("性别参数无效");
+  if ((input.method === "bazi" || input.method === "ziwei") && input.gender === "other") {
+    throw new FortuneValidationError("四柱与紫微需要选择男或女作为排盘口径，此选项仅用于排盘顺逆，不代表身份认同");
+  }
   if (input.birthCalendar !== "gregorian") throw new FortuneValidationError("首版仅支持公历出生日期");
   if (!input.modelId?.trim()) throw new FortuneValidationError("请选择解读模型");
   validateLocation(input.birthLocation);
 
-  const birth = parseLocalDateTime(input.birthDateTimeLocal);
-  const query = parseLocalDateTime(input.queryDateTimeLocal);
-  if (birth.getTime() > query.getTime()) {
+  const birth = parseInputDateTime(input.birthDateTimeLocal, input.birthLocation.timezone);
+  const query = parseInputDateTime(input.queryDateTimeLocal, input.birthLocation.timezone);
+  if (Date.parse(birth.instant) > Date.parse(query.instant)) {
     throw new FortuneValidationError("出生时间不能晚于测算时间");
   }
-  if (birth.getFullYear() < 1900 || birth.getFullYear() > 2100) {
+  if (birth.year < 1900 || birth.year > 2100) {
     throw new FortuneValidationError("出生年份需在 1900 至 2100 年之间");
   }
   return {
@@ -190,12 +196,27 @@ export function validateFortuneInput(input: FortuneInput): FortuneInput {
 
 export function buildBaziChart(rawInput: FortuneInput): BaziChart {
   const input = validateFortuneInput(rawInput);
-  const originalBirth = parseLocalDateTime(input.birthDateTimeLocal);
-  const queryDate = parseLocalDateTime(input.queryDateTimeLocal);
-  const trueSolarOffsetMinutes = input.useTrueSolarTime
-    ? Math.round((input.birthLocation.longitude - timezoneStandardLongitude(input.birthLocation.timezone)) * 4)
-    : 0;
-  const effectiveBirth = addMinutes(originalBirth, trueSolarOffsetMinutes);
+  const originalBirth = parseInputDateTime(input.birthDateTimeLocal, input.birthLocation.timezone);
+  const queryDate = parseInputDateTime(input.queryDateTimeLocal, input.birthLocation.timezone);
+  const solarCorrection = input.useTrueSolarTime
+    ? applyTrueSolarTime({
+        localDateTime: originalBirth.localDateTime,
+        timeZone: input.birthLocation.timezone,
+        longitude: input.birthLocation.longitude,
+      })
+    : {
+        originalLocalDateTime: originalBirth.localDateTime,
+        effectiveLocalDateTime: originalBirth.localDateTime,
+        timezoneOffsetMinutes: originalBirth.offsetMinutes,
+        standardMeridianLongitude: (originalBirth.offsetMinutes / 60) * 15,
+        longitudeOffsetMinutes: 0,
+        equationOfTimeMinutes: 0,
+        totalOffsetMinutes: 0,
+      };
+  const effectiveBirth = {
+    ...localParts(solarCorrection.effectiveLocalDateTime),
+    localDateTime: solarCorrection.effectiveLocalDateTime,
+  };
   const lunarContext = getLunarContext(effectiveBirth);
   const solarTerms = getSolarTermSnapshotFromLunar(lunarContext.lunar);
   const pillars = getPillarsFromLunar(lunarContext.eightChar);
@@ -205,8 +226,16 @@ export function buildBaziChart(rawInput: FortuneInput): BaziChart {
   const shenSha = getShenSha(pillars);
   const dayMasterStrength = getDayMasterStrength(pillars, fiveElementBalance);
   const pattern = getPattern(pillars, dayMasterStrength, fiveElementBalance);
-  const luckCycles = getLuckCycles(input, pillars, lunarContext.eightChar, queryDate);
+  const luckCycles = getLuckCycles(input, pillars, lunarContext.eightChar, queryDate.year);
   const annualFortune = getAnnualFortune(queryDate, pillars.day.stem);
+  const dynamicContext = buildBaziDynamicContextForYear({
+    year: queryDate.year,
+    timezone: input.birthLocation.timezone,
+    dayStem: pillars.day.stem,
+    natalPillars: pillars,
+    luckCycles,
+    queryDateTimeLocal: queryDate.localDateTime,
+  });
 
   return {
     profileName: input.profileName,
@@ -223,19 +252,26 @@ export function buildBaziChart(rawInput: FortuneInput): BaziChart {
     pattern,
     luckCycles,
     annualFortune,
+    dynamicContext,
     calculationBasis: {
       library: "lunar-typescript",
       libraryVersion: "1.7.8",
-      ruleSet: "opencat-ziping-v1",
+      ruleSet: "opencat-ziping-v2",
       birthCalendar: input.birthCalendar,
       timeBasis: input.useTrueSolarTime ? "trueSolar" : "standard",
-      originalBirthDateTimeLocal: formatLocalDateTime(originalBirth),
-      effectiveBirthDateTimeLocal: formatLocalDateTime(effectiveBirth),
-      queryDateTimeLocal: formatLocalDateTime(queryDate),
+      originalBirthDateTimeLocal: originalBirth.localDateTime,
+      effectiveBirthDateTimeLocal: effectiveBirth.localDateTime,
+      queryDateTimeLocal: queryDate.localDateTime,
       timezone: input.birthLocation.timezone,
       longitude: input.birthLocation.longitude,
       latitude: input.birthLocation.latitude,
-      trueSolarOffsetMinutes,
+      trueSolarOffsetMinutes: solarCorrection.totalOffsetMinutes,
+      timezoneOffsetMinutes: solarCorrection.timezoneOffsetMinutes,
+      standardMeridianLongitude: solarCorrection.standardMeridianLongitude,
+      longitudeOffsetMinutes: solarCorrection.longitudeOffsetMinutes,
+      equationOfTimeMinutes: solarCorrection.equationOfTimeMinutes,
+      yearBoundary: "li-chun",
+      monthBoundary: "solar-terms",
       locationName: input.birthLocation.name,
     },
   };
@@ -252,37 +288,22 @@ function validateLocation(location: FortuneLocation) {
   if (!location.timezone?.trim()) throw new FortuneValidationError("请选择时区");
 }
 
-function parseLocalDateTime(value: string): Date {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) {
-    throw new FortuneValidationError("日期时间格式无效");
+function parseInputDateTime(value: string, timezone: string) {
+  try {
+    return parseZonedLocalDateTime(value, timezone);
+  } catch (error) {
+    throw new FortuneValidationError(error instanceof Error ? error.message : "日期时间格式无效");
   }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) throw new FortuneValidationError("日期时间格式无效");
-  return date;
 }
 
-function timezoneStandardLongitude(timezone: string) {
-  const offsets: Record<string, number> = {
-    "Asia/Shanghai": 120,
-    "Asia/Hong_Kong": 120,
-    "Asia/Taipei": 120,
-    "Asia/Tokyo": 135,
-    "Asia/Singapore": 120,
-    "America/New_York": -75,
-    "America/Los_Angeles": -120,
-    "Europe/London": 0,
-  };
-  return offsets[timezone] ?? 120;
-}
-
-function getLunarContext(date: Date) {
+function getLunarContext(date: { year: number; month: number; day: number; hour: number; minute: number; second: number }) {
   const solar = Solar.fromYmdHms(
-    date.getFullYear(),
-    date.getMonth() + 1,
-    date.getDate(),
-    date.getHours(),
-    date.getMinutes(),
-    0
+    date.year,
+    date.month,
+    date.day,
+    date.hour,
+    date.minute,
+    date.second
   );
   const lunar = solar.getLunar();
   const eightChar = lunar.getEightChar();
@@ -448,8 +469,11 @@ function getTenGodSummary(pillars: BaziChart["pillars"]) {
 }
 
 function getRelations(pillars: BaziChart["pillars"]) {
+  return getRelationsFromPillars(Object.values(pillars));
+}
+
+function getRelationsFromPillars(pillarValues: BaziPillar[]) {
   const relations = new Set<string>();
-  const pillarValues = Object.values(pillars);
   for (let i = 0; i < pillarValues.length; i++) {
     for (let j = i + 1; j < pillarValues.length; j++) {
       const stems = sortPair(pillarValues[i].stem, pillarValues[j].stem);
@@ -554,7 +578,7 @@ function getLuckCycles(
   input: FortuneInput,
   pillars: BaziChart["pillars"],
   eightChar: EightChar,
-  queryDate: Date
+  queryYear: number
 ): LuckCycle[] {
   const genderNumber = input.gender === "female" ? 0 : 1;
   const yun = eightChar.getYun(genderNumber, 1);
@@ -571,7 +595,7 @@ function getLuckCycles(
       endYear: daYun.getEndYear(),
       pillar: makePillarFromStemBranch("month", daYun.getGanZhi().slice(0, 1), daYun.getGanZhi().slice(1, 2), pillars.day.stem),
     }));
-  const currentAge = Math.max(0, queryDate.getFullYear() - birthYear);
+  const currentAge = Math.max(0, queryYear - birthYear);
   return cycles.map((cycle) => ({
     ...cycle,
     pillar: {
@@ -583,14 +607,148 @@ function getLuckCycles(
   }));
 }
 
-function getAnnualFortune(queryDate: Date, dayStem: string): AnnualFortune {
-  const index = mod(queryDate.getFullYear() - 1984, 60);
-  const pillar = makePillar("annual", index, dayStem);
+function getAnnualFortune(
+  queryDate: { year: number; month: number; day: number; hour: number; minute: number; second: number },
+  dayStem: string
+): AnnualFortune {
+  const lunar = getLunarContext(queryDate).lunar;
+  const stemBranch = lunar.getYearInGanZhiExact();
+  const pillar = makePillarFromStemBranch("annual", stemBranch.slice(0, 1), stemBranch.slice(1, 2), dayStem);
+  const calendarYearPillar = makePillar("annual", mod(queryDate.year - 1984, 60), dayStem).stemBranch;
   return {
-    year: queryDate.getFullYear(),
+    year: stemBranch === calendarYearPillar ? queryDate.year : queryDate.year - 1,
     pillar,
     relationToDayMaster: `流年${pillar.stemBranch}为${pillar.tenGod}透出，地支${pillar.branch}${ELEMENT_CN[BRANCH_ELEMENT[pillar.branch]]}参与岁运作用。`,
   };
+}
+
+export function buildBaziDynamicContextForYear(input: {
+  year: number;
+  timezone: string;
+  dayStem: string;
+  natalPillars: BaziChart["pillars"];
+  luckCycles: LuckCycle[];
+  queryDateTimeLocal: string;
+}): BaziDynamicContext {
+  const anchorDate = parseInputDateTime(input.queryDateTimeLocal, input.timezone);
+  const queryDate = anchorDate.year === input.year
+    ? anchorDate
+    : parseInputDateTime(`${input.year}-07-01T12:00`, input.timezone);
+  const annualFortune = getAnnualFortune(queryDate, input.dayStem);
+  const matchedLuckCycle = input.luckCycles.find(
+    (cycle) => cycle.startYear <= input.year && input.year <= cycle.endYear
+  );
+  const currentLuckCycle = matchedLuckCycle
+    ? {
+        ...matchedLuckCycle,
+        pillar: {
+          ...matchedLuckCycle.pillar,
+          tenGod: `${matchedLuckCycle.pillar.tenGod.replace(/（当前大运）/g, "")}（当前大运）`,
+        },
+      }
+    : null;
+  const monthSegments = buildBaziMonthSegments({
+    year: input.year,
+    dayStem: input.dayStem,
+    natalPillars: input.natalPillars,
+    currentLuckCycle,
+  });
+
+  return {
+    method: "bazi",
+    targetRange: {
+      startLocalDateTime: `${input.year}-01-01T00:00`,
+      endLocalDateTime: `${input.year + 1}-01-01T00:00`,
+      timezone: input.timezone,
+      granularity: "month",
+    },
+    annualFortunes: [annualFortune],
+    currentLuckCycle,
+    monthSegments,
+  };
+}
+
+function buildBaziMonthSegments(input: {
+  year: number;
+  dayStem: string;
+  natalPillars: BaziChart["pillars"];
+  currentLuckCycle: LuckCycle | null;
+}): BaziMonthSegment[] {
+  const jieNames = new Set(["小寒", "立春", "惊蛰", "清明", "立夏", "芒种", "小暑", "立秋", "白露", "寒露", "立冬", "大雪"]);
+  const table = Solar.fromYmd(input.year, 7, 1).getLunar().getJieQiTable();
+  const boundaries = Object.entries(table)
+    .filter(([name, solar]) => jieNames.has(name) && solar.getYear() === input.year)
+    .map(([name, solar]) => ({ name, dateTimeLocal: solarToSecondDateTime(solar), solar }))
+    .sort((left, right) => left.dateTimeLocal.localeCompare(right.dateTimeLocal));
+  const result: BaziMonthSegment[] = [];
+
+  for (let month = 1; month <= 12; month++) {
+    const monthKey = `${input.year}-${parsePad(month)}`;
+    const monthStart = `${monthKey}-01T00:00:00`;
+    const monthEnd = month === 12
+      ? `${input.year + 1}-01-01T00:00:00`
+      : `${input.year}-${parsePad(month + 1)}-01T00:00:00`;
+    const inside = boundaries.filter((boundary) => boundary.dateTimeLocal > monthStart && boundary.dateTimeLocal < monthEnd);
+    const cuts = [monthStart, ...inside.map((boundary) => boundary.dateTimeLocal), monthEnd];
+
+    for (let index = 0; index < cuts.length - 1; index++) {
+      const start = cuts[index];
+      const end = cuts[index + 1];
+      const startParts = localParts(start);
+      const lunar = getLunarContext(startParts).lunar;
+      const stemBranch = lunar.getMonthInGanZhiExact();
+      const pillar = makePillarFromStemBranch("month", stemBranch.slice(0, 1), stemBranch.slice(1, 2), input.dayStem);
+      const segmentAnnualFortune = getAnnualFortune(startParts, input.dayStem);
+      const relationPillars = [
+        ...Object.values(input.natalPillars),
+        segmentAnnualFortune.pillar,
+        ...(input.currentLuckCycle ? [input.currentLuckCycle.pillar] : []),
+      ];
+      const boundary = inside.find((item) => item.dateTimeLocal === start);
+      result.push({
+        gregorianMonth: monthKey,
+        startLocalDateTime: start,
+        endLocalDateTime: end,
+        solarTermBoundary: boundary ? { name: boundary.name, dateTimeLocal: boundary.dateTimeLocal } : undefined,
+        pillar,
+        relations: getRelationsForTarget(pillar, relationPillars),
+      });
+    }
+  }
+  return result;
+}
+
+function getRelationsForTarget(target: BaziPillar, others: BaziPillar[]) {
+  const relations = new Set<string>();
+  for (const other of others) {
+    const stems = sortPair(target.stem, other.stem);
+    const branches = sortPair(target.branch, other.branch);
+    if (STEM_COMBOS[stems]) relations.add(STEM_COMBOS[stems]);
+    if (BRANCH_CONFLICTS[branches]) relations.add(BRANCH_CONFLICTS[branches]);
+    if (BRANCH_LIUHE[branches]) relations.add(BRANCH_LIUHE[branches]);
+    if (BRANCH_HARM[branches]) relations.add(BRANCH_HARM[branches]);
+    if (BRANCH_BREAK[branches]) relations.add(BRANCH_BREAK[branches]);
+  }
+  const branches = new Set([target.branch, ...others.map((pillar) => pillar.branch)]);
+  for (const group of SANHE_GROUPS) {
+    if (group.branches.includes(target.branch) && group.branches.every((branch) => branches.has(branch))) {
+      relations.add(group.text);
+    }
+  }
+  return [...relations];
+}
+
+function localParts(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!match) throw new FortuneValidationError("日期时间格式无效");
+  return {
+    year: Number(match[1]), month: Number(match[2]), day: Number(match[3]),
+    hour: Number(match[4]), minute: Number(match[5]), second: Number(match[6] || 0),
+  };
+}
+
+function solarToSecondDateTime(solar: Solar) {
+  return `${solar.getYear()}-${parsePad(solar.getMonth())}-${parsePad(solar.getDay())}T${parsePad(solar.getHour())}:${parsePad(solar.getMinute())}:${parsePad(solar.getSecond())}`;
 }
 
 function getSolarTermSnapshotFromLunar(lunar: Lunar): BaziChart["solarTerms"] {
@@ -626,14 +784,6 @@ function solarToLocalDateTime(solar: Solar) {
 
 function parsePad(value: number) {
   return String(value).padStart(2, "0");
-}
-
-function formatLocalDateTime(date: Date) {
-  return `${date.getFullYear()}-${parsePad(date.getMonth() + 1)}-${parsePad(date.getDate())}T${parsePad(date.getHours())}:${parsePad(date.getMinutes())}`;
-}
-
-function addMinutes(date: Date, minutes: number) {
-  return new Date(date.getTime() + minutes * 60000);
 }
 
 function mod(value: number, divisor: number) {

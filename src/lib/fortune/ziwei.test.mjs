@@ -37,6 +37,13 @@ test("buildZiweiChart returns a stable zi wei astrolabe shape", () => {
   assert.equal(chart.earthlyBranchOfBodyPalace, "酉");
   assert.equal(chart.fiveElementsClass, "火六局");
   assert.equal(chart.palaces.length, 12);
+  assert.equal(chart.dynamicContext.method, "ziwei");
+  assert.equal(chart.dynamicContext.decadal.heavenlyStem + chart.dynamicContext.decadal.earthlyBranch, "庚辰");
+  assert.equal(chart.dynamicContext.yearly.heavenlyStem + chart.dynamicContext.yearly.earthlyBranch, "丙午");
+  assert.equal(chart.dynamicContext.monthly.heavenlyStem + chart.dynamicContext.monthly.earthlyBranch, "癸巳");
+  assert.equal(chart.dynamicContext.daily.heavenlyStem + chart.dynamicContext.daily.earthlyBranch, "乙卯");
+  assert.equal(chart.dynamicContext.yearly.stars.length, 12);
+  assert.equal(chart.dynamicContext.yearly.yearlyDecStar.suiqian12.length, 12);
 
   const soulPalace = chart.palaces.find((palace) => palace.name === "命宫");
   assert.equal(soulPalace?.earthlyBranch, "丑");
@@ -47,7 +54,7 @@ test("buildZiweiChart returns a stable zi wei astrolabe shape", () => {
     palace.majorStars.some((star) => star.name === "紫微")
   );
   assert.equal(ziweiPalace?.name, "田宅");
-  assert.equal(chart.calculationBasis.ruleSet, "opencat-ziwei-v1");
+  assert.equal(chart.calculationBasis.ruleSet, "opencat-ziwei-v2");
   assert.equal(chart.calculationBasis.library, "iztro");
   assert.equal(chart.calculationBasis.libraryVersion, "2.5.8");
 });
@@ -81,4 +88,6 @@ test("buildZiweiChart records true solar time correction when enabled", () => {
     trueSolar.calculationBasis.effectiveBirthDateTimeLocal
   );
   assert.equal(trueSolar.calculationBasis.trueSolarOffsetMinutes < -100, true);
+  assert.equal(trueSolar.calculationBasis.longitudeOffsetMinutes < -120, true);
+  assert.equal(Math.abs(trueSolar.calculationBasis.equationOfTimeMinutes) > 10, true);
 });

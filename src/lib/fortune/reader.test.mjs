@@ -7,7 +7,7 @@ const jiti = require("../../../node_modules/.pnpm/jiti@2.6.1/node_modules/jiti")
   import.meta.url,
   { interopDefault: true }
 );
-const { buildFortuneUserPrompt } = jiti("./reader.ts");
+const { buildFortuneSystemPrompt, buildFortuneUserPrompt } = jiti("./reader.ts");
 
 const input = {
   profileName: "李波",
@@ -56,4 +56,11 @@ test("buildFortuneUserPrompt keeps tarot reading independent", () => {
   assert.doesNotMatch(prompt, /十神结构/);
   assert.doesNotMatch(prompt, /紫微斗数提示/);
   assert.doesNotMatch(prompt, /周易时间卦提示/);
+});
+
+test("fortune system prompt forbids pseudo-statistical certainty", () => {
+  const prompt = buildFortuneSystemPrompt();
+  assert.match(prompt, /不得输出单点百分比/);
+  assert.match(prompt, /低、中、高/);
+  assert.match(prompt, /现实统计概率/);
 });

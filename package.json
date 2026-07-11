@@ -20,6 +20,7 @@
     "@ai-sdk/openai": "^3.0.52",
     "@ai-sdk/react": "^3.0.160",
     "@auth/prisma-adapter": "^2.11.1",
+    "@js-temporal/polyfill": "0.5.1",
     "@prisma/adapter-pg": "^7.7.0",
     "@prisma/client": "^7.7.0",
     "ai": "^6.0.158",

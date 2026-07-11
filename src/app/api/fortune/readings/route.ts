@@ -13,6 +13,7 @@ import { buildZiweiChart } from "@/lib/fortune/ziwei";
 import { buildZhouyiTimeChart } from "@/lib/fortune/zhouyi";
 import { buildXiaoliurenChart } from "@/lib/fortune/xiaoliuren";
 import type { FortuneInput, FortuneMethod } from "@/lib/fortune/types";
+import { parseZonedLocalDateTime } from "@/lib/fortune/time";
 
 const fortuneLocationSchema = z.object({
   id: z.string().trim().optional(),
@@ -112,8 +113,12 @@ export async function POST(req: Request) {
         profileName: input.profileName,
         gender: input.gender,
         birthCalendar: input.birthCalendar,
-        birthDateTime: new Date(input.birthDateTimeLocal),
-        queryDateTime: new Date(input.queryDateTimeLocal),
+        birthDateTime: new Date(
+          parseZonedLocalDateTime(input.birthDateTimeLocal, input.birthLocation.timezone).instant
+        ),
+        queryDateTime: new Date(
+          parseZonedLocalDateTime(input.queryDateTimeLocal, input.birthLocation.timezone).instant
+        ),
         locationName: input.birthLocation.name,
         longitude: input.birthLocation.longitude,
         latitude: input.birthLocation.latitude,
@@ -150,6 +155,7 @@ export async function POST(req: Request) {
         method: input.method,
         ...methodChartPayload(input.method, chart),
         interpretation: interpretation.text,
+        dynamicContext: getDynamicContext(chart),
         calculationBasis: getCalculationBasis(chart),
         privacyScope: "private:user",
       },
@@ -239,6 +245,13 @@ function methodChartPayload(method: FortuneMethod, chart: unknown) {
 function getCalculationBasis(chart: unknown) {
   if (chart && typeof chart === "object" && "calculationBasis" in chart) {
     return (chart as { calculationBasis?: unknown }).calculationBasis;
+  }
+  return null;
+}
+
+function getDynamicContext(chart: unknown) {
+  if (chart && typeof chart === "object" && "dynamicContext" in chart) {
+    return (chart as { dynamicContext?: unknown }).dynamicContext || null;
   }
   return null;
 }

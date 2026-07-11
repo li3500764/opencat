@@ -153,6 +153,19 @@ export function FortuneResult(props: FortuneResultProps) {
       </div>
 
       <div className="mx-auto max-w-4xl px-4 pt-8">
+        {isLegacyChart(baziChart, ziweiChart) && (
+          <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-amber-200">旧版排盘口径</p>
+              <p className="mt-1 text-xs leading-5 text-amber-100/70">
+                此记录保持原结果，不会静默套用新的时区、真太阳时和动态运限规则。
+              </p>
+            </div>
+            <button onClick={onBack} className="shrink-0 rounded-lg border border-amber-300/30 px-3 py-2 text-xs font-semibold text-amber-100">
+              按 v2 新口径重新测算
+            </button>
+          </div>
+        )}
         {/* Chart display */}
         <div className="mb-8">
           {baziChart && <BaziResultView chart={baziChart} accent={meta.accent} />}
@@ -278,6 +291,13 @@ function ConsultPanel({ messages, input, setInput, isAsking, onSend, modelId, on
 /* ---- Method-specific chart views ---- */
 
 function BaziResultView({ chart, accent }: { chart: BaziChart; accent: string }) {
+  const groupedMonths = chart.dynamicContext?.monthSegments.reduce<Record<string, BaziChart["dynamicContext"]["monthSegments"]>>(
+    (groups, segment) => {
+      (groups[segment.gregorianMonth] ||= []).push(segment);
+      return groups;
+    },
+    {}
+  ) || {};
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -308,11 +328,42 @@ function BaziResultView({ chart, accent }: { chart: BaziChart; accent: string })
           ))}
         </div>
       </div>
+      {Object.keys(groupedMonths).length > 0 && (
+        <div className="fortune-card p-4" style={{ "--card-accent": accent } as React.CSSProperties}>
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-white">{chart.dynamicContext.targetRange.startLocalDateTime.slice(0, 4)} 流月时间轴</h4>
+              <p className="mt-1 text-[11px] text-[var(--fortune-text-muted)]">按公历月展示，月内以节气时刻切换流月。</p>
+            </div>
+            <span className="text-[10px] text-[var(--fortune-text-muted)]">立春换年 · 节气换月</span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {Object.entries(groupedMonths).map(([month, segments]) => (
+              <div key={month} className="rounded-xl border border-[var(--fortune-border)] bg-black/20 p-3">
+                <p className="mb-2 text-xs font-semibold text-white">{Number(month.slice(5))} 月</p>
+                <div className="space-y-1.5">
+                  {segments.map((segment) => (
+                    <div key={segment.startLocalDateTime} className="flex items-center justify-between gap-2 text-[11px]">
+                      <span className="text-[var(--fortune-text-muted)]">
+                        {segment.startLocalDateTime.slice(5, 16).replace("T", " ")}—{segment.endLocalDateTime.slice(5, 16).replace("T", " ")}
+                      </span>
+                      <span className="font-semibold" style={{ color: accent }}>
+                        {segment.pillar.stemBranch} · {segment.pillar.tenGod}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function ZiweiResultView({ chart, accent }: { chart: ZiweiChart; accent: string }) {
+  const horoscope = chart.dynamicContext;
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
@@ -343,8 +394,38 @@ function ZiweiResultView({ chart, accent }: { chart: ZiweiChart; accent: string 
           );
         })}
       </div>
+      {horoscope && (
+        <div className="fortune-card p-4" style={{ "--card-accent": accent } as React.CSSProperties}>
+          <div className="mb-3">
+            <h4 className="text-sm font-semibold text-white">当前运限 · {horoscope.solarDate}</h4>
+            <p className="mt-1 text-[11px] text-[var(--fortune-text-muted)]">农历初一为运限月份分界</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {([
+              ["大限", horoscope.decadal],
+              ["流年", horoscope.yearly],
+              ["流月", horoscope.monthly],
+              ["流日", horoscope.daily],
+            ] as const).map(([label, item]) => (
+              <div key={label} className="rounded-xl border border-[var(--fortune-border)] bg-black/20 p-3">
+                <p className="text-[11px] text-[var(--fortune-text-muted)]">{label}</p>
+                <p className="mt-1 text-lg font-bold text-white">{item.heavenlyStem}{item.earthlyBranch}</p>
+                <p className="mt-1 text-[10px] leading-4" style={{ color: accent }}>
+                  四化：{item.mutagen.join("、") || "无"}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function isLegacyChart(bazi?: BaziChart | null, ziwei?: ZiweiChart | null) {
+  if (bazi) return bazi.calculationBasis?.ruleSet !== "opencat-ziping-v2";
+  if (ziwei) return ziwei.calculationBasis?.ruleSet !== "opencat-ziwei-v2";
+  return false;
 }
 
 function ZhouyiResultView({ chart, accent }: { chart: ZhouyiTimeChart; accent: string }) {

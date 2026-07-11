@@ -162,8 +162,11 @@ export function FortuneFormModal({ method, onClose, onSubmit, isSubmitting }: Fo
           {/* Gender */}
           <div>
             <label className="mb-1.5 block text-xs font-medium text-[var(--fortune-text-muted)]">性别</label>
-            <div className="grid grid-cols-3 gap-2">
-              {([["male", "男"], ["female", "女"], ["other", "其他"]] as const).map(([val, label]) => (
+            <div className={`grid gap-2 ${method === "bazi" || method === "ziwei" ? "grid-cols-2" : "grid-cols-3"}`}>
+              {(method === "bazi" || method === "ziwei"
+                ? ([["male", "男"], ["female", "女"]] as const)
+                : ([["male", "男"], ["female", "女"], ["other", "其他"]] as const)
+              ).map(([val, label]) => (
                 <button
                   key={val}
                   onClick={() => setGender(val)}
@@ -178,6 +181,11 @@ export function FortuneFormModal({ method, onClose, onSubmit, isSubmitting }: Fo
                 </button>
               ))}
             </div>
+            {(method === "bazi" || method === "ziwei") && (
+              <p className="mt-1.5 text-[11px] leading-5 text-[var(--fortune-text-muted)]">
+                此处男/女仅用于传统排盘的顺逆规则，不代表身份认同。
+              </p>
+            )}
           </div>
 
           {/* Birth time (hidden for xiaoliuren/zhouyi) */}
@@ -312,7 +320,7 @@ export function FortuneFormModal({ method, onClose, onSubmit, isSubmitting }: Fo
               <span>
                 <span className="block text-sm font-medium text-white">启用真太阳时修正</span>
                 <span className="text-xs leading-5 text-[var(--fortune-text-muted)]">
-                  根据出生地经度修正时间，可能影响时柱或临界日柱。
+                  根据出生地时区、经度与均时差修正，可能影响时柱或临界日柱。
                 </span>
               </span>
             </label>
